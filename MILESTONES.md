@@ -4,7 +4,7 @@ This file tracks project progress. Update it whenever a meaningful feature, inte
 
 ## Current Snapshot
 
-Last updated: 2026-06-01
+Last updated: 2026-06-10
 
 The project currently has an end-to-end demo flow:
 
@@ -31,6 +31,22 @@ Do not query HAPI FHIR PostgreSQL internal tables directly.
 ```
 
 ## Completed Milestones
+
+### 0. Business Module Decomposition
+
+Status: Done
+
+Completed:
+
+- Read `module_nghiep_vu_chatbot_y_te_moscow.md`.
+- Created detailed module breakdown in `module_nghiep_vu_chatbot_y_te_moscow_chi_tiet.md`.
+- Exported the detailed module breakdown to `outputs/module-breakdown/module_nghiep_vu_chatbot_y_te_moscow_chi_tiet.xlsx`.
+- Broke MoSCoW modules into smaller implementation-oriented modules.
+- Added requirements, concrete work items, and completion criteria for each submodule.
+
+Verified:
+
+- Markdown and Excel documentation files created for planning and backlog refinement.
 
 ### 1. HAPI FHIR Infrastructure
 

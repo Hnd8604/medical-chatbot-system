@@ -37,6 +37,9 @@ public class QuotaPolicy {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    @Column(name = "rate_limit_per_minute")
+    private Integer rateLimitPerMinute;
+
     protected QuotaPolicy() {
     }
 
@@ -62,5 +65,9 @@ public class QuotaPolicy {
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public Integer getRateLimitPerMinute() {
+        return rateLimitPerMinute;
     }
 }

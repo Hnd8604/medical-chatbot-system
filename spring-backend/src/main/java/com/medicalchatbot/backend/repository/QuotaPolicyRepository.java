@@ -23,4 +23,13 @@ public interface QuotaPolicyRepository extends JpaRepository<QuotaPolicy, UUID> 
             where u.id = :userId
             """)
     Optional<QuotaPolicyInfo> findByUserId(@Param("userId") UUID userId);
+
+
+    @Query("""
+    SELECT q.rateLimitPerMinute
+    FROM User u
+    JOIN u.quotaPolicy q
+    WHERE u.username = :username
+""")
+    Integer findRateLimitByUsername(String username);
 }

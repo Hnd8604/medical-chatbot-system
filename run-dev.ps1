@@ -15,6 +15,7 @@ $RunDir = Join-Path $RootDir ".run"
 $LogDir = Join-Path $RootDir "logs"
 $HapiCompose = Join-Path $RootDir "infra\hapi-fhir\docker-compose.yml"
 $AppPostgresCompose = Join-Path $RootDir "infra\app-postgres\docker-compose.yml"
+$RedisCompose = Join-Path $RootDir "infra\redis\docker-compose.yml"
 $FrontendDir = Join-Path $RootDir "frontend"
 $ChatbotDir = Join-Path $RootDir "chatbot-service"
 $SpringDir = Join-Path $RootDir "spring-backend"
@@ -135,6 +136,7 @@ if ($Stop) {
     Stop-ManagedProcess -Name "chatbot-service"
     docker compose -f $HapiCompose down
     docker compose -f $AppPostgresCompose down
+    docker compose -f $RedisCompose down
     Write-Host "Stopped dev stack. Docker volumes were preserved."
     exit 0
 }
@@ -147,6 +149,7 @@ Require-Command "java"
 Write-Step "Starting Docker infrastructure"
 docker compose -f $HapiCompose up -d
 docker compose -f $AppPostgresCompose up -d
+docker compose -f $RedisCompose up -d
 
 Write-Step "Waiting for HAPI FHIR"
 Invoke-StepCommand "wait_for_hapi.py" {

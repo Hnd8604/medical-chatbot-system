@@ -427,6 +427,24 @@ Follow-up refactor:
 - Verified `.\mvnw.cmd test -q` with Java 21.
 - Verified Spring JPA startup against app PostgreSQL still succeeds.
 - Restarted Spring backend and verified `GET /api/chat/sessions?limit=1` returns HTTP 200.
+ 
+### 12. Rate Limiting & Security Foundation (M10)
+
+Status: Done
+
+Completed:
+
+- Added Redis infrastructure to `infra/redis/docker-compose.yml`.
+- Implemented `RateLimitInterceptor` using Redis Lua Scripts to guarantee atomic INCR and EXPIRE operations, preventing race conditions.
+- Added support for Cloud environments by parsing the `X-Forwarded-For` header for IP-based rate limiting.
+- Implemented `CurrentUserService` to decouple identity extraction, allowing smooth transition from `anonymousUser` (IP-based) to `demo_user` or real JWT users in the future.
+- Implemented `QuotaPolicyService` with Spring `@Cacheable` to dynamically fetch `rate_limit_per_minute` from the `quota_policies` PostgreSQL table without degrading performance.
+- Added temporary `SecurityConfig` (permitAll) to unblock API testing while waiting for the M1 Authentication module.
+
+Verified:
+
+- Redis container starts successfully.
+- Spamming `POST /api/chat` correctly yields HTTP 429 after exceeding the dynamically assigned limit.
 
 ## Current Capabilities
 
@@ -452,6 +470,8 @@ The system can currently answer questions about:
 - Compact evidence reference memory for follow-up questions.
 - Daily AI quota status and quota blocking before AI calls.
 - Daily AI cost estimate and model pricing status.
+
+- Dynamic Redis-based rate limiting per IP or user package.
 
 Example questions:
 
@@ -479,6 +499,8 @@ chi so do co cao khong
 - Quota V1 uses app database `quota_policies` plus daily aggregation from `usage_logs`; it does not maintain a separate counter table.
 - Cost V1 uses `model_pricing` plus `usage_logs.estimated_cost_usd`; it does not create a separate `cost_logs` table yet.
 - Spring app database persistence now follows JPA entity/repository flow; HAPI FHIR internal tables are still not mapped as entities.
+
+- Rate limiting limits are driven by database configurations (quota packages) rather than hardcoded values, cached via Spring Cache to protect PostgreSQL.
 
 ## Next Recommended Milestones
 

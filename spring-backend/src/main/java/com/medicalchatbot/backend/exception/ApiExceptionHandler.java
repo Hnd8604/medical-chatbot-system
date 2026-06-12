@@ -44,4 +44,10 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(Map.of("detail", exception.getMessage()));
     }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    ResponseEntity<Map<String, String>> rateLimitExceeded(RateLimitExceededException exception) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(Map.of("detail", exception.getMessage()));
+    }
 }

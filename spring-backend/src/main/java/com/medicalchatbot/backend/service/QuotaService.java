@@ -18,6 +18,7 @@ import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -81,6 +82,15 @@ public class QuotaService {
 
         logQuotaBlocked(userId, status);
         throw new QuotaExceededException(status.blockedReason(), status);
+    }
+
+    @Cacheable(value = "rateLimitConfig", key = "#userId")
+    public int getRateLimitForUser(String username) {
+        if ("anonymousUser".equals(username)) {
+            return 5;
+        }
+        return quotaPolicyRepository.findRateLimitByUsername(username);
+
     }
 
     private QuotaStatusResponse statusForUser(UUID userId, String username) {

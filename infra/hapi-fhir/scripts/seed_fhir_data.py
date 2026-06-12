@@ -31,7 +31,12 @@ def post_bundle(bundle: bytes) -> dict:
 
 def main() -> int:
     try:
-        seed_files = sorted(SEED_DIR.glob("*.json"))
+        seed_files = [
+            SEED_DIR / "ambiguous-patient-demo-data-transaction-bundle.json",
+            SEED_DIR / "demo-data-transaction-bundle.json",
+            SEED_DIR / "extended-demo-data-transaction-bundle.json",
+            SEED_DIR / "detailed-demo-data-transaction-bundle.json",
+        ]
         if not seed_files:
             print(f"No seed JSON files found in: {SEED_DIR}", file=sys.stderr)
             return 1

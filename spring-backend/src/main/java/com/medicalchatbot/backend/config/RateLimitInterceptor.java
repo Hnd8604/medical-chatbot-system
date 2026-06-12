@@ -2,6 +2,7 @@ package com.medicalchatbot.backend.config;
 
 import java.util.Collections;
 
+import com.medicalchatbot.backend.exception.RateLimitExceededException;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.QuotaService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -69,12 +70,8 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
         if (currentRequests != null && currentRequests > maxLimit) {
             log.warn("Rate limit exceeded for key {} ({} > {})", key, currentRequests, maxLimit);
-            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.setContentType("application/json; charset=UTF-8");
-            String body = "{\"error\": \"Too Many Requests\", \"message\": \"Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.\"}";
-            response.getWriter().write(body);
-            response.getWriter().flush();
-            return false;
+            // Ném exception thẳng ra ngoài, không tự ghi chuỗi JSON nữa
+            throw new RateLimitExceededException("Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.");
         }
 
         return true;

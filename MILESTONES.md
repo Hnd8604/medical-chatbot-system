@@ -4,7 +4,7 @@ This file tracks project progress. Update it whenever a meaningful feature, inte
 
 ## Current Snapshot
 
-Last updated: 2026-06-10
+Last updated: 2026-06-13
 
 The project currently has an end-to-end demo flow:
 
@@ -427,7 +427,7 @@ Follow-up refactor:
 - Verified `.\mvnw.cmd test -q` with Java 21.
 - Verified Spring JPA startup against app PostgreSQL still succeeds.
 - Restarted Spring backend and verified `GET /api/chat/sessions?limit=1` returns HTTP 200.
- 
+
 ### 12. Rate Limiting & Security Foundation (M10)
 
 Status: Done
@@ -445,6 +445,26 @@ Verified:
 
 - Redis container starts successfully.
 - Spamming `POST /api/chat` correctly yields HTTP 429 after exceeding the dynamically assigned limit.
+
+### 13. Semantic Cache Management (M14)
+
+Status: Done
+
+Completed:
+
+- Implemented Semantic Caching (M14.1, M14.2) using Qdrant Vector DB and `fastembed` in the FastAPI `chatbot-service`.
+- Replaced traditional exact-match cache keys with Vector Embeddings to achieve high cache-hit rates for semantically similar questions (e.g., "lịch sử khám của demo-001" vs "lịch sử khám bệnh nhân demo-001").
+- Enforced strict Data Privacy and Context Isolation by filtering vector search results using `user_id` and `patient_id` payloads.
+- Implemented Cache Storage and TTL (M14.3) with automatic expiration logic for stale cache entries.
+- Optimized cost and latency by completely bypassing the LLM on cache hits, simulating the exact LLM usage payload (`saved_input_tokens`, `saved_output_tokens`).
+- Implemented Cache Observability (M14.4) in the Spring Boot backend by adding `MetricsService` and `MetricsController` (`GET /api/metrics/cache`) to track total requests, cache hits, saved tokens, saved cost USD, and hit rate percentage via JPA native queries.
+
+Verified:
+
+- Qdrant collection initialized successfully.
+- Cache similarity threshold correctly distinguishes between short factual queries and complex RAG queries.
+- Cache hit correctly bypasses LLM and returns mock usage payload.
+- Spring Boot `GET /api/metrics/cache` successfully calculates `hit_rate_percentage` and aggregates saved costs.
 
 ## Current Capabilities
 
@@ -470,7 +490,7 @@ The system can currently answer questions about:
 - Compact evidence reference memory for follow-up questions.
 - Daily AI quota status and quota blocking before AI calls.
 - Daily AI cost estimate and model pricing status.
-
+- Semantic Caching using Vector DB to reduce latency and AI token costs for repeated or similar queries.
 - Dynamic Redis-based rate limiting per IP or user package.
 
 Example questions:

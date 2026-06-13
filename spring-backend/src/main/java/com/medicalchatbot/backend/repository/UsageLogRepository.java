@@ -6,11 +6,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.response.CostByDay;
-import com.medicalchatbot.backend.dto.response.CostByModel;
-import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
-import com.medicalchatbot.backend.dto.response.MissingPricingModel;
-import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
+import com.medicalchatbot.backend.dto.response.*;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.UsageLog;
 import com.medicalchatbot.backend.entity.User;
@@ -19,7 +15,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
-
     default void save(
             User user,
             ChatSession session,
@@ -33,6 +28,41 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             BigDecimal estimatedCostUsd,
             String errorMessage
     ) {
+        save(
+                user,
+                session,
+                llmProvider,
+                llmModel,
+                operation,
+                status,
+                latencyMs,
+                inputTokens,
+                outputTokens,
+                estimatedCostUsd,
+                errorMessage,
+                null,
+                0,
+                BigDecimal.ZERO
+        );
+    }
+
+
+    default void save(
+            User user,
+            ChatSession session,
+            String llmProvider,
+            String llmModel,
+            String operation,
+            String status,
+            long latencyMs,
+            int inputTokens,
+            int outputTokens,
+            BigDecimal estimatedCostUsd,
+            String errorMessage,
+            String answerSource,
+            int savedTokens,
+            BigDecimal savedCostUsd
+    ) {
         save(new UsageLog(
                 user,
                 session,
@@ -44,9 +74,27 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                 inputTokens,
                 outputTokens,
                 estimatedCostUsd,
-                errorMessage
+                errorMessage,
+                answerSource,
+                savedTokens,
+                savedCostUsd
         ));
     }
+
+    @Query("""
+        SELECT new com.medicalchatbot.backend.dto.response.CacheMetricsResponse(
+            COUNT(u.id),
+            SUM(CASE WHEN u.answerSource LIKE '%cache%' THEN 1 ELSE 0 END),
+            SUM(u.savedTokens),
+            SUM(u.savedCostUsd)
+        )
+        FROM UsageLog u
+        WHERE u.createdAt >= :startDate AND u.createdAt <= :endDate
+    """)
+    CacheMetricsResponse getCacheObservabilityMetrics(
+            @Param("startDate") OffsetDateTime startDate,
+            @Param("endDate") OffsetDateTime endDate
+    );
 
     @Query(
             value = """

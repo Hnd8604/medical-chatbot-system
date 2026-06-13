@@ -148,19 +148,25 @@ class ChatbotControllerTest {
                         null,
                         objectMapper.readTree("[]"),
                         objectMapper.readTree("""
-                                {
-                                  "input_tokens": 0,
-                                  "output_tokens": 0,
-                                  "estimated_cost_usd": 0
-                                }
-                                """),
+                {
+                  "input_tokens": 0,
+                  "output_tokens": 0,
+                  "estimated_cost_usd": 0
+                }
+                """),
                         objectMapper.readTree("""
-                                {
-                                  "input_tokens": 0,
-                                  "output_tokens": 0,
-                                  "estimated_cost_usd": 0
-                                }
-                                """)
+                {
+                  "input_tokens": 0,
+                  "output_tokens": 0,
+                  "estimated_cost_usd": 0
+                }
+                """),
+                        objectMapper.readTree("""
+                {
+                  "saved_input_tokens": 0,
+                  "saved_output_tokens": 0
+                }
+                """)
                 ));
 
         mockMvc.perform(post("/api/chat")

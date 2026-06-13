@@ -167,10 +167,10 @@ class RuleBasedIntentExtractor:
 
 
 class OpenAIIntentExtractor:
-    def __init__(self, api_key: str, model: str, timeout_seconds: float) -> None:
+    def __init__(self, api_key: str, model: str, timeout_seconds: float,base_url: str | None = None) -> None:
         from openai import AsyncOpenAI
 
-        self.client = AsyncOpenAI(api_key=api_key, timeout=timeout_seconds)
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
         self.model = model
         self.fallback = RuleBasedIntentExtractor()
 
@@ -190,6 +190,7 @@ class OpenAIIntentExtractor:
         )
         user_prompt = {
             "message": message,
+            "normalized_message": normalize_text(message),
             "provided_patient_id": patient_id_hint,
             "allowed_patient_id_default": DEFAULT_PATIENT_ID,
         }
@@ -241,6 +242,7 @@ def get_intent_extractor() -> IntentExtractor:
             api_key=settings.openai_api_key,
             model=settings.llm_model,
             timeout_seconds=settings.llm_request_timeout_seconds,
+            base_url=settings.openai_base_url,
         )
     return RuleBasedIntentExtractor()
 

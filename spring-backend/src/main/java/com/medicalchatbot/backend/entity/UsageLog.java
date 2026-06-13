@@ -62,6 +62,15 @@ public class UsageLog {
     @Column(name = "error_message", columnDefinition = "text")
     private String errorMessage;
 
+    @Column(name = "answer_source")
+    private String answerSource;
+
+    @Column(name = "saved_tokens")
+    private Integer savedTokens;
+
+    @Column(name = "saved_cost_usd")
+    private BigDecimal savedCostUsd;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -80,7 +89,10 @@ public class UsageLog {
             int inputTokens,
             int outputTokens,
             BigDecimal estimatedCostUsd,
-            String errorMessage
+            String errorMessage,
+            String answerSource,
+            Integer savedTokens,
+            BigDecimal savedCostUsd
     ) {
         this.user = user;
         this.session = session;
@@ -93,5 +105,9 @@ public class UsageLog {
         this.outputTokens = outputTokens;
         this.estimatedCostUsd = estimatedCostUsd == null ? BigDecimal.ZERO : estimatedCostUsd;
         this.errorMessage = errorMessage;
+
+        this.answerSource = answerSource != null ? answerSource : "llm";
+        this.savedTokens = savedTokens != null ? savedTokens : 0;
+        this.savedCostUsd = savedCostUsd != null ? savedCostUsd : BigDecimal.ZERO;
     }
 }

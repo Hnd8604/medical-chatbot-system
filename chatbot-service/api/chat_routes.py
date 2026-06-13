@@ -4,6 +4,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from services.semantic_cache import SemanticCacheService, get_semantic_cache
+
 from app.config import get_settings
 from agents.answer_generator import AnswerGenerator, combine_usage, get_answer_generator
 from agents.intent_extractor import (
@@ -45,6 +47,8 @@ from fhir.normalizer import (
     normalize_patient_bundle,
 )
 
+import contextvars
+current_user_context = contextvars.ContextVar("current_user_context", default="demo_user")
 
 router = APIRouter(tags=["chat"])
 
@@ -78,14 +82,65 @@ async def chat(
     client: FhirClient = Depends(get_fhir_client),
     intent_extractor: IntentExtractor = Depends(get_intent_extractor),
     answer_generator: AnswerGenerator = Depends(get_answer_generator),
+    cache_service: SemanticCacheService = Depends(get_semantic_cache),
 ) -> dict[str, Any]:
+
+    current_user_context.set(request.user_id)
+
     patient_hint = _patient_id_hint(request)
+
+    patient_id_for_cache = patient_hint or "demo-patient-001"
+    try:
+        strict_cache_result = await cache_service.get_cached_answer(
+            user_id=request.user_id, 
+            patient_id=patient_id_for_cache,
+            question=request.message,
+        )
+        
+        if strict_cache_result:
+            cached_answer, cached_intent, original_usage = strict_cache_result
+            settings = get_settings()
+            
+            # Gói Payload như thể đã chạy qua LLM
+            payload = {
+                "answer": cached_answer,
+                "intent": cached_intent,
+                "patient_id": patient_id_for_cache,
+                "answer_source": "semantic_cache_strict", 
+                "evidence": [],
+                "usage": _zero_usage(), # Token thực tế xài = 0
+                "saved_usage": {
+                    "saved_input_tokens": original_usage.get("input_tokens", 0),
+                    "saved_output_tokens": original_usage.get("output_tokens", 0)
+                    # Gửi số token về, Spring Boot tự nhân tiền!
+                },
+                "tool_name": "cache_hit",
+                "intent_source": "strict_cache",
+                "llm_provider": settings.llm_provider,
+                "llm_model": settings.llm_model,
+            }
+            
+            mock_plan = IntentPlan(
+                tool_name="cache_hit", 
+                patient_id=patient_id_for_cache,
+                source="strict_cache"
+            )
+            
+            memory_update = _build_memory_update(payload, mock_plan)
+            if memory_update:
+                payload["memory_update"] = memory_update
+                
+            return payload
+    except Exception as e:
+        print(f"Strict Cache read error: {e}")
+    
     plan = await intent_extractor.extract(
         request.message,
         provided_patient_id=patient_hint,
     )
     plan = _apply_selected_patient_context(request, plan)
     plan = _apply_context_reference_context(request, plan)
+
 
     try:
         context_payload = await _answer_context_resource_if_applicable(client, request, plan)
@@ -1003,6 +1058,28 @@ async def _finalize_chat_response(
     payload["answer"] = answer_result.answer
     payload["answer_source"] = answer_result.source
     payload["answer_usage"] = answer_result.usage
+
+    if answer_result.source == "llm":
+        try:
+            cache_svc = get_semantic_cache()
+            patient_id_for_cache = payload.get("patient_id") or plan.patient_id or "demo-patient-001"
+            
+            total_usage = combine_usage(
+                plan.usage,
+                answer_result.usage
+            )
+
+            await cache_svc.save_to_cache(
+                user_id=current_user_context.get(),
+                patient_id=patient_id_for_cache,
+                intent=plan.intent,
+                question=question,
+                answer=answer_result.answer,
+                usage=total_usage
+            )
+        except Exception as e:
+            print(f"Cache save error: {e}")
+            
     if answer_result.reason:
         payload["answer_reason"] = answer_result.reason
     payload["usage"] = combine_usage(plan.usage, answer_result.usage)

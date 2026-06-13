@@ -51,6 +51,9 @@ public record ChatResponse(
         @JsonProperty("answer_usage")
         JsonNode answerUsage,
 
-        JsonNode usage
+        JsonNode usage,
+
+        @JsonProperty("saved_usage")
+        JsonNode savedUsage
 ) {
 }

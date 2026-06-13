@@ -20,6 +20,7 @@ import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;
 import com.medicalchatbot.backend.dto.request.ConversationContext;
 import com.medicalchatbot.backend.entity.ChatSession;
+import com.medicalchatbot.backend.entity.UsageLog;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.ChatMessageRole;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
@@ -129,7 +130,8 @@ public class ChatApplicationService {
                 chatbotResponse.path("pending_question").asText(null),
                 chatbotResponse.path("evidence"),
                 chatbotResponse.path("answer_usage"),
-                chatbotResponse.path("usage")
+                chatbotResponse.path("usage"),
+                chatbotResponse.path("saved_usage")
         );
     }
 
@@ -165,6 +167,8 @@ public class ChatApplicationService {
         JsonNode usage = chatbotResponse.path("usage");
         String llmProvider = textOrNull(chatbotResponse, "llm_provider");
         String llmModel = textOrNull(chatbotResponse, "llm_model");
+        String answerSource = textOrNull(chatbotResponse, "answer_source");
+
         int inputTokens = usage.path("input_tokens").asInt(0);
         int outputTokens = usage.path("output_tokens").asInt(0);
         BigDecimal estimatedCostUsd = costEstimationService.estimateUsd(
@@ -174,6 +178,24 @@ public class ChatApplicationService {
                 outputTokens,
                 decimalOrZero(usage.path("estimated_cost_usd"))
         );
+
+        JsonNode savedUsage = chatbotResponse.path("saved_usage");
+        int savedTokens = 0;
+        BigDecimal savedCostUsd = BigDecimal.ZERO;
+
+        if (!savedUsage.isMissingNode() && !savedUsage.isNull()) {
+            int savedIn = savedUsage.path("saved_input_tokens").asInt(0);
+            int savedOut = savedUsage.path("saved_output_tokens").asInt(0);
+            savedTokens = savedIn + savedOut;
+
+            savedCostUsd = costEstimationService.estimateUsd(
+                    llmProvider,
+                    llmModel,
+                    savedIn,
+                    savedOut,
+                    BigDecimal.ZERO
+            );
+        }
 
         usageLogRepository.save(
                 user,
@@ -186,7 +208,10 @@ public class ChatApplicationService {
                 inputTokens,
                 outputTokens,
                 estimatedCostUsd,
-                null
+                null,
+                answerSource,
+                savedTokens,
+                savedCostUsd
         );
     }
 

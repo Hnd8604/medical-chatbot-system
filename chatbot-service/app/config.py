@@ -11,8 +11,17 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="openai")
     llm_model: str = Field(default="gpt-4.1-mini")
     openai_api_key: str | None = Field(default=None)
+    openai_base_url: str | None = Field(default=None)
     llm_request_timeout_seconds: float = Field(default=20)
     enable_llm_answer: bool = Field(default=True)
+
+    # Semantic Cache Config (Qdrant)
+    qdrant_url: str = Field(default="http://localhost:6333")
+    cache_collection_name: str = Field(default="medical_chat_cache")
+    cache_embedding_model: str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    cache_vector_size: int = Field(default=384)
+    cache_ttl_seconds: int = Field(default=300)
+    cache_similarity_threshold: float = Field(default=0.94)
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -26,7 +35,7 @@ class Settings(BaseSettings):
 
     @property
     def use_openai_llm(self) -> bool:
-        return self.llm_provider.lower() == "openai" and bool(self.openai_api_key)
+        return bool(self.openai_api_key)
 
     @property
     def use_llm_answer(self) -> bool:

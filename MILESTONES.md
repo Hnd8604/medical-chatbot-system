@@ -4,7 +4,7 @@ This file tracks project progress. Update it whenever a meaningful feature, inte
 
 ## Current Snapshot
 
-Last updated: 2026-06-13
+Last updated: 2026-06-14
 
 The project currently has an end-to-end demo flow:
 
@@ -466,6 +466,28 @@ Verified:
 - Cache hit correctly bypasses LLM and returns mock usage payload.
 - Spring Boot `GET /api/metrics/cache` successfully calculates `hit_rate_percentage` and aggregates saved costs.
 
+### 14. Logging & Error Handling (M11)
+
+Status: Done
+
+Completed:
+
+- Implemented Application & External Logs (M11.1, M11.3): Centralized logging configuration in FastAPI and Spring Boot. Resolved UTF-8 stdout encoding issues.
+- Implemented Friendly Error Responses (M11.2): Created Global Exception Handlers across both services to gracefully catch 500 errors and return unified, secure JSON responses (`status`, `error_code`, `message`) to prevent stack trace leakage.
+- Implemented Sensitive Data Protection (M11.4): Created a Custom Formatter using Regex to automatically intercept and mask PII (Phone numbers, National IDs, and Emails) before writing to output logs.
+
+### 15. Audit Log & Data Access Tracking (M18)
+
+Status: Done
+
+Completed:
+
+- Implemented Medical Access Tracking (M18.1): Refactored `ChatApplicationService` to translate AI tool executions (e.g., `get_medication_requests`) into standardized medical compliance actions (`VIEW_MEDICATIONS`, `VIEW_OBSERVATIONS`, etc.).
+- Implemented Secure Storage (M18.2): Utilized the existing `audit_logs` PostgreSQL table. Mapped the entity using `JsonNode` for the `jsonb` metadata column to allow flexible, native JSON querying.
+- Implemented Admin API (M18.3): Created `AuditLogService` and `AuditLogController` exposing `GET /api/audit-logs`.
+- Implemented Dynamic Filtering & Pagination: Added a custom `@Query` in `AuditLogRepository` to support dynamic filtering by `userId`, `action`, `resourceType`, `resourceId`, and date ranges, along with full pagination and sorting support.
+- Fixed Serialization Issues: Applied `@JsonIgnore` and custom getters to prevent `LazyInitializationException` and Jackson empty object `{}` serialization errors on JPA relationships.
+
 ## Current Capabilities
 
 The system can currently answer questions about:
@@ -490,6 +512,8 @@ The system can currently answer questions about:
 - Compact evidence reference memory for follow-up questions.
 - Daily AI quota status and quota blocking before AI calls.
 - Daily AI cost estimate and model pricing status.
+- Medical data access audit logging (Compliance) with a fully paginated, dynamically filterable Admin API.
+- Centralized exception handling and automatic PII masking in system logs.
 - Semantic Caching using Vector DB to reduce latency and AI token costs for repeated or similar queries.
 - Dynamic Redis-based rate limiting per IP or user package.
 
@@ -524,7 +548,17 @@ chi so do co cao khong
 
 ## Next Recommended Milestones
 
-### 1. RAG For Medical Explanations
+### 1. System Alerts & Webhooks (M19) Or Authentication (M1)
+
+Status: Recommended next step
+
+Goal:
+
+- Prioritize either M19 to improve operational safety and incident visibility, or M1 to enable real user identity and access boundaries.
+- Choose M1 first if production-like access control is the immediate priority.
+- Choose M19 first if operational monitoring and reliability are the immediate priority.
+
+### 2. RAG For Medical Explanations
 
 Status: Planned
 
@@ -536,7 +570,7 @@ Goal:
   - what hypertension means
   - what a medication is commonly used for
 
-### 2. Admin Cost And Quota UI
+### 3. Admin Cost And Quota UI
 
 Status: Partially done
 
@@ -548,7 +582,7 @@ Goal:
 - Show quota/cost status in Staff Demo Dashboard. Done in compact form.
 - Add Admin Dashboard for editing quotas/pricing and viewing longer-range cost statistics.
 
-### 3. Frontend Improvements
+### 4. Frontend Improvements
 
 Status: Partially done
 
@@ -558,7 +592,7 @@ Goal:
 - Chat history. Done for staff demo.
 - Improve evidence panel. Basic readable summaries done; production polish remains.
 
-### 4. Authentication And Access Control
+### 5. Authentication And Access Control
 
 Status: Planned
 

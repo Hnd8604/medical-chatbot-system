@@ -1168,6 +1168,7 @@ def _with_plan_metadata(payload: dict[str, Any], plan: IntentPlan) -> dict[str, 
     payload["usage"] = plan.usage
     payload["tool_name"] = plan.tool_name
     payload["intent_source"] = plan.source
+    payload["confidence_score"] = plan.confidence_score
     payload["llm_provider"] = settings.llm_provider
     payload["llm_model"] = settings.llm_model
     if plan.all_patients:

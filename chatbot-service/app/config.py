@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     openai_base_url: str | None = Field(default=None)
     llm_request_timeout_seconds: float = Field(default=20)
     enable_llm_answer: bool = Field(default=True)
+    demo_user_id: str = Field(default="demo_user")
+    demo_patient_id: str = Field(default="demo-patient-001")
 
     # Semantic Cache Config (Qdrant)
     qdrant_url: str = Field(default="http://localhost:6333")

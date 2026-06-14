@@ -11,6 +11,10 @@ def infer_observation_type(message: str) -> str | None:
         return "glucose"
     if contains_any(text, ["heart rate", "nhip tim"]):
         return "heart_rate"
+    if contains_any(text, ["ldl"]):
+        return "ldl"
+    if contains_any(text, ["hdl"]):
+        return "hdl"
     if contains_any(text, ["cholesterol"]):
         return "cholesterol"
     if contains_any(text, ["hba1c", "a1c"]):
@@ -39,8 +43,4 @@ def infer_observation_type(message: str) -> str | None:
         return "alt"
     if contains_any(text, ["triglyceride"]):
         return "triglyceride"
-    if contains_any(text, ["ldl"]):
-        return "ldl"
-    if contains_any(text, ["hdl"]):
-        return "hdl"
     return None

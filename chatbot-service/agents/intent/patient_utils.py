@@ -74,7 +74,7 @@ def resolve_explicit_patient_id(message: str) -> str | None:
         return demo_id.group(0)
 
     numbered_patient = re.search(
-        r"\b(?:patient|benh\s+nhan)\s*[-#:]?\s*0*([1-9][0-9]*)\b",
+        r"\b(?:patient|benh\s+nhan)\s*(?:so\s*)?[-#:]?\s*0*([1-9][0-9]*)\b",
         normalize_text(message),
         flags=re.IGNORECASE,
     )

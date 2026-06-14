@@ -47,7 +47,7 @@ class OpenAIIntentExtractor:
             "The product is for Vietnamese users, so Vietnamese medical wording is expected. "
             "Select exactly one tool. Use FHIR tools for structured patient data. "
             "Do not answer the medical question. Do not invent patient data. "
-            "If the user did not provide a patient id, use demo-patient-001 for local demo. "
+            f"If the user did not provide a patient id, use {DEFAULT_PATIENT_ID} for local demo. "
             "Vietnamese 'benh nhan' means patient, not condition. "
             "Questions about all patients, patient list, 'tat ca benh nhan', or 'danh sach benh nhan' must use search_patients. "
             "Questions that identify a patient by name, phone, birth date, or identifier must use search_patients unless a clear FHIR patient id is provided. "

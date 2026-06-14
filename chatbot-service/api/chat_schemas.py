@@ -1,0 +1,26 @@
+from pydantic import BaseModel, Field
+
+from app.config import get_settings
+
+
+class RecentMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ConversationContext(BaseModel):
+    memory_summary: str | None = None
+    active_patient_id: str | None = None
+    last_intent: str | None = None
+    last_tool_name: str | None = None
+    last_resource_type: str | None = None
+    last_resource_id: str | None = None
+    recent_messages: list[RecentMessage] = Field(default_factory=list)
+
+
+class ChatRequest(BaseModel):
+    user_id: str = Field(default_factory=lambda: get_settings().demo_user_id)
+    session_id: str | None = None
+    message: str = Field(min_length=1)
+    patient_id: str | None = None
+    conversation_context: ConversationContext | None = None

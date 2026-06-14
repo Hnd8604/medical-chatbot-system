@@ -1,4 +1,7 @@
-DEFAULT_PATIENT_ID = "demo-patient-001"
+from app.config import get_settings
+
+
+DEFAULT_PATIENT_ID = get_settings().demo_patient_id
 
 TOOL_GET_PATIENT = "get_patient_by_id"
 TOOL_SEARCH_PATIENTS = "search_patients"

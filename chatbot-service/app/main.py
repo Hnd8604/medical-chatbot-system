@@ -1,9 +1,10 @@
+from app.logger import setup_logging
+setup_logging()
+
 import logging
-import sys
 import asyncio
 from api.exceptions import register_exception_handlers
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 from api.chat_routes import router as chat_router
@@ -12,28 +13,14 @@ from api.health_routes import router as health_router
 from app.config import get_settings
 from services.semantic_cache import get_semantic_cache
 
-
-
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout) 
-    ]
-)
 log = logging.getLogger(__name__)
 settings = get_settings()
-
 
 async def cache_cleanup_task():
     """Background task định kỳ dọn dẹp cache."""
     cache_service = get_semantic_cache()
     while True:
         await asyncio.sleep(3600) 
-        
         log.info("[SYSTEM] Bắt đầu tiến trình dọn dẹp cache định kỳ...")
         await cache_service.cleanup_expired_cache()
 

@@ -12,6 +12,7 @@ from qdrant_client.models import (
     Filter,
     FieldCondition,
     MatchValue,
+    Range
 )
 from fastembed import TextEmbedding
 
@@ -64,39 +65,48 @@ class SemanticCacheService:
         threshold =self.settings.cache_similarity_threshold
         query_vector = self._get_embedding(question)
         
+        expiration_threshold = (
+            time.time() - self.settings.cache_ttl_seconds
+        )
         search_result = await self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector, 
             query_filter=Filter(
                 must=[
                     FieldCondition(key="user_id", match=MatchValue(value=user_id)),
-                    FieldCondition(key="patient_id", match=MatchValue(value=patient_id))
+                    FieldCondition(key="patient_id", match=MatchValue(value=patient_id)),
+                    FieldCondition(key="created_at",range=Range(gte=expiration_threshold))
                 ]
             ),
             limit=1
         )
 
         points = search_result.points
-        
-        if points and points[0].score >= threshold:
-            payload = points[0].payload
-            created_at = payload.get("created_at", 0)
-            
-            # Sử dụng TTL từ config
-            if time.time() - created_at > self.settings.cache_ttl_seconds:
-                log.info(f"[CACHE EXPIRED] Dữ liệu cache đã quá hạn.")
-                return None
-                
-            log.info(f"[CACHE HIT] Bỏ qua hoàn toàn LLM! Độ tương đồng: {points[0].score:.3f}")
-            return payload.get("answer"), payload.get("intent"), payload.get("original_usage", {})
-            
-        if points:
-            log.info(f"[CACHE MISS] Điểm tương đồng cao nhất là {points[0].score:.3f} (Dưới ngưỡng {threshold}).")
-        else:
-            log.info(f"[CACHE MISS] Không có câu hỏi nào trong cache.")
-            
-        return None
 
+        if not points:
+            log.info("[CACHE MISS] Không tìm thấy cache.")
+            return None
+
+        point = points[0]
+
+        if point.score < threshold:
+            log.info(
+                f"[CACHE MISS] Score={point.score:.3f} < threshold={threshold}"
+            )
+            return None
+
+        payload = point.payload
+
+        log.info(
+            f"[CACHE HIT] Độ tương đồng={point.score:.3f}"
+        )
+
+        return (
+            payload.get("answer"),
+            payload.get("intent"),
+            payload.get("original_usage", {})
+        )
+    
     async def save_to_cache(self, user_id: str, patient_id: str, intent: str, question: str, answer: str, usage: dict) -> None:
         """Stores the newly generated LLM answer into the vector cache database."""
         vector = self._get_embedding(question)
@@ -135,6 +145,26 @@ class SemanticCacheService:
             log.info(f"[CACHE INVALIDATED] All cache vectors cleared for patient: {patient_id}")
         except Exception as e:
             log.error(f"[CACHE ERROR] Invalidation sequence failed for patient {patient_id}: {e}")
+
+    async def cleanup_expired_cache(self) -> None:
+        """Quét và xóa toàn bộ các vector cache đã hết hạn (TTL) khỏi Qdrant."""
+        try:
+            expiration_threshold = time.time() - self.settings.cache_ttl_seconds
+            
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="created_at",
+                            range=Range(lt=expiration_threshold)
+                        )
+                    ]
+                )
+            )
+            log.info("[CACHE CLEANUP] Đã quét và dọn dẹp các bản ghi cache hết hạn.")
+        except Exception as e:
+            log.error(f"[CACHE CLEANUP ERROR] Lỗi khi dọn dẹp cache: {e}", exc_info=True)
 
 
 @lru_cache

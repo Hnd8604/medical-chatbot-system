@@ -1,6 +1,6 @@
 from dataclasses import replace
 from typing import Any
-
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -46,7 +46,7 @@ from fhir.normalizer import (
     normalize_patient,
     normalize_patient_bundle,
 )
-
+log = logging.getLogger(__name__)
 import contextvars
 current_user_context = contextvars.ContextVar("current_user_context", default="demo_user")
 
@@ -132,7 +132,7 @@ async def chat(
                 
             return payload
     except Exception as e:
-        print(f"Strict Cache read error: {e}")
+        log.warning(f"[CACHE ERROR] Bỏ qua đọc cache do lỗi Qdrant (Fallback sang LLM): {e}")
     
     plan = await intent_extractor.extract(
         request.message,
@@ -1078,7 +1078,7 @@ async def _finalize_chat_response(
                 usage=total_usage
             )
         except Exception as e:
-            print(f"Cache save error: {e}")
+            log.warning(f"[CACHE ERROR] Lỗi khi lưu cache vô Qdrant: {e}")
             
     if answer_result.reason:
         payload["answer_reason"] = answer_result.reason

@@ -480,7 +480,8 @@ function renderMessagesFromHistory(items) {
   }
 
   for (const item of items) {
-    appendMessage(item.role === "assistant" ? "assistant" : "user", item.content);
+    const role = item.role === "assistant" ? "assistant" : "user";
+    appendMessage(role, item.content, role === "assistant" ? { message_id: item.id } : undefined);
   }
 }
 
@@ -521,10 +522,96 @@ function appendMessage(role, text, data) {
     if (candidates) {
       article.append(candidates);
     }
+    if (data?.message_id) {
+      article.dataset.messageId = data.message_id;
+      article.append(renderFeedbackRow(data.message_id));
+    }
   }
 
   messages.append(article);
   messages.scrollTop = messages.scrollHeight;
+}
+
+function renderFeedbackRow(messageId) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "feedback-wrapper";
+
+  const triggerBtn = document.createElement("button");
+  triggerBtn.type = "button";
+  triggerBtn.className = "feedback-trigger";
+  triggerBtn.textContent = "★ Đánh giá";
+
+  const panel = document.createElement("div");
+  panel.className = "feedback-panel";
+  panel.hidden = true;
+
+  let pendingRating = 0;
+
+  const starsEl = document.createElement("div");
+  starsEl.className = "feedback-stars";
+
+  [1, 2, 3, 4, 5].forEach((val) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "feedback-btn";
+    btn.title = `${val} sao`;
+    btn.textContent = "★";
+    btn.addEventListener("mouseover", () => {
+      starsEl.querySelectorAll(".feedback-btn").forEach((b, i) => b.classList.toggle("hover", i < val));
+    });
+    btn.addEventListener("mouseout", () => {
+      starsEl.querySelectorAll(".feedback-btn").forEach((b, i) => {
+        b.classList.remove("hover");
+        b.classList.toggle("active", i < pendingRating);
+      });
+    });
+    btn.addEventListener("click", () => {
+      pendingRating = val;
+      starsEl.querySelectorAll(".feedback-btn").forEach((b, i) => b.classList.toggle("active", i < val));
+    });
+    starsEl.append(btn);
+  });
+
+  const textarea = document.createElement("textarea");
+  textarea.placeholder = "Nhận xét (không bắt buộc)...";
+  textarea.rows = 2;
+
+  const submitBtn = document.createElement("button");
+  submitBtn.type = "button";
+  submitBtn.className = "feedback-submit";
+  submitBtn.textContent = "Gửi đánh giá";
+  submitBtn.addEventListener("click", async () => {
+    if (!pendingRating) return;
+    await handleFeedback(messageId, pendingRating, textarea.value.trim(), wrapper, starsEl);
+  });
+
+  panel.append(starsEl, textarea, submitBtn);
+
+  triggerBtn.addEventListener("click", () => {
+    const opening = panel.hidden;
+    panel.hidden = !panel.hidden;
+    triggerBtn.classList.toggle("open", opening);
+    if (opening) textarea.focus();
+  });
+
+  wrapper.append(triggerBtn, panel);
+  return wrapper;
+}
+
+async function handleFeedback(messageId, rating, comment, wrapper, starsEl) {
+  try {
+    await apiPost(`/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, {
+      rating,
+      comment: comment || null,
+    });
+    starsEl.querySelectorAll(".feedback-btn").forEach((btn, i) => {
+      btn.classList.toggle("active", i < rating);
+      btn.disabled = true;
+    });
+    wrapper.replaceWith(createEl("span", "feedback-thanks", "★".repeat(rating) + " Cảm ơn bạn đã đánh giá!"));
+  } catch (e) {
+    console.error("Feedback failed", e);
+  }
 }
 
 function renderPatientCandidates(data) {

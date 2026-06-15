@@ -1,16 +1,19 @@
 package com.medicalchatbot.backend.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.medicalchatbot.backend.dto.request.FeedbackRequest;
 import com.medicalchatbot.backend.dto.response.ChatMessagesResponse;
 import com.medicalchatbot.backend.dto.request.ChatRequest;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
+import com.medicalchatbot.backend.dto.response.FeedbackResponse;
 import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.service.ChatApplicationService;
 import com.medicalchatbot.backend.service.ChatbotServiceClient;
 import com.medicalchatbot.backend.service.CostManagementService;
+import com.medicalchatbot.backend.service.FeedbackService;
 import com.medicalchatbot.backend.service.QuotaService;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -36,17 +39,20 @@ public class ChatbotController {
     private final ChatApplicationService chatApplicationService;
     private final QuotaService quotaService;
     private final CostManagementService costManagementService;
+    private final FeedbackService feedbackService;
 
     public ChatbotController(
             ChatbotServiceClient chatbotServiceClient,
             ChatApplicationService chatApplicationService,
             QuotaService quotaService,
-            CostManagementService costManagementService
+            CostManagementService costManagementService,
+            FeedbackService feedbackService
     ) {
         this.chatbotServiceClient = chatbotServiceClient;
         this.chatApplicationService = chatApplicationService;
         this.quotaService = quotaService;
         this.costManagementService = costManagementService;
+        this.feedbackService = feedbackService;
     }
 
     @GetMapping("/chatbot/status")
@@ -135,5 +141,13 @@ public class ChatbotController {
     @GetMapping("/model-pricing")
     ModelPricingListResponse modelPricing() {
         return costManagementService.activePricing();
+    }
+
+    @PostMapping("/chat/messages/{messageId}/feedback")
+    FeedbackResponse submitFeedback(
+            @PathVariable UUID messageId,
+            @Valid @RequestBody FeedbackRequest request
+    ) {
+        return feedbackService.submitFeedback(messageId, request);
     }
 }

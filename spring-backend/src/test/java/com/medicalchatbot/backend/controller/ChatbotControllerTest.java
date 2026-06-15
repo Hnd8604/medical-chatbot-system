@@ -133,6 +133,7 @@ class ChatbotControllerTest {
         when(chatApplicationService.chat(new ChatRequest(null, "demo-patient-001", "Bệnh nhân 001 đang dùng thuốc gì?")))
                 .thenReturn(new ChatResponse(
                         sessionId,
+                        null,
                         "Theo dữ liệu FHIR hiện có...",
                         "medications",
                         "get_medication_requests",

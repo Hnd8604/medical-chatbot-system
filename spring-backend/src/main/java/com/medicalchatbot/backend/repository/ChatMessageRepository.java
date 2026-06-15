@@ -18,4 +18,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
         session.touch();
         save(new ChatMessage(session, role.databaseValue(), content, metadata));
     }
+
+    default ChatMessage saveAndReturn(ChatSession session, ChatMessageRole role, String content, JsonNode metadata) {
+        session.touch();
+        return save(new ChatMessage(session, role.databaseValue(), content, metadata));
+    }
 }

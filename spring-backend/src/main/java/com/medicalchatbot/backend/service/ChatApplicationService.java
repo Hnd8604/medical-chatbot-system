@@ -19,6 +19,7 @@ import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
 import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;
 import com.medicalchatbot.backend.dto.request.ConversationContext;
+import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.UsageLog;
 import com.medicalchatbot.backend.entity.User;
@@ -105,7 +106,7 @@ public class ChatApplicationService {
         long latencyMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
 
         String answer = chatbotResponse.path("answer").asText("");
-        chatMessageRepository.save(session, ChatMessageRole.ASSISTANT, answer, assistantMessageMetadata(chatbotResponse));
+        ChatMessage assistantMsg = chatMessageRepository.saveAndReturn(session, ChatMessageRole.ASSISTANT, answer, assistantMessageMetadata(chatbotResponse));
         ChatSessionMemory nextMemory = nextSessionMemory(sessionMemory, effectivePatientId, chatbotResponse);
         chatSessionRepository.updateMemory(session, nextMemory);
         saveUsage(user, session, chatbotResponse, latencyMs);
@@ -113,6 +114,7 @@ public class ChatApplicationService {
 
         return new ChatResponse(
                 sessionId,
+                assistantMsg.getId(),
                 answer,
                 chatbotResponse.path("intent").asText(null),
                 chatbotResponse.path("tool_name").asText(null),

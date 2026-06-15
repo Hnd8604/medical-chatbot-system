@@ -9,6 +9,9 @@ public record ChatResponse(
         @JsonProperty("session_id")
         UUID sessionId,
 
+        @JsonProperty("message_id")
+        UUID messageId,
+
         String answer,
 
         String intent,

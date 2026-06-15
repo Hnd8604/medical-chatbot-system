@@ -4,7 +4,7 @@ This file tracks project progress. Update it whenever a meaningful feature, inte
 
 ## Current Snapshot
 
-Last updated: 2026-06-13
+Last updated: 2026-06-15
 
 The project currently has an end-to-end demo flow:
 
@@ -466,6 +466,77 @@ Verified:
 - Cache hit correctly bypasses LLM and returns mock usage payload.
 - Spring Boot `GET /api/metrics/cache` successfully calculates `hit_rate_percentage` and aggregates saved costs.
 
+### 14. Logging & Error Handling (M11)
+
+Status: Done
+
+Completed:
+
+- Implemented Application & External Logs (M11.1, M11.3): Centralized logging configuration in FastAPI and Spring Boot. Resolved UTF-8 stdout encoding issues.
+- Implemented Friendly Error Responses (M11.2): Created Global Exception Handlers across both services to gracefully catch 500 errors and return unified, secure JSON responses (`status`, `error_code`, `message`) to prevent stack trace leakage.
+- Implemented Sensitive Data Protection (M11.4): Created a Custom Formatter using Regex to automatically intercept and mask PII (Phone numbers, National IDs, and Emails) before writing to output logs.
+
+### 15. Audit Log & Data Access Tracking (M18)
+
+Status: Done
+
+Completed:
+
+- Implemented Medical Access Tracking (M18.1): Refactored `ChatApplicationService` to translate AI tool executions (e.g., `get_medication_requests`) into standardized medical compliance actions (`VIEW_MEDICATIONS`, `VIEW_OBSERVATIONS`, etc.).
+- Implemented Secure Storage (M18.2): Utilized the existing `audit_logs` PostgreSQL table. Mapped the entity using `JsonNode` for the `jsonb` metadata column to allow flexible, native JSON querying.
+- Implemented Admin API (M18.3): Created `AuditLogService` and `AuditLogController` exposing `GET /api/audit-logs`.
+- Implemented Dynamic Filtering & Pagination: Added a custom `@Query` in `AuditLogRepository` to support dynamic filtering by `userId`, `action`, `resourceType`, `resourceId`, and date ranges, along with full pagination and sorting support.
+- Fixed Serialization Issues: Applied `@JsonIgnore` and custom getters to prevent `LazyInitializationException` and Jackson empty object `{}` serialization errors on JPA relationships.
+
+### 16. Alert Management (M19)
+
+Status: Done
+
+Completed:
+
+### M19.1 - Alert threshold (Done)
+
+- Integrated runtime checks inside `QuotaService` (quota exhaustion), `ApiExceptionHandler` (500 internal errors and FastAPI/AI gateway timeouts), and `RateLimitInterceptor` (traffic anomalies).
+- System accurately detects when to trigger high-priority alerts based on pre-defined severities (INFO, WARNING, CRITICAL).
+
+### M19.2 - Alert generation (Done)
+
+- Created the `alerts` PostgreSQL table managed by Flyway migration (v8) with proper indexes for fast lookup and a strict `jsonb` constraint for dynamic metadata logging.
+- Fixed database insertion issues by safely mapping null metadata to empty JSON nodes `{}`.
+- Implemented smart alert deduplication/debounce logic to prevent alert storms (suppresses duplicate open alerts within a 15-minute window).
+- Added real-time asynchronous alert broadcasting to a Telegram Group Chat using Spring Boot 3's `RestClient` and `CompletableFuture`, driven by zero-leak environment variables configured via a local `.env` file.
+
+### M19.3 - Alert dashboard (Done)
+
+- Developed a production-grade Admin API endpoint (`GET /api/admin/alerts`) with support for pagination, dynamic sorting, and comprehensive filters (status, severity, source, alertType, and custom date range fromDate/toDate).
+- Implemented an alert resolution endpoint (`PATCH /api/admin/alerts/{id}/resolve`) leveraging proper Spring `ResponseStatusException` to return accurate HTTP 404 errors instead of generic 500 runtime exceptions for non-existent alerts.
+
+### 17. Backup & Restore (M26)
+
+Status: Done
+
+Completed:
+
+### M26.1 - Backup policy (Done)
+
+- Defined the backup scope to include both `medical_chatbot_app` (App DB) and `hapi` (HAPI FHIR DB).
+- Established a 7-day data retention policy.
+- Scheduled daily automated backups via Cron at 02:00 AM.
+- Created `BACKUP_RESTORE.md` documenting the comprehensive policy, avoiding committing any secret files (like `.env`) to the repository.
+
+### M26.2 - Backup automation (Done)
+
+- Created a highly defensive shell script (`infra/scripts/backup.sh`) utilizing `set -euo pipefail` to ensure fail-fast behavior.
+- Utilized `pg_dump --clean --if-exists` to guarantee that subsequent restores do not cause duplicate key constraint violations.
+- Implemented real-time Telegram alerts: If the backup pipeline fails (e.g., container down, disk full), the script safely loads Telegram credentials from `.env` and broadcasts a CRITICAL alert.
+- Implemented automated cleanup of `.sql.gz` backup files older than the 7-day retention period.
+
+### M26.3 - Restore procedure (Done)
+
+- Created a secure restore script (`infra/scripts/restore.sh`).
+- Added robust pre-flight checks: The script verifies if the target Docker container is running and performs a `gzip -t` integrity check on the backup file to prevent restoring from corrupted archives.
+- Enforced strict database recovery by running `psql` with `ON_ERROR_STOP=1`, halting the restoration process immediately if any SQL error occurs, thus preventing partial or corrupted data states.
+
 ## Current Capabilities
 
 The system can currently answer questions about:
@@ -490,8 +561,11 @@ The system can currently answer questions about:
 - Compact evidence reference memory for follow-up questions.
 - Daily AI quota status and quota blocking before AI calls.
 - Daily AI cost estimate and model pricing status.
+- Medical data access audit logging (Compliance) with a fully paginated, dynamically filterable Admin API.
+- Centralized exception handling and automatic PII masking in system logs.
 - Semantic Caching using Vector DB to reduce latency and AI token costs for repeated or similar queries.
 - Dynamic Redis-based rate limiting per IP or user package.
+- Automated daily PostgreSQL database backups with strict data integrity checks, 7-day retention, and real-time Telegram alerting on failure.
 
 Example questions:
 
@@ -524,7 +598,47 @@ chi so do co cao khong
 
 ## Next Recommended Milestones
 
-### 1. RAG For Medical Explanations
+### 1. System Alerts & Webhooks (M19) Or Authentication (M1)
+
+Status: Recommended next step
+
+Goal:
+
+- Prioritize either M19 to improve operational safety and incident visibility, or M1 to enable real user identity and access boundaries.
+- Choose M1 first if production-like access control is the immediate priority.
+- Choose M19 first if operational monitoring and reliability are the immediate priority.
+
+### 2. RAG For Medical Explanations
+
+### 1. Authentication And Access Control (M1)
+
+## Next Recommended Milestones
+
+### 1. Authentication And Access Control (M1)
+
+### 1. Authentication And Access Control (M1)
+
+Status: Recommended next step
+
+Goal:
+
+- Replace demo user with real login (JWT or OAuth2).
+- Add user-level access checks before exposing patient data.
+- Enable multi-user support with proper session isolation.
+
+## Next Recommended Milestones
+
+### 1. Authentication And Access Control (M1)
+
+Status: Recommended next step
+
+Goal:
+
+- Replace demo user with real login (JWT or OAuth2).
+- Add user-level access checks before exposing patient data.
+- Enable multi-user support with proper session isolation.
+
+### 2. RAG For Medical Explanations
 
 Status: Planned
 
@@ -536,7 +650,7 @@ Goal:
   - what hypertension means
   - what a medication is commonly used for
 
-### 2. Admin Cost And Quota UI
+### 3. Admin Cost And Quota UI
 
 Status: Partially done
 
@@ -548,7 +662,7 @@ Goal:
 - Show quota/cost status in Staff Demo Dashboard. Done in compact form.
 - Add Admin Dashboard for editing quotas/pricing and viewing longer-range cost statistics.
 
-### 3. Frontend Improvements
+### 4. Frontend Improvements
 
 Status: Partially done
 
@@ -557,12 +671,4 @@ Goal:
 - Patient search UI. Done for staff demo.
 - Chat history. Done for staff demo.
 - Improve evidence panel. Basic readable summaries done; production polish remains.
-
-### 4. Authentication And Access Control
-
-Status: Planned
-
-Goal:
-
-- Replace demo user with real login.
 - Add user-level access checks before exposing patient data.

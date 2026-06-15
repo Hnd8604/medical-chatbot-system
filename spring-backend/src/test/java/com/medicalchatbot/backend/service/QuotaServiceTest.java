@@ -2,9 +2,7 @@ package com.medicalchatbot.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
@@ -42,6 +41,9 @@ class QuotaServiceTest {
 
     @Mock
     private AuditLogRepository auditLogRepository;
+
+    @Mock
+    private AlertService alertService;
 
     @Test
     void demoUserStatusReturnsRemainingQuota() {
@@ -116,6 +118,14 @@ class QuotaServiceTest {
                 eq(userId.toString()),
                 any()
         );
+
+        verify(alertService).triggerAlert(
+                eq("QUOTA_SYSTEM"),
+                eq("QUOTA_EXCEEDED"),
+                eq(AlertSeverity.WARNING),
+                anyString(),
+                any()
+        );
     }
 
     @Test
@@ -161,6 +171,7 @@ class QuotaServiceTest {
                 usageLogRepository,
                 auditLogRepository,
                 new ObjectMapper(),
+                alertService,
                 ZoneId.of("Asia/Saigon")
         );
     }

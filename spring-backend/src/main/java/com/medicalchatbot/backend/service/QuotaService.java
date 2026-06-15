@@ -12,11 +12,13 @@ import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+
 public class QuotaService {
 
     private static final String DEMO_USERNAME = "demo_user";
@@ -35,13 +38,16 @@ public class QuotaService {
     private final ObjectMapper objectMapper;
     private final ZoneId quotaZone;
 
+    private final AlertService alertService;
+
     @Autowired
     public QuotaService(
             UserRepository userRepository,
             QuotaPolicyRepository quotaPolicyRepository,
             UsageLogRepository usageLogRepository,
             AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            AlertService alertService // 2. Inject vào constructor
     ) {
         this(
                 userRepository,
@@ -49,6 +55,7 @@ public class QuotaService {
                 usageLogRepository,
                 auditLogRepository,
                 objectMapper,
+                alertService,
                 ZoneId.systemDefault()
         );
     }
@@ -59,6 +66,7 @@ public class QuotaService {
             UsageLogRepository usageLogRepository,
             AuditLogRepository auditLogRepository,
             ObjectMapper objectMapper,
+            AlertService alertService,
             ZoneId quotaZone
     ) {
         this.userRepository = userRepository;
@@ -66,6 +74,7 @@ public class QuotaService {
         this.usageLogRepository = usageLogRepository;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.alertService = alertService;
         this.quotaZone = quotaZone;
     }
 
@@ -80,6 +89,14 @@ public class QuotaService {
             return;
         }
 
+
+        alertService.triggerAlert(
+                "QUOTA_SYSTEM",
+                "QUOTA_EXCEEDED",
+                AlertSeverity.WARNING,
+                "User " + userId + " bị chặn do: " + status.blockedReason(),
+                objectMapper.valueToTree(status)
+        );
         logQuotaBlocked(userId, status);
         throw new QuotaExceededException(status.blockedReason(), status);
     }

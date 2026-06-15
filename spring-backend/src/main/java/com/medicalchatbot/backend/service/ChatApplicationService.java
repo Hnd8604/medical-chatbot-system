@@ -225,14 +225,41 @@ public class ChatApplicationService {
             JsonNode chatbotResponse,
             long latencyMs
     ) {
+        String toolName = textOrNull(chatbotResponse, "tool_name");
+        String responsePatientId = textOrNull(chatbotResponse, "patient_id");
+
+
+        String action = "CHAT_COMPLETED";
+        String resourceType = "chat_session";
+        String resourceId = session.getId().toString();
+
+
+        if (toolName != null) {
+            switch (toolName) {
+                case "get_medication_requests" -> { action = "VIEW_MEDICATIONS"; resourceType = "MedicationRequest"; resourceId = responsePatientId; }
+                case "get_observations" -> { action = "VIEW_OBSERVATIONS"; resourceType = "Observation"; resourceId = responsePatientId; }
+                case "get_conditions" -> { action = "VIEW_CONDITIONS"; resourceType = "Condition"; resourceId = responsePatientId; }
+                case "get_encounters" -> { action = "VIEW_ENCOUNTERS"; resourceType = "Encounter"; resourceId = responsePatientId; }
+                case "get_patient_by_id" -> { action = "VIEW_PATIENT_DETAIL"; resourceType = "Patient"; resourceId = responsePatientId; }
+                case "search_patients" -> { action = "SEARCH_PATIENTS"; resourceType = "Patient"; resourceId = "search_query"; }
+                case "cache_hit" -> { action = "VIEW_FROM_CACHE"; resourceType = "Cache"; resourceId = responsePatientId; }
+                case "unsupported_question" -> { action = "ASK_UNSUPPORTED"; }
+            }
+        }
+
+
+        if (resourceId == null) {
+            resourceId = effectivePatientId != null ? effectivePatientId : session.getId().toString();
+        }
+
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("operation", "chat");
         metadata.put("latency_ms", latencyMs);
         metadata.put("intent", textOrNull(chatbotResponse, "intent"));
-        metadata.put("tool_name", textOrNull(chatbotResponse, "tool_name"));
+        metadata.put("tool_name", toolName);
         metadata.put("intent_source", textOrNull(chatbotResponse, "intent_source"));
         metadata.put("answer_source", textOrNull(chatbotResponse, "answer_source"));
-        metadata.put("patient_id", textOrNull(chatbotResponse, "patient_id"));
+        metadata.put("patient_id", responsePatientId);
         metadata.put("request_patient_id", request.patientId());
         metadata.put("effective_patient_id", effectivePatientId);
         metadata.put("llm_provider", textOrNull(chatbotResponse, "llm_provider"));
@@ -243,12 +270,13 @@ public class ChatApplicationService {
             metadata.put("needs_patient_selection", chatbotResponse.path("needs_patient_selection").asBoolean(false));
         }
 
+        // Gọi method save() tùy chỉnh mà bạn đã định nghĩa trong AuditLogRepository
         auditLogRepository.save(
                 user,
                 session,
-                "CHAT_COMPLETED",
-                "chat_session",
-                session.getId().toString(),
+                action,
+                resourceType,
+                resourceId,
                 metadata
         );
     }

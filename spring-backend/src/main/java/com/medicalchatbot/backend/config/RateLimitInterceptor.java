@@ -70,8 +70,11 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
         if (currentRequests != null && currentRequests > maxLimit) {
             log.warn("Rate limit exceeded for key {} ({} > {})", key, currentRequests, maxLimit);
-            // Ném exception thẳng ra ngoài, không tự ghi chuỗi JSON nữa
-            throw new RateLimitExceededException("Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.");
+
+            throw new RateLimitExceededException(
+                    "Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.",
+                    key
+            );
         }
 
         return true;

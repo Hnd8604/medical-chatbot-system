@@ -1,5 +1,5 @@
 from typing import Any
-
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from agents.answer_generator import AnswerGenerator, get_answer_generator

@@ -1,7 +1,15 @@
 package com.medicalchatbot.backend.exception;
 
 public class RateLimitExceededException extends RuntimeException {
-    public RateLimitExceededException(String message) {
+
+    private final String identifier;
+
+    public RateLimitExceededException(String message, String identifier) {
         super(message);
+        this.identifier = identifier;
+    }
+
+    public String getIdentifier() {
+        return identifier;
     }
 }

@@ -3,8 +3,10 @@ package com.medicalchatbot.backend.entity;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import lombok.Getter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -21,16 +23,19 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "audit_logs")
+@Getter
 public class AuditLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id")
     private ChatSession session;
@@ -76,5 +81,13 @@ public class AuditLog {
             return JsonNodeFactory.instance.objectNode();
         }
         return value;
+    }
+
+    public UUID getUserId() {
+        return user != null ? user.getId() : null;
+    }
+
+    public UUID getSessionId() {
+        return session != null ? session.getId() : null;
     }
 }

@@ -11,6 +11,12 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# Fix for double-quoted JAVA_HOME which breaks mvnw.cmd on Windows
+if ($env:JAVA_HOME -match '^"(.*)"$') {
+    $env:JAVA_HOME = $matches[1]
+}
+
 $RunDir = Join-Path $RootDir ".run"
 $LogDir = Join-Path $RootDir "logs"
 $HapiCompose = Join-Path $RootDir "infra\hapi-fhir\docker-compose.yml"
@@ -99,23 +105,41 @@ function Start-ManagedProcess {
 }
 
 function Stop-ManagedProcess {
-    param([string]$Name)
+    param(
+        [string]$Name,
+        [int]$Port = 0
+    )
 
     $pidFile = Join-Path $RunDir "$Name.pid"
-    if (-not (Test-Path $pidFile)) {
-        return
+    
+    # Try stopping by PID first (using tree kill)
+    if (Test-Path $pidFile) {
+        $processId = Get-Content -Path $pidFile | Select-Object -First 1
+        if ($processId) {
+            $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+            if ($process) {
+                # Use taskkill /T /F to kill process trees (essential for batch/spawned JVMs)
+                taskkill /F /T /PID $processId 2>&1 | Out-Null
+                Write-Host "Stopped $Name process tree (PID $processId)."
+            }
+        }
+        Remove-Item -LiteralPath $pidFile -Force
     }
 
-    $processId = Get-Content -Path $pidFile | Select-Object -First 1
-    if ($processId) {
-        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-        if ($process) {
-            Stop-Process -Id $processId -Force
-            Write-Host "Stopped $Name with PID $processId."
+    # Also clean up by port if specified, to catch orphaned JVMs or other processes
+    if ($Port -gt 0) {
+        $connections = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+        foreach ($conn in $connections) {
+            if ($conn.OwningProcess) {
+                $pid = $conn.OwningProcess
+                $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                if ($proc) {
+                    taskkill /F /T /PID $pid 2>&1 | Out-Null
+                    Write-Host "Stopped orphaned process on port $Port (PID $pid)."
+                }
+            }
         }
     }
-
-    Remove-Item -LiteralPath $pidFile -Force
 }
 
 function Invoke-StepCommand {
@@ -132,9 +156,9 @@ function Invoke-StepCommand {
 
 if ($Stop) {
     Write-Step "Stopping dev services"
-    Stop-ManagedProcess -Name "frontend"
-    Stop-ManagedProcess -Name "spring-backend"
-    Stop-ManagedProcess -Name "chatbot-service"
+    Stop-ManagedProcess -Name "frontend" -Port 5173
+    Stop-ManagedProcess -Name "spring-backend" -Port 8081
+    Stop-ManagedProcess -Name "chatbot-service" -Port 8000
     docker compose -f $HapiCompose down
     docker compose -f $AppPostgresCompose down
     docker compose -f $RedisCompose down

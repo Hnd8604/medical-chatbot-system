@@ -21,6 +21,16 @@ const refreshSessionsButton = document.querySelector("#refreshSessionsButton");
 const sessionSearchInput = document.querySelector("#sessionSearchInput");
 const sessionList = document.querySelector("#sessionList");
 
+const exportPdfButton = document.querySelector("#exportPdfButton");
+const exportCsvButton = document.querySelector("#exportCsvButton");
+const exportHistoryButton = document.querySelector("#exportHistoryButton");
+const exportModal = document.querySelector("#exportModal");
+const exportForm = document.querySelector("#exportForm");
+const exportFromDate = document.querySelector("#exportFromDate");
+const exportToDate = document.querySelector("#exportToDate");
+const exportFormat = document.querySelector("#exportFormat");
+const closeExportModal = document.querySelector("#closeExportModal");
+
 const sessionId = document.querySelector("#sessionId");
 const intent = document.querySelector("#intent");
 const answerSource = document.querySelector("#answerSource");
@@ -60,6 +70,27 @@ newChatButton.addEventListener("click", () => {
 refreshSessionsButton.addEventListener("click", () => {
   sessionSearchInput.value = "";
   loadSessions();
+});
+
+exportPdfButton.addEventListener("click", () => exportSession("pdf"));
+exportCsvButton.addEventListener("click", () => exportSession("csv"));
+
+exportHistoryButton.addEventListener("click", () => {
+  exportModal.style.display = "flex";
+  const today = new Date().toISOString().split("T")[0];
+  const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  exportFromDate.value = lastWeek;
+  exportToDate.value = today;
+});
+
+closeExportModal.addEventListener("click", () => {
+  exportModal.style.display = "none";
+});
+
+exportForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  exportHistory(exportFromDate.value, exportToDate.value, exportFormat.value);
+  exportModal.style.display = "none";
 });
 
 sessionSearchInput.addEventListener("input", () => {
@@ -507,6 +538,14 @@ function renderSessionsActiveState() {
   document.querySelectorAll(".session-row").forEach((node) => {
     node.classList.toggle("active", node.dataset.sessionId === currentSessionId);
   });
+  
+  if (currentSessionId) {
+    exportPdfButton.style.display = "inline-block";
+    exportCsvButton.style.display = "inline-block";
+  } else {
+    exportPdfButton.style.display = "none";
+    exportCsvButton.style.display = "none";
+  }
 }
 
 function resetMessages(text) {
@@ -806,6 +845,30 @@ function formatUsd(value) {
     minimumFractionDigits: 6,
     maximumFractionDigits: 6,
   }).format(Number(value || 0));
+}
+
+function exportSession(format) {
+  if (!currentSessionId) return;
+  const url = `${apiBaseUrl()}/api/chat/sessions/${currentSessionId}/export?format=${format}`;
+  const link = document.createElement("a");
+  link.href = url;
+  // If authorization is needed, usually the cookie handles it or we'd need to fetch and trigger download
+  // For standard browser download with cookies, link.click() works if the API allows GET.
+  link.target = "_blank";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function exportHistory(from, to, format) {
+  if (!from || !to) return;
+  const url = `${apiBaseUrl()}/api/chat/export?from=${from}&to=${to}&format=${format}`;
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 function createPlaceholder(text, className = "muted") {

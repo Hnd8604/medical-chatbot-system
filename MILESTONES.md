@@ -490,6 +490,29 @@ Completed:
 
 ## Current Capabilities
 
+### 16. Alert Management (M19)
+
+Status: Done
+
+Completed:
+
+### M19.1 - Alert threshold (Done)
+
+- Integrated runtime checks inside `QuotaService` (quota exhaustion), `ApiExceptionHandler` (500 internal errors and FastAPI/AI gateway timeouts), and `RateLimitInterceptor` (traffic anomalies).
+- System accurately detects when to trigger high-priority alerts based on pre-defined severities (INFO, WARNING, CRITICAL).
+
+### M19.2 - Alert generation (Done)
+
+- Created the `alerts` PostgreSQL table managed by Flyway migration (v8) with proper indexes for fast lookup and a strict `jsonb` constraint for dynamic metadata logging.
+- Fixed database insertion issues by safely mapping null metadata to empty JSON nodes `{}`.
+- Implemented smart alert deduplication/debounce logic to prevent alert storms (suppresses duplicate open alerts within a 15-minute window).
+- Added real-time asynchronous alert broadcasting to a Telegram Group Chat using Spring Boot 3's `RestClient` and `CompletableFuture`, driven by zero-leak environment variables configured via a local `.env` file.
+
+### M19.3 - Alert dashboard (Done)
+
+- Developed a production-grade Admin API endpoint (`GET /api/admin/alerts`) with support for pagination, dynamic sorting, and comprehensive filters (status, severity, source, alertType, and custom date range fromDate/toDate).
+- Implemented an alert resolution endpoint (`PATCH /api/admin/alerts/{id}/resolve`) leveraging proper Spring `ResponseStatusException` to return accurate HTTP 404 errors instead of generic 500 runtime exceptions for non-existent alerts.
+
 The system can currently answer questions about:
 
 - Patient list.
@@ -560,6 +583,36 @@ Goal:
 
 ### 2. RAG For Medical Explanations
 
+### 1. Authentication And Access Control (M1)
+
+## Next Recommended Milestones
+
+### 1. Authentication And Access Control (M1)
+
+### 1. Authentication And Access Control (M1)
+
+Status: Recommended next step
+
+Goal:
+
+- Replace demo user with real login (JWT or OAuth2).
+- Add user-level access checks before exposing patient data.
+- Enable multi-user support with proper session isolation.
+
+## Next Recommended Milestones
+
+### 1. Authentication And Access Control (M1)
+
+Status: Recommended next step
+
+Goal:
+
+- Replace demo user with real login (JWT or OAuth2).
+- Add user-level access checks before exposing patient data.
+- Enable multi-user support with proper session isolation.
+
+### 2. RAG For Medical Explanations
+
 Status: Planned
 
 Goal:
@@ -591,12 +644,4 @@ Goal:
 - Patient search UI. Done for staff demo.
 - Chat history. Done for staff demo.
 - Improve evidence panel. Basic readable summaries done; production polish remains.
-
-### 5. Authentication And Access Control
-
-Status: Planned
-
-Goal:
-
-- Replace demo user with real login.
 - Add user-level access checks before exposing patient data.

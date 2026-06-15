@@ -190,6 +190,7 @@ label {
 }
 
 .api-setting,
+.session-search,
 .history-actions,
 .session-panel {
   flex: 0 0 auto;

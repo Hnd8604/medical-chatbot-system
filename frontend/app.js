@@ -18,6 +18,7 @@ const sendButton = document.querySelector("#sendButton");
 const messages = document.querySelector("#messages");
 const newChatButton = document.querySelector("#newChatButton");
 const refreshSessionsButton = document.querySelector("#refreshSessionsButton");
+const sessionSearchInput = document.querySelector("#sessionSearchInput");
 const sessionList = document.querySelector("#sessionList");
 
 const sessionId = document.querySelector("#sessionId");
@@ -32,6 +33,7 @@ const costSummary = document.querySelector("#costSummary");
 let selectedPatient = null;
 let currentSessionId = null;
 let lastPatients = [];
+let sessionSearchTimer = null;
 
 patientSearchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -56,7 +58,15 @@ newChatButton.addEventListener("click", () => {
 });
 
 refreshSessionsButton.addEventListener("click", () => {
+  sessionSearchInput.value = "";
   loadSessions();
+});
+
+sessionSearchInput.addEventListener("input", () => {
+  window.clearTimeout(sessionSearchTimer);
+  sessionSearchTimer = window.setTimeout(() => {
+    loadSessions();
+  }, 300);
 });
 
 document.querySelectorAll("[data-prompt]").forEach((button) => {
@@ -410,15 +420,24 @@ async function submitChat(message, patientId, displayText) {
 async function loadSessions() {
   sessionList.replaceChildren(createPlaceholder("Đang tải lịch sử..."));
   try {
-    const data = await apiGet("/api/chat/sessions?limit=30");
-    renderSessionList(data.sessions || []);
+    const params = new URLSearchParams({ limit: "30" });
+    const query = sessionSearchInput.value.trim();
+    if (query) {
+      params.set("query", query);
+    }
+    const data = await apiGet(`/api/chat/sessions?${params.toString()}`);
+    renderSessionList(data.sessions || [], Boolean(query));
   } catch (error) {
     sessionList.replaceChildren(createPlaceholder(error.message, "error-text"));
   }
 }
 
-function renderSessionList(sessions) {
+function renderSessionList(sessions, isSearch = false) {
   sessionList.replaceChildren();
+  if (!sessions.length && isSearch) {
+    sessionList.append(createPlaceholder("Không tìm thấy hội thoại phù hợp."));
+    return;
+  }
   if (!sessions.length) {
     sessionList.append(createPlaceholder("Chưa có phiên chat."));
     return;

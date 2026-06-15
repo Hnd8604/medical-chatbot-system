@@ -25,6 +25,7 @@ import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.service.ChatApplicationService;
 import com.medicalchatbot.backend.service.ChatbotServiceClient;
 import com.medicalchatbot.backend.service.CostManagementService;
+import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.QuotaService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -33,12 +34,15 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ChatbotController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class ChatbotControllerTest {
 
     @Autowired
@@ -58,6 +62,12 @@ class ChatbotControllerTest {
 
     @MockitoBean
     private CostManagementService costManagementService;
+
+    @MockitoBean
+    private CurrentUserService currentUserService;
+
+    @MockitoBean
+    private StringRedisTemplate stringRedisTemplate;
 
     @Test
     void patientReturnsChatbotServicePayload() throws Exception {
@@ -222,7 +232,7 @@ class ChatbotControllerTest {
     @Test
     void chatSessionsReturnRecentSessions() throws Exception {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000401");
-        when(chatApplicationService.recentSessions(20))
+        when(chatApplicationService.sessions(null, 20))
                 .thenReturn(new ChatSessionListResponse(List.of(new ChatSessionSummary(
                         sessionId,
                         "Thuốc của bệnh nhân 001",
@@ -240,6 +250,36 @@ class ChatbotControllerTest {
                 .andExpect(jsonPath("$.sessions[0].active_patient_id").value("demo-patient-001"))
                 .andExpect(jsonPath("$.sessions[0].message_count").value(2))
                 .andExpect(jsonPath("$.sessions[0].last_message_preview").value("Theo dữ liệu FHIR..."));
+    }
+
+    @Test
+    void chatSessionsSearchByQuery() throws Exception {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000403");
+        when(chatApplicationService.sessions("thuoc", 30))
+                .thenReturn(new ChatSessionListResponse(List.of(new ChatSessionSummary(
+                        sessionId,
+                        "Thuoc cua benh nhan 002",
+                        OffsetDateTime.parse("2026-06-01T10:00:00Z"),
+                        OffsetDateTime.parse("2026-06-01T10:05:00Z"),
+                        "demo-patient-002",
+                        4,
+                        "Benh nhan dang dung Amlodipine."
+                ))));
+
+        mockMvc.perform(get("/api/chat/sessions?query=thuoc&limit=30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessions[0].id").value(sessionId.toString()))
+                .andExpect(jsonPath("$.sessions[0].title").value("Thuoc cua benh nhan 002"))
+                .andExpect(jsonPath("$.sessions[0].active_patient_id").value("demo-patient-002"))
+                .andExpect(jsonPath("$.sessions[0].message_count").value(4));
+    }
+
+    @Test
+    void chatSessionsRejectTooLongQuery() throws Exception {
+        String query = "a".repeat(101);
+
+        mockMvc.perform(get("/api/chat/sessions").param("query", query))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

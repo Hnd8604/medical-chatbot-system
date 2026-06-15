@@ -3,6 +3,7 @@ package com.medicalchatbot.backend.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -14,13 +15,16 @@ import static org.mockito.Mockito.doThrow;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
+import java.time.OffsetDateTime;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.dto.request.ChatContextMessage;
 import com.medicalchatbot.backend.dto.request.ChatRequest;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
+import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
+import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.entity.ChatSession;
@@ -306,8 +310,59 @@ class ChatApplicationServiceTest {
                 eq(1000),
                 eq(500),
                 eq(new BigDecimal("0.001200")),
-                isNull()
+                isNull(),
+                isNull(),
+                eq(0),
+                eq(BigDecimal.ZERO)
         );
+    }
+
+    @Test
+    void sessionsUsesRecentSessionsWhenQueryIsBlank() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        ChatApplicationService service = newService();
+        ChatSessionSummary summary = new ChatSessionSummary(
+                UUID.fromString("00000000-0000-0000-0000-000000000701"),
+                "Recent chat",
+                OffsetDateTime.parse("2026-06-01T10:00:00Z"),
+                OffsetDateTime.parse("2026-06-01T10:05:00Z"),
+                "demo-patient-001",
+                2,
+                "Latest answer"
+        );
+
+        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        when(chatSessionRepository.findRecentSessionsForUser(userId, 20)).thenReturn(List.of(summary));
+
+        ChatSessionListResponse result = service.sessions("   ", 20);
+
+        assertEquals(List.of(summary), result.sessions());
+        verify(chatSessionRepository).findRecentSessionsForUser(userId, 20);
+        verify(chatSessionRepository, never()).searchSessionsForUser(any(), any(), anyInt());
+    }
+
+    @Test
+    void sessionsUsesSearchWhenQueryHasText() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        ChatApplicationService service = newService();
+        ChatSessionSummary summary = new ChatSessionSummary(
+                UUID.fromString("00000000-0000-0000-0000-000000000702"),
+                "Medication chat",
+                OffsetDateTime.parse("2026-06-02T10:00:00Z"),
+                OffsetDateTime.parse("2026-06-02T10:05:00Z"),
+                "demo-patient-002",
+                4,
+                "Amlodipine"
+        );
+
+        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        when(chatSessionRepository.searchSessionsForUser(userId, "thuoc", 30)).thenReturn(List.of(summary));
+
+        ChatSessionListResponse result = service.sessions("  thuoc  ", 30);
+
+        assertEquals(List.of(summary), result.sessions());
+        verify(chatSessionRepository).searchSessionsForUser(userId, "thuoc", 30);
+        verify(chatSessionRepository, never()).findRecentSessionsForUser(any(), anyInt());
     }
 
     private ChatApplicationService newService() {

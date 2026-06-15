@@ -17,6 +17,7 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -109,9 +110,10 @@ public class ChatbotController {
 
     @GetMapping("/chat/sessions")
     ChatSessionListResponse chatSessions(
+            @RequestParam(required = false) @Size(max = 100) String query,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit
     ) {
-        return chatApplicationService.recentSessions(limit);
+        return chatApplicationService.sessions(query, limit);
     }
 
     @GetMapping("/chat/sessions/{sessionId}/messages")

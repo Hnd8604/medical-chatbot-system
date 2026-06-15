@@ -13,20 +13,21 @@ import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertSeverity;
+import com.medicalchatbot.backend.enums.NotificationType;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @Service
-
 public class QuotaService {
 
     private static final String DEMO_USERNAME = "demo_user";
@@ -36,9 +37,9 @@ public class QuotaService {
     private final UsageLogRepository usageLogRepository;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
-    private final ZoneId quotaZone;
-
     private final AlertService alertService;
+    private final NotificationService notificationService;
+    private final ZoneId quotaZone;
 
     @Autowired
     public QuotaService(
@@ -47,7 +48,8 @@ public class QuotaService {
             UsageLogRepository usageLogRepository,
             AuditLogRepository auditLogRepository,
             ObjectMapper objectMapper,
-            AlertService alertService // 2. Inject vào constructor
+            AlertService alertService,
+            NotificationService notificationService
     ) {
         this(
                 userRepository,
@@ -56,6 +58,7 @@ public class QuotaService {
                 auditLogRepository,
                 objectMapper,
                 alertService,
+                notificationService,
                 ZoneId.systemDefault()
         );
     }
@@ -67,6 +70,7 @@ public class QuotaService {
             AuditLogRepository auditLogRepository,
             ObjectMapper objectMapper,
             AlertService alertService,
+            NotificationService notificationService,
             ZoneId quotaZone
     ) {
         this.userRepository = userRepository;
@@ -75,6 +79,7 @@ public class QuotaService {
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
         this.alertService = alertService;
+        this.notificationService = notificationService;
         this.quotaZone = quotaZone;
     }
 
@@ -89,12 +94,11 @@ public class QuotaService {
             return;
         }
 
-
         alertService.triggerAlert(
                 "QUOTA_SYSTEM",
                 "QUOTA_EXCEEDED",
                 AlertSeverity.WARNING,
-                "User " + userId + " bị chặn do: " + status.blockedReason(),
+                "User " + userId + " b\u1ecb ch\u1eb7n do: " + status.blockedReason(),
                 objectMapper.valueToTree(status)
         );
         logQuotaBlocked(userId, status);
@@ -107,7 +111,6 @@ public class QuotaService {
             return 5;
         }
         return quotaPolicyRepository.findRateLimitByUsername(username);
-
     }
 
     private QuotaStatusResponse statusForUser(UUID userId, String username) {
@@ -126,6 +129,8 @@ public class QuotaService {
         );
 
         int usedTokens = usage.usedTokens();
+        checkAndTriggerQuotaWarning(userId, policy, usage, usedTokens);
+
         int remainingRequests = remaining(policy.dailyRequestLimit(), usage.usedRequests());
         int remainingTokens = remaining(policy.dailyTokenLimit(), usedTokens);
         BigDecimal remainingCost = remaining(policy.dailyCostLimitUsd(), usage.usedCostUsd());
@@ -196,5 +201,38 @@ public class QuotaService {
                 userId.toString(),
                 metadata
         );
+    }
+
+    private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {
+        double requestUsagePct = ratio(usage.usedRequests(), policy.dailyRequestLimit());
+        double tokenUsagePct = ratio(usedTokens, policy.dailyTokenLimit());
+
+        if (requestUsagePct < 0.8 && tokenUsagePct < 0.8) {
+            return;
+        }
+        try {
+            if (!notificationService.hasQuotaWarningBeenSentToday(userId)) {
+                double maxPct = Math.max(requestUsagePct, tokenUsagePct);
+                String content = String.format(
+                        "H\u1ea1n m\u1ee9c s\u1eed d\u1ee5ng h\u1eb1ng ng\u00e0y c\u1ee7a b\u1ea1n \u0111\u00e3 \u0111\u1ea1t %.1f%%. Vui l\u00f2ng s\u1eed d\u1ee5ng ti\u1ebft ki\u1ec7m.",
+                        maxPct * 100
+                );
+                notificationService.createNotification(
+                        userId,
+                        NotificationType.QUOTA_WARNING,
+                        "C\u1ea3nh b\u00e1o h\u1ea1n m\u1ee9c s\u1eed d\u1ee5ng (Quota Warning)",
+                        content
+                );
+            }
+        } catch (Exception ex) {
+            log.error("Failed to create quota warning notification for user {}", userId, ex);
+        }
+    }
+
+    private double ratio(int used, int limit) {
+        if (limit <= 0) {
+            return 0;
+        }
+        return (double) used / limit;
     }
 }

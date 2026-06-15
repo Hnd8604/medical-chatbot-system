@@ -2,7 +2,10 @@ package com.medicalchatbot.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +47,9 @@ class QuotaServiceTest {
 
     @Mock
     private AlertService alertService;
+
+    @Mock
+    private NotificationService notificationService;
 
     @Test
     void demoUserStatusReturnsRemainingQuota() {
@@ -172,6 +178,7 @@ class QuotaServiceTest {
                 auditLogRepository,
                 new ObjectMapper(),
                 alertService,
+                notificationService,
                 ZoneId.of("Asia/Saigon")
         );
     }

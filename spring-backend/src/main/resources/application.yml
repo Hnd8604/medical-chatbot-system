@@ -36,7 +36,7 @@ chatbot:
     base-url: http://localhost:8000
 
 telegram:
-    bot:
-      token : ${TELEGRAM_BOT_TOKEN}
-    chat:
-        id : ${TELEGRAM_CHAT_ID}
+  bot:
+    token: ${TELEGRAM_BOT_TOKEN:}
+  chat:
+    id: ${TELEGRAM_CHAT_ID:}

@@ -39,6 +39,7 @@ public class ChatApplicationService {
 
     private static final String DEMO_USERNAME = "demo_user";
     private static final int RECENT_CONTEXT_MESSAGE_LIMIT = 6;
+    private static final int SESSION_SEARCH_QUERY_MAX_LENGTH = 100;
 
     private final UserRepository userRepository;
     private final ChatSessionRepository chatSessionRepository;
@@ -138,8 +139,15 @@ public class ChatApplicationService {
     }
 
     public ChatSessionListResponse recentSessions(int limit) {
+        return sessions(null, limit);
+    }
+
+    public ChatSessionListResponse sessions(String query, int limit) {
         UUID userId = getDemoUser().getId();
-        List<ChatSessionSummary> sessions = chatSessionRepository.findRecentSessionsForUser(userId, limit);
+        String normalizedQuery = normalizeSessionSearchQuery(query);
+        List<ChatSessionSummary> sessions = normalizedQuery == null
+                ? chatSessionRepository.findRecentSessionsForUser(userId, limit)
+                : chatSessionRepository.searchSessionsForUser(userId, normalizedQuery, limit);
         return new ChatSessionListResponse(sessions);
     }
 
@@ -163,6 +171,20 @@ public class ChatApplicationService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiên trò chuyện.");
         }
         return chatSessionRepository.getReferenceById(sessionId);
+    }
+
+    private String normalizeSessionSearchQuery(String query) {
+        if (query == null) {
+            return null;
+        }
+        String trimmed = query.strip();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > SESSION_SEARCH_QUERY_MAX_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Từ khóa tìm kiếm quá dài.");
+        }
+        return trimmed;
     }
 
     private void saveUsage(User user, ChatSession session, JsonNode chatbotResponse, long latencyMs) {

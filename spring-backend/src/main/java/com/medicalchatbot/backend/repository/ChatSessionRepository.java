@@ -124,6 +124,109 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
     @Query(
             value = """
                     select
+                        s.id as "id",
+                        s.title as "title",
+                        s.created_at as "createdAt",
+                        s.updated_at as "updatedAt",
+                        s.active_patient_id as "activePatientId",
+                        coalesce(message_counts.message_count, 0) as "messageCount",
+                        '' as "lastMessagePreview"
+                    from chat_sessions s
+                    left join lateral (
+                        select count(*)::int as message_count
+                        from chat_messages m
+                        where m.session_id = s.id
+                    ) message_counts on true
+                    where s.user_id = :userId
+                      and s.created_at >= :fromDate and s.created_at < :toDate
+                    order by s.created_at asc
+                    """,
+            nativeQuery = true
+    )
+    List<ChatSessionSummaryView> findSessionViewsByDateRangeForUser(
+            @Param("userId") UUID userId,
+            @Param("fromDate") OffsetDateTime fromDate,
+            @Param("toDate") OffsetDateTime toDate
+    );
+
+    default List<ChatSessionSummary> findSessionsByDateRangeForUser(UUID userId, OffsetDateTime fromDate, OffsetDateTime toDate) {
+        return findSessionViewsByDateRangeForUser(userId, fromDate, toDate)
+                .stream()
+                .map(session -> new ChatSessionSummary(
+                        session.getId(),
+                        session.getTitle(),
+                        toOffsetDateTime(session.getCreatedAt()),
+                        toOffsetDateTime(session.getUpdatedAt()),
+                        session.getActivePatientId(),
+                        session.getMessageCount(),
+                        session.getLastMessagePreview()
+                ))
+                .toList();
+    }
+
+    @Query(
+            value = """
+                    select
+                        s.id as "id",
+                        s.title as "title",
+                        s.created_at as "createdAt",
+                        s.updated_at as "updatedAt",
+                        s.active_patient_id as "activePatientId",
+                        coalesce(message_counts.message_count, 0) as "messageCount",
+                        left(coalesce(last_message.content, ''), 160) as "lastMessagePreview"
+                    from chat_sessions s
+                    left join lateral (
+                        select count(*)::int as message_count
+                        from chat_messages m
+                        where m.session_id = s.id
+                    ) message_counts on true
+                    left join lateral (
+                        select m.content
+                        from chat_messages m
+                        where m.session_id = s.id
+                        order by m.created_at desc
+                        limit 1
+                    ) last_message on true
+                    where s.user_id = :userId
+                      and (
+                        lower(coalesce(s.title, '')) like concat('%', lower(:query), '%')
+                        or lower(coalesce(s.active_patient_id, '')) like concat('%', lower(:query), '%')
+                        or exists (
+                            select 1
+                            from chat_messages search_messages
+                            where search_messages.session_id = s.id
+                              and lower(search_messages.content) like concat('%', lower(:query), '%')
+                        )
+                      )
+                    order by s.updated_at desc
+                    limit :limit
+                    """,
+            nativeQuery = true
+    )
+    List<ChatSessionSummaryView> findSearchSessionViewsForUser(
+            @Param("userId") UUID userId,
+            @Param("query") String query,
+            @Param("limit") int limit
+    );
+
+    default List<ChatSessionSummary> searchSessionsForUser(UUID userId, String query, int limit) {
+        return findSearchSessionViewsForUser(userId, query, limit)
+                .stream()
+                .map(session -> new ChatSessionSummary(
+                        session.getId(),
+                        session.getTitle(),
+                        toOffsetDateTime(session.getCreatedAt()),
+                        toOffsetDateTime(session.getUpdatedAt()),
+                        session.getActivePatientId(),
+                        session.getMessageCount(),
+                        session.getLastMessagePreview()
+                ))
+                .toList();
+    }
+
+    @Query(
+            value = """
+                    select
                         m.id as "id",
                         m.role as "role",
                         m.content as "content",

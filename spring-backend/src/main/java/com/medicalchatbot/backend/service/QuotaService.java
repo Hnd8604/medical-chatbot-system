@@ -34,6 +34,7 @@ public class QuotaService {
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
     private final ZoneId quotaZone;
+    private final NotificationService notificationService;
 
     @Autowired
     public QuotaService(
@@ -41,7 +42,8 @@ public class QuotaService {
             QuotaPolicyRepository quotaPolicyRepository,
             UsageLogRepository usageLogRepository,
             AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            NotificationService notificationService
     ) {
         this(
                 userRepository,
@@ -49,6 +51,7 @@ public class QuotaService {
                 usageLogRepository,
                 auditLogRepository,
                 objectMapper,
+                notificationService,
                 ZoneId.systemDefault()
         );
     }
@@ -59,6 +62,7 @@ public class QuotaService {
             UsageLogRepository usageLogRepository,
             AuditLogRepository auditLogRepository,
             ObjectMapper objectMapper,
+            NotificationService notificationService,
             ZoneId quotaZone
     ) {
         this.userRepository = userRepository;
@@ -66,6 +70,7 @@ public class QuotaService {
         this.usageLogRepository = usageLogRepository;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.notificationService = notificationService;
         this.quotaZone = quotaZone;
     }
 
@@ -109,6 +114,10 @@ public class QuotaService {
         );
 
         int usedTokens = usage.usedTokens();
+        
+        // M25.1 Trigger quota warning if >= 80% used
+        checkAndTriggerQuotaWarning(userId, policy, usage, usedTokens);
+
         int remainingRequests = remaining(policy.dailyRequestLimit(), usage.usedRequests());
         int remainingTokens = remaining(policy.dailyTokenLimit(), usedTokens);
         BigDecimal remainingCost = remaining(policy.dailyCostLimitUsd(), usage.usedCostUsd());
@@ -179,5 +188,23 @@ public class QuotaService {
                 userId.toString(),
                 metadata
         );
+    }
+
+    private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {
+        double requestUsagePct = (double) usage.usedRequests() / policy.dailyRequestLimit();
+        double tokenUsagePct = (double) usedTokens / policy.dailyTokenLimit();
+
+        if (requestUsagePct >= 0.8 || tokenUsagePct >= 0.8) {
+            if (!notificationService.hasQuotaWarningBeenSentToday(userId)) {
+                double maxPct = Math.max(requestUsagePct, tokenUsagePct);
+                String content = String.format("Hạn mức sử dụng hằng ngày của bạn đã đạt %.1f%%. Vui lòng sử dụng tiết kiệm.", maxPct * 100);
+                notificationService.createNotification(
+                        userId,
+                        com.medicalchatbot.backend.enums.NotificationType.QUOTA_WARNING,
+                        "Cảnh báo hạn mức sử dụng (Quota Warning)",
+                        content
+                );
+            }
+        }
     }
 }

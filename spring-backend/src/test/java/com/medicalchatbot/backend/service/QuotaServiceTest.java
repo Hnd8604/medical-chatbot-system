@@ -43,6 +43,9 @@ class QuotaServiceTest {
     @Mock
     private AuditLogRepository auditLogRepository;
 
+    @Mock
+    private NotificationService notificationService;
+
     @Test
     void demoUserStatusReturnsRemainingQuota() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
@@ -161,6 +164,7 @@ class QuotaServiceTest {
                 usageLogRepository,
                 auditLogRepository,
                 new ObjectMapper(),
+                notificationService,
                 ZoneId.of("Asia/Saigon")
         );
     }

@@ -40,6 +40,12 @@ const evidenceList = document.querySelector("#evidenceList");
 const usageBlock = document.querySelector("#usageBlock");
 const costSummary = document.querySelector("#costSummary");
 
+const notificationBellButton = document.querySelector("#notificationBellButton");
+const notificationBadge = document.querySelector("#notificationBadge");
+const notificationPopover = document.querySelector("#notificationPopover");
+const notificationList = document.querySelector("#notificationList");
+const markAllNotificationsRead = document.querySelector("#markAllNotificationsRead");
+
 let selectedPatient = null;
 let currentSessionId = null;
 let lastPatients = [];
@@ -74,6 +80,33 @@ refreshSessionsButton.addEventListener("click", () => {
 
 exportPdfButton.addEventListener("click", () => exportSession("pdf"));
 exportCsvButton.addEventListener("click", () => exportSession("csv"));
+
+notificationBellButton.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = notificationPopover.style.display === "flex";
+  if (isOpen) {
+    notificationPopover.style.display = "none";
+  } else {
+    notificationPopover.style.display = "flex";
+    loadNotifications().catch(() => {});
+  }
+});
+
+markAllNotificationsRead.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  try {
+    await apiPost("/api/notifications/read-all");
+    await loadNotifications();
+  } catch (error) {
+    console.error("Không thể đánh dấu tất cả đã đọc:", error);
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".notification-container")) {
+    notificationPopover.style.display = "none";
+  }
+});
 
 exportHistoryButton.addEventListener("click", () => {
   exportModal.style.display = "flex";
@@ -111,6 +144,7 @@ apiBaseUrlInput.addEventListener("change", () => {
   clearPatientSearchResults("Nhập thông tin rồi bấm Tìm khi cần chọn bệnh nhân.");
   loadSessions();
   loadCostSummary();
+  loadNotifications().catch(() => {});
 });
 
 init();
@@ -121,6 +155,10 @@ async function init() {
   clearPatientSearchResults("Nhập thông tin rồi bấm Tìm khi cần chọn bệnh nhân.");
   await loadSessions();
   await loadCostSummary();
+  await loadNotifications().catch(() => {});
+  setInterval(() => {
+    loadNotifications().catch(() => {});
+  }, 30000);
 }
 
 function apiBaseUrl() {
@@ -438,10 +476,12 @@ async function submitChat(message, patientId, displayText) {
     renderDetails(data);
     await loadSessions();
     await loadCostSummary();
+    await loadNotifications().catch(() => {});
     setStatus("Sẵn sàng", "ready");
   } catch (error) {
     appendMessage("error", error.message || "Yêu cầu thất bại.");
     setStatus("Lỗi", "error");
+    await loadNotifications().catch(() => {});
   } finally {
     setFormDisabled(false);
     messageInput.focus();
@@ -714,9 +754,11 @@ function renderCostSummary(cost, quota) {
   grid.className = "cost-grid";
   grid.append(
     costMetric("Token hôm nay", formatInteger(cost?.total_tokens)),
+    costMetric("Lượt gọi hôm nay", `${formatInteger(quota?.used_requests)} lượt`),
     costMetric("Chi phí hôm nay", formatUsd(cost?.estimated_cost_usd)),
-    costMetric("Hạn mức/ngày", formatUsd(quota?.daily_cost_limit_usd)),
-    costMetric("Còn lại", formatUsd(quota?.remaining_cost_usd))
+    costMetric("Chi phí còn lại", formatUsd(quota?.remaining_cost_usd)),
+    costMetric("Hạn mức chi phí/ngày", formatUsd(quota?.daily_cost_limit_usd)),
+    costMetric("Hạn mức lượt gọi/ngày", `${formatInteger(quota?.daily_request_limit)} lượt`)
   );
   costSummary.append(grid);
 
@@ -897,4 +939,115 @@ function setFormDisabled(disabled) {
   document.querySelectorAll("[data-prompt]").forEach((button) => {
     button.disabled = disabled;
   });
+}
+
+async function loadNotifications() {
+  try {
+    const data = await apiGet("/api/notifications");
+    const unreadCount = data.unread_count || 0;
+    
+    if (unreadCount > 0) {
+      const oldVal = parseInt(notificationBadge.textContent || "0");
+      notificationBadge.textContent = unreadCount;
+      notificationBadge.style.display = "flex";
+      
+      if (unreadCount > oldVal) {
+        notificationBadge.classList.add("animate-bounce");
+        setTimeout(() => {
+          notificationBadge.classList.remove("animate-bounce");
+        }, 400);
+      }
+    } else {
+      notificationBadge.style.display = "none";
+      notificationBadge.textContent = "0";
+    }
+    
+    renderNotificationList(data.notifications || []);
+  } catch (error) {
+    console.error("Lỗi khi tải thông báo:", error);
+  }
+}
+
+function renderNotificationList(items) {
+  notificationList.replaceChildren();
+  
+  if (!items || items.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "popover-empty";
+    empty.innerHTML = `
+      <span class="popover-empty-icon">🔔</span>
+      <span>Không có thông báo nào</span>
+    `;
+    notificationList.appendChild(empty);
+    return;
+  }
+  
+  items.forEach(item => {
+    const div = document.createElement("div");
+    const typeClass = `type-${item.type.toLowerCase().replace(/_/g, '-')}`;
+    div.className = `notification-item ${item.isRead ? '' : 'unread'} ${typeClass}`;
+    
+    const headerDiv = document.createElement("div");
+    headerDiv.className = "notification-item-header";
+    
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "notification-item-title";
+    titleSpan.textContent = item.title;
+    
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "notification-item-time";
+    timeSpan.textContent = formatTimeAgo(item.createdAt);
+    
+    headerDiv.appendChild(titleSpan);
+    headerDiv.appendChild(timeSpan);
+    
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "notification-item-content";
+    contentDiv.textContent = item.content;
+    
+    div.appendChild(headerDiv);
+    div.appendChild(contentDiv);
+    
+    div.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!item.isRead) {
+        try {
+          await apiPost(`/api/notifications/${item.id}/read`);
+          await loadNotifications();
+        } catch (error) {
+          console.error("Không thể đánh dấu thông báo đã đọc:", error);
+        }
+      }
+    });
+    
+    notificationList.appendChild(div);
+  });
+}
+
+function formatTimeAgo(isoString) {
+  try {
+    const date = new Date(isoString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    
+    if (isNaN(seconds)) return "";
+    if (seconds < 0) return "Vừa xong";
+    
+    if (seconds < 60) return "Vừa xong";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} phút trước`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} ngày trước`;
+    
+    return date.toLocaleDateString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit'
+    });
+  } catch (e) {
+    return "";
+  }
 }

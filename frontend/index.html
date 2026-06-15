@@ -51,7 +51,26 @@
             <h2 id="selectedPatientName">Chưa chọn bệnh nhân</h2>
             <p id="selectedPatientMeta">Có thể hỏi câu tổng quát hoặc tìm bệnh nhân ở panel bên phải để chat theo hồ sơ.</p>
           </div>
-          <div class="chat-actions" style="display: flex; gap: 8px;">
+          <div class="chat-actions" style="display: flex; gap: 8px; align-items: center;">
+            <!-- Notification Bell -->
+            <div class="notification-container">
+              <button type="button" id="notificationBellButton">
+                🔔
+                <span id="notificationBadge" style="display: none;">0</span>
+              </button>
+              
+              <!-- Notification Popover -->
+              <div id="notificationPopover" class="notification-popover">
+                <div class="popover-header">
+                  <h3>Thông báo</h3>
+                  <button type="button" id="markAllNotificationsRead">Đọc tất cả</button>
+                </div>
+                <div id="notificationList" class="popover-list">
+                  <!-- Dynamic items -->
+                </div>
+              </div>
+            </div>
+
             <button type="button" id="exportPdfButton" style="display: none;">Xuất PDF</button>
             <button type="button" id="exportCsvButton" style="display: none;">Xuất CSV</button>
           </div>

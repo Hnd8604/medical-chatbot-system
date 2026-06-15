@@ -8,6 +8,7 @@ import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.service.ChatbotServiceClient;
+import com.medicalchatbot.backend.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -22,6 +23,9 @@ class SpringBackendApplicationTests {
 
 	@MockitoBean
 	private UserRepository userRepository;
+
+	@MockitoBean
+	private NotificationRepository notificationRepository;
 
 	@MockitoBean
 	private ChatSessionRepository chatSessionRepository;

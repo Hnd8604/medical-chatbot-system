@@ -4,7 +4,7 @@ This file tracks project progress. Update it whenever a meaningful feature, inte
 
 ## Current Snapshot
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 The project currently has an end-to-end demo flow:
 
@@ -488,8 +488,6 @@ Completed:
 - Implemented Dynamic Filtering & Pagination: Added a custom `@Query` in `AuditLogRepository` to support dynamic filtering by `userId`, `action`, `resourceType`, `resourceId`, and date ranges, along with full pagination and sorting support.
 - Fixed Serialization Issues: Applied `@JsonIgnore` and custom getters to prevent `LazyInitializationException` and Jackson empty object `{}` serialization errors on JPA relationships.
 
-## Current Capabilities
-
 ### 16. Alert Management (M19)
 
 Status: Done
@@ -512,6 +510,34 @@ Completed:
 
 - Developed a production-grade Admin API endpoint (`GET /api/admin/alerts`) with support for pagination, dynamic sorting, and comprehensive filters (status, severity, source, alertType, and custom date range fromDate/toDate).
 - Implemented an alert resolution endpoint (`PATCH /api/admin/alerts/{id}/resolve`) leveraging proper Spring `ResponseStatusException` to return accurate HTTP 404 errors instead of generic 500 runtime exceptions for non-existent alerts.
+
+### 17. Backup & Restore (M26)
+
+Status: Done
+
+Completed:
+
+### M26.1 - Backup policy (Done)
+
+- Defined the backup scope to include both `medical_chatbot_app` (App DB) and `hapi` (HAPI FHIR DB).
+- Established a 7-day data retention policy.
+- Scheduled daily automated backups via Cron at 02:00 AM.
+- Created `BACKUP_RESTORE.md` documenting the comprehensive policy, avoiding committing any secret files (like `.env`) to the repository.
+
+### M26.2 - Backup automation (Done)
+
+- Created a highly defensive shell script (`infra/scripts/backup.sh`) utilizing `set -euo pipefail` to ensure fail-fast behavior.
+- Utilized `pg_dump --clean --if-exists` to guarantee that subsequent restores do not cause duplicate key constraint violations.
+- Implemented real-time Telegram alerts: If the backup pipeline fails (e.g., container down, disk full), the script safely loads Telegram credentials from `.env` and broadcasts a CRITICAL alert.
+- Implemented automated cleanup of `.sql.gz` backup files older than the 7-day retention period.
+
+### M26.3 - Restore procedure (Done)
+
+- Created a secure restore script (`infra/scripts/restore.sh`).
+- Added robust pre-flight checks: The script verifies if the target Docker container is running and performs a `gzip -t` integrity check on the backup file to prevent restoring from corrupted archives.
+- Enforced strict database recovery by running `psql` with `ON_ERROR_STOP=1`, halting the restoration process immediately if any SQL error occurs, thus preventing partial or corrupted data states.
+
+## Current Capabilities
 
 The system can currently answer questions about:
 
@@ -539,6 +565,7 @@ The system can currently answer questions about:
 - Centralized exception handling and automatic PII masking in system logs.
 - Semantic Caching using Vector DB to reduce latency and AI token costs for repeated or similar queries.
 - Dynamic Redis-based rate limiting per IP or user package.
+- Automated daily PostgreSQL database backups with strict data integrity checks, 7-day retention, and real-time Telegram alerting on failure.
 
 Example questions:
 

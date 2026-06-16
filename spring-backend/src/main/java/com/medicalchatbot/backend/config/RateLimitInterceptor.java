@@ -54,10 +54,10 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        String username = currentUserService.getCurrentUsername();
+        String username = currentUserService.getCurrentUsernameOrNull();
         int maxLimit = quotaService.getRateLimitForUser(username);
 
-        String key = "anonymousUser".equals(username) ?
+        String key = username == null ?
                 "rate_limit:ip:" + getClientIp(request) :
                 "rate_limit:user:" + username;
 

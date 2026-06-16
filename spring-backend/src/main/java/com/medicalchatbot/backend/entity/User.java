@@ -3,11 +3,15 @@ package com.medicalchatbot.backend.entity;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import com.medicalchatbot.backend.enums.UserRole;
+import com.medicalchatbot.backend.enums.UserStatus;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -30,8 +34,22 @@ public class User {
     @Column(unique = true, length = 255)
     private String email;
 
+    @Column(name = "display_name", nullable = false, length = 255)
+    private String displayName;
+
+    @Column(name = "password_hash", nullable = false, length = 255)
+    private String passwordHash;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private String role = "USER";
+    private UserRole role = UserRole.USER;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private UserStatus status = UserStatus.ACTIVE;
+
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "quota_policy_id")
@@ -64,8 +82,24 @@ public class User {
         return email;
     }
 
-    public String getRole() {
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public UserRole getRole() {
         return role;
+    }
+
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    public int getTokenVersion() {
+        return tokenVersion;
     }
 
     public QuotaPolicy getQuotaPolicy() {
@@ -78,5 +112,17 @@ public class User {
 
     public OffsetDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public void updateRole(UserRole role) {
+        this.role = role;
+    }
+
+    public void updateStatus(UserStatus status) {
+        this.status = status;
+    }
+
+    public void incrementTokenVersion() {
+        this.tokenVersion += 1;
     }
 }

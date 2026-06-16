@@ -30,8 +30,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class QuotaService {
 
-    private static final String DEMO_USERNAME = "demo_user";
-
     private final UserRepository userRepository;
     private final QuotaPolicyRepository quotaPolicyRepository;
     private final UsageLogRepository usageLogRepository;
@@ -40,6 +38,7 @@ public class QuotaService {
     private final AlertService alertService;
     private final NotificationService notificationService;
     private final ZoneId quotaZone;
+    private final CurrentUserService currentUserService;
 
     @Autowired
     public QuotaService(
@@ -49,7 +48,8 @@ public class QuotaService {
             AuditLogRepository auditLogRepository,
             ObjectMapper objectMapper,
             AlertService alertService,
-            NotificationService notificationService
+            NotificationService notificationService,
+            CurrentUserService currentUserService
     ) {
         this(
                 userRepository,
@@ -59,7 +59,8 @@ public class QuotaService {
                 objectMapper,
                 alertService,
                 notificationService,
-                ZoneId.systemDefault()
+                ZoneId.systemDefault(),
+                currentUserService
         );
     }
 
@@ -71,7 +72,8 @@ public class QuotaService {
             ObjectMapper objectMapper,
             AlertService alertService,
             NotificationService notificationService,
-            ZoneId quotaZone
+            ZoneId quotaZone,
+            CurrentUserService currentUserService
     ) {
         this.userRepository = userRepository;
         this.quotaPolicyRepository = quotaPolicyRepository;
@@ -81,11 +83,12 @@ public class QuotaService {
         this.alertService = alertService;
         this.notificationService = notificationService;
         this.quotaZone = quotaZone;
+        this.currentUserService = currentUserService;
     }
 
-    public QuotaStatusResponse demoUserStatus() {
-        UUID userId = getDemoUserId();
-        return statusForUser(userId, DEMO_USERNAME);
+    public QuotaStatusResponse currentUserStatus() {
+        User user = currentUserService.requireCurrentUser();
+        return statusForUser(user.getId(), user.getUsername());
     }
 
     public void assertQuotaAvailable(UUID userId) {
@@ -98,26 +101,27 @@ public class QuotaService {
                 "QUOTA_SYSTEM",
                 "QUOTA_EXCEEDED",
                 AlertSeverity.WARNING,
-                "User " + userId + " b\u1ecb ch\u1eb7n do: " + status.blockedReason(),
+                "User " + userId + " bị chặn do: " + status.blockedReason(),
                 objectMapper.valueToTree(status)
         );
         logQuotaBlocked(userId, status);
         throw new QuotaExceededException(status.blockedReason(), status);
     }
 
-    @Cacheable(value = "rateLimitConfig", key = "#userId")
+    @Cacheable(value = "rateLimitConfig", key = "#username")
     public int getRateLimitForUser(String username) {
-        if ("anonymousUser".equals(username)) {
+        if (username == null || username.isBlank() || "anonymousUser".equals(username)) {
             return 5;
         }
-        return quotaPolicyRepository.findRateLimitByUsername(username);
+        Integer configuredLimit = quotaPolicyRepository.findRateLimitByUsername(username);
+        return configuredLimit != null ? configuredLimit : 5;
     }
 
     private QuotaStatusResponse statusForUser(UUID userId, String username) {
         QuotaPolicyInfo policy = quotaPolicyRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Kh\u00f4ng t\u00ecm th\u1ea5y quota policy cho ng\u01b0\u1eddi d\u00f9ng."
+                        "Không tìm thấy quota policy cho người dùng."
                 ));
         ZonedDateTime now = ZonedDateTime.now(quotaZone);
         OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay(quotaZone).toOffsetDateTime();
@@ -155,23 +159,15 @@ public class QuotaService {
         );
     }
 
-    private UUID getDemoUserId() {
-        return userRepository.findIdByUsername(DEMO_USERNAME)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi d\u00f9ng demo."
-                ));
-    }
-
     private String blockedReason(QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {
         if (usage.usedRequests() >= policy.dailyRequestLimit()) {
-            return "\u0110\u00e3 v\u01b0\u1ee3t qu\u00e1 h\u1ea1n m\u1ee9c " + policy.dailyRequestLimit() + " l\u01b0\u1ee3t g\u1ecdi AI/ng\u00e0y.";
+            return "Đã vượt quá hạn mức " + policy.dailyRequestLimit() + " lượt gọi AI/ngày.";
         }
         if (usedTokens >= policy.dailyTokenLimit()) {
-            return "\u0110\u00e3 v\u01b0\u1ee3t qu\u00e1 h\u1ea1n m\u1ee9c " + policy.dailyTokenLimit() + " token/ng\u00e0y.";
+            return "Đã vượt quá hạn mức " + policy.dailyTokenLimit() + " token/ngày.";
         }
         if (usage.usedCostUsd().compareTo(policy.dailyCostLimitUsd()) >= 0) {
-            return "\u0110\u00e3 v\u01b0\u1ee3t qu\u00e1 h\u1ea1n m\u1ee9c chi ph\u00ed AI/ng\u00e0y.";
+            return "Đã vượt quá hạn mức chi phí AI/ngày.";
         }
         return null;
     }
@@ -214,13 +210,13 @@ public class QuotaService {
             if (!notificationService.hasQuotaWarningBeenSentToday(userId)) {
                 double maxPct = Math.max(requestUsagePct, tokenUsagePct);
                 String content = String.format(
-                        "H\u1ea1n m\u1ee9c s\u1eed d\u1ee5ng h\u1eb1ng ng\u00e0y c\u1ee7a b\u1ea1n \u0111\u00e3 \u0111\u1ea1t %.1f%%. Vui l\u00f2ng s\u1eed d\u1ee5ng ti\u1ebft ki\u1ec7m.",
+                        "Hạn mức sử dụng hằng ngày của bạn đã đạt %.1f%%. Vui lòng sử dụng tiết kiệm.",
                         maxPct * 100
                 );
                 notificationService.createNotification(
                         userId,
                         NotificationType.QUOTA_WARNING,
-                        "C\u1ea3nh b\u00e1o h\u1ea1n m\u1ee9c s\u1eed d\u1ee5ng (Quota Warning)",
+                        "Cảnh báo hạn mức sử dụng (Quota Warning)",
                         content
                 );
             }

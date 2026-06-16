@@ -6,6 +6,9 @@ public record ChatbotChatRequest(
         @JsonProperty("user_id")
         String userId,
 
+        @JsonProperty("user_role")
+        String userRole,
+
         @JsonProperty("session_id")
         String sessionId,
 

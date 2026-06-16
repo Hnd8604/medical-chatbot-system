@@ -8,7 +8,6 @@ from agents.intent.constants import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_MEDICATIONS,
     TOOL_UNSUPPORTED,
-    DEFAULT_PATIENT_ID,
 )
 from agents.intent.models import IntentPlan
 from agents.intent.observation_utils import infer_observation_type

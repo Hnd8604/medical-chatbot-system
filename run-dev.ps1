@@ -249,6 +249,27 @@ Wait-Http -Url "http://localhost:5173" -Retries 30 -DelaySeconds 2
 
 if (-not $SkipFlowCheck) {
     Write-Step "Checking full chat flow through Spring"
+    # M1 requires JWT auth for /api/chat. Use doctor_demo because this smoke test
+    # asks for patient medication data, which USER accounts cannot access.
+    $loginBody = @{
+        username_or_email = "doctor_demo"
+        password = "DoctorDemo123!"
+    } | ConvertTo-Json
+    $loginBytes = [System.Text.Encoding]::UTF8.GetBytes($loginBody)
+
+    Add-Type -AssemblyName System.Net.Http
+    $httpClient = [System.Net.Http.HttpClient]::new()
+    $loginContent = [System.Net.Http.ByteArrayContent]::new($loginBytes)
+    $loginContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/json; charset=utf-8")
+    $loginResponse = $httpClient.PostAsync("http://localhost:8081/api/auth/login", $loginContent).GetAwaiter().GetResult()
+    $loginResponseBytes = $loginResponse.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+    $loginResponseText = [System.Text.Encoding]::UTF8.GetString($loginResponseBytes)
+    if (-not $loginResponse.IsSuccessStatusCode) {
+        throw "Full chat flow login failed with HTTP $([int]$loginResponse.StatusCode): $loginResponseText"
+    }
+    $login = $loginResponseText | ConvertFrom-Json
+    $httpClient.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $login.access_token)
+
     # Keep the smoke-test payload ASCII to avoid Windows PowerShell source encoding issues.
     $body = @{
         message = "Benh nhan demo-patient-001 dang dung thuoc gi?"
@@ -256,8 +277,6 @@ if (-not $SkipFlowCheck) {
     } | ConvertTo-Json
     $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 
-    Add-Type -AssemblyName System.Net.Http
-    $httpClient = [System.Net.Http.HttpClient]::new()
     $content = [System.Net.Http.ByteArrayContent]::new($bodyBytes)
     $content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/json; charset=utf-8")
     $httpResponse = $httpClient.PostAsync("http://localhost:8081/api/chat", $content).GetAwaiter().GetResult()

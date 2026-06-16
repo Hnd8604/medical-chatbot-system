@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-from agents.intent.constants import DEFAULT_PATIENT_ID
 from agents.intent.text_utils import (
     normalize_text,
     contains_any,
@@ -52,16 +51,15 @@ def extract_patient_search_criteria(message: str) -> dict[str, str]:
     return criteria
 
 
-def resolve_patient_id_for_request(message: str, provided_patient_id: str | None = None) -> str:
+def resolve_patient_id_for_request(message: str, provided_patient_id: str | None = None) -> str | None:
     return (
         resolve_explicit_patient_id(message)
         or normalize_patient_id(provided_patient_id)
-        or DEFAULT_PATIENT_ID
     )
 
 
-def resolve_patient_id(message: str) -> str:
-    return resolve_explicit_patient_id(message) or DEFAULT_PATIENT_ID
+def resolve_patient_id(message: str) -> str | None:
+    return resolve_explicit_patient_id(message)
 
 
 def resolve_explicit_patient_id(message: str) -> str | None:

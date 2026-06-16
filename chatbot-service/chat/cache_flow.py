@@ -2,9 +2,8 @@ from typing import Any
 
 from agents.intent_extractor import IntentPlan
 from api.chat_schemas import ChatRequest
-from app.config import get_settings
 from chat.context_memory import _patient_id_hint
-from chat.response_builder import _build_memory_update, _zero_usage
+from chat.response_builder import NO_PATIENT_CACHE_KEY, _build_memory_update, _zero_usage
 from services.semantic_cache import SemanticCacheService
 
 
@@ -13,8 +12,7 @@ async def get_cached_chat_payload(
     cache_service: SemanticCacheService,
 ) -> dict[str, Any] | None:
     patient_hint = _patient_id_hint(request)
-    settings = get_settings()
-    patient_id_for_cache = patient_hint or settings.demo_patient_id
+    patient_id_for_cache = patient_hint or NO_PATIENT_CACHE_KEY
     strict_cache_result = await cache_service.get_cached_answer(
         user_id=request.user_id,
         patient_id=patient_id_for_cache,
@@ -37,8 +35,8 @@ async def get_cached_chat_payload(
         },
         "tool_name": "cache_hit",
         "intent_source": "strict_cache",
-        "llm_provider": settings.llm_provider,
-        "llm_model": settings.llm_model,
+        "llm_provider": cache_service.settings.llm_provider,
+        "llm_model": cache_service.settings.llm_model,
     }
     mock_plan = IntentPlan(
         tool_name="cache_hit",

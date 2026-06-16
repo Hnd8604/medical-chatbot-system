@@ -10,24 +10,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.request.ChatContextMessage;
+import com.medicalchatbot.backend.dto.request.ChatRequest;
+import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;
+import com.medicalchatbot.backend.dto.request.ConversationContext;
 import com.medicalchatbot.backend.dto.response.ChatMessageItem;
 import com.medicalchatbot.backend.dto.response.ChatMessagesResponse;
-import com.medicalchatbot.backend.dto.request.ChatRequest;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
 import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
-import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;
-import com.medicalchatbot.backend.dto.request.ConversationContext;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
-import com.medicalchatbot.backend.entity.UsageLog;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.ChatMessageRole;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
-import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,11 +35,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ChatApplicationService {
 
-    private static final String DEMO_USERNAME = "demo_user";
     private static final int RECENT_CONTEXT_MESSAGE_LIMIT = 6;
     private static final int SESSION_SEARCH_QUERY_MAX_LENGTH = 100;
 
-    private final UserRepository userRepository;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final UsageLogRepository usageLogRepository;
@@ -50,9 +46,9 @@ public class ChatApplicationService {
     private final QuotaService quotaService;
     private final CostEstimationService costEstimationService;
     private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
 
     public ChatApplicationService(
-            UserRepository userRepository,
             ChatSessionRepository chatSessionRepository,
             ChatMessageRepository chatMessageRepository,
             UsageLogRepository usageLogRepository,
@@ -60,9 +56,9 @@ public class ChatApplicationService {
             ChatbotServiceClient chatbotServiceClient,
             QuotaService quotaService,
             CostEstimationService costEstimationService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            CurrentUserService currentUserService
     ) {
-        this.userRepository = userRepository;
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.usageLogRepository = usageLogRepository;
@@ -71,11 +67,12 @@ public class ChatApplicationService {
         this.quotaService = quotaService;
         this.costEstimationService = costEstimationService;
         this.objectMapper = objectMapper;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional
     public ChatResponse chat(ChatRequest request) {
-        User user = getDemoUser();
+        User user = currentUserService.requireCurrentUser();
         UUID userId = user.getId();
         quotaService.assertQuotaAvailable(userId);
         ChatSession session = request.sessionId() == null
@@ -99,6 +96,7 @@ public class ChatApplicationService {
         long startedAtNanos = System.nanoTime();
         JsonNode chatbotResponse = chatbotServiceClient.chat(new ChatbotChatRequest(
                 userId.toString(),
+                user.getRole().name(),
                 sessionId.toString(),
                 request.message(),
                 effectivePatientId,
@@ -107,7 +105,12 @@ public class ChatApplicationService {
         long latencyMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
 
         String answer = chatbotResponse.path("answer").asText("");
-        ChatMessage assistantMsg = chatMessageRepository.saveAndReturn(session, ChatMessageRole.ASSISTANT, answer, assistantMessageMetadata(chatbotResponse));
+        ChatMessage assistantMsg = chatMessageRepository.saveAndReturn(
+                session,
+                ChatMessageRole.ASSISTANT,
+                answer,
+                assistantMessageMetadata(chatbotResponse)
+        );
         ChatSessionMemory nextMemory = nextSessionMemory(sessionMemory, effectivePatientId, chatbotResponse);
         chatSessionRepository.updateMemory(session, nextMemory);
         saveUsage(user, session, chatbotResponse, latencyMs);
@@ -143,7 +146,7 @@ public class ChatApplicationService {
     }
 
     public ChatSessionListResponse sessions(String query, int limit) {
-        UUID userId = getDemoUser().getId();
+        UUID userId = currentUserService.requireCurrentUserId();
         String normalizedQuery = normalizeSessionSearchQuery(query);
         List<ChatSessionSummary> sessions = normalizedQuery == null
                 ? chatSessionRepository.findRecentSessionsForUser(userId, limit)
@@ -152,18 +155,10 @@ public class ChatApplicationService {
     }
 
     public ChatMessagesResponse sessionMessages(UUID sessionId) {
-        UUID userId = getDemoUser().getId();
+        UUID userId = currentUserService.requireCurrentUserId();
         requireSessionForUser(sessionId, userId);
         List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(sessionId, userId);
         return new ChatMessagesResponse(sessionId, messages);
-    }
-
-    private User getDemoUser() {
-        return userRepository.findByUsername(DEMO_USERNAME)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Không tìm thấy người dùng demo."
-                ));
     }
 
     private ChatSession requireSessionForUser(UUID sessionId, UUID userId) {
@@ -250,25 +245,52 @@ public class ChatApplicationService {
         String toolName = textOrNull(chatbotResponse, "tool_name");
         String responsePatientId = textOrNull(chatbotResponse, "patient_id");
 
-
         String action = "CHAT_COMPLETED";
         String resourceType = "chat_session";
         String resourceId = session.getId().toString();
 
-
         if (toolName != null) {
             switch (toolName) {
-                case "get_medication_requests" -> { action = "VIEW_MEDICATIONS"; resourceType = "MedicationRequest"; resourceId = responsePatientId; }
-                case "get_observations" -> { action = "VIEW_OBSERVATIONS"; resourceType = "Observation"; resourceId = responsePatientId; }
-                case "get_conditions" -> { action = "VIEW_CONDITIONS"; resourceType = "Condition"; resourceId = responsePatientId; }
-                case "get_encounters" -> { action = "VIEW_ENCOUNTERS"; resourceType = "Encounter"; resourceId = responsePatientId; }
-                case "get_patient_by_id" -> { action = "VIEW_PATIENT_DETAIL"; resourceType = "Patient"; resourceId = responsePatientId; }
-                case "search_patients" -> { action = "SEARCH_PATIENTS"; resourceType = "Patient"; resourceId = "search_query"; }
-                case "cache_hit" -> { action = "VIEW_FROM_CACHE"; resourceType = "Cache"; resourceId = responsePatientId; }
-                case "unsupported_question" -> { action = "ASK_UNSUPPORTED"; }
+                case "get_medication_requests" -> {
+                    action = "VIEW_MEDICATIONS";
+                    resourceType = "MedicationRequest";
+                    resourceId = responsePatientId;
+                }
+                case "get_observations" -> {
+                    action = "VIEW_OBSERVATIONS";
+                    resourceType = "Observation";
+                    resourceId = responsePatientId;
+                }
+                case "get_conditions" -> {
+                    action = "VIEW_CONDITIONS";
+                    resourceType = "Condition";
+                    resourceId = responsePatientId;
+                }
+                case "get_encounters" -> {
+                    action = "VIEW_ENCOUNTERS";
+                    resourceType = "Encounter";
+                    resourceId = responsePatientId;
+                }
+                case "get_patient_by_id" -> {
+                    action = "VIEW_PATIENT_DETAIL";
+                    resourceType = "Patient";
+                    resourceId = responsePatientId;
+                }
+                case "search_patients" -> {
+                    action = "SEARCH_PATIENTS";
+                    resourceType = "Patient";
+                    resourceId = "search_query";
+                }
+                case "cache_hit" -> {
+                    action = "VIEW_FROM_CACHE";
+                    resourceType = "Cache";
+                    resourceId = responsePatientId;
+                }
+                case "unsupported_question" -> action = "ASK_UNSUPPORTED";
+                default -> {
+                }
             }
         }
-
 
         if (resourceId == null) {
             resourceId = effectivePatientId != null ? effectivePatientId : session.getId().toString();
@@ -292,7 +314,6 @@ public class ChatApplicationService {
             metadata.put("needs_patient_selection", chatbotResponse.path("needs_patient_selection").asBoolean(false));
         }
 
-        // Gọi method save() tùy chỉnh mà bạn đã định nghĩa trong AuditLogRepository
         auditLogRepository.save(
                 user,
                 session,

@@ -74,7 +74,7 @@ sequenceDiagram
 
     Staff->>FE: Gửi câu hỏi
     FE->>Spring: POST /api/chat
-    Spring->>AppDB: Kiểm tra demo_user, session, quota
+    Spring->>AppDB: Kiem tra JWT user, session, quota
     Spring->>AppDB: Lưu user message
     Spring->>Bot: POST /chat + conversation_context
     Bot->>LLM: Extract intent/tool
@@ -407,11 +407,19 @@ http://localhost:5173
 | Service | URL / Host | Credential |
 |---|---|---|
 | Frontend | `http://localhost:5173` | none |
-| Spring backend | `http://localhost:8081` | demo user internal |
+| Spring backend | `http://localhost:8081` | JWT login required |
 | chatbot-service | `http://localhost:8000` | none |
 | HAPI FHIR | `http://localhost:8080/fhir` | none |
 | App PostgreSQL | `localhost:5433/medical_chatbot_app` | `app_user` / `app_password` |
 | HAPI PostgreSQL | `localhost:5434/hapi` | `admin` / `admin` |
+
+Local demo login accounts:
+
+| Username | Password | Role |
+|---|---|---|
+| `user_demo` | `UserDemo123!` | `USER` |
+| `doctor_demo` | `DoctorDemo123!` | `DOCTOR` |
+| `admin_demo` | `AdminDemo123!` | `ADMIN` |
 
 ## Kết Nối Database Bằng pgAdmin
 

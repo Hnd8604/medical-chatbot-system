@@ -45,7 +45,6 @@ from agents.intent.constants import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_MEDICATIONS,
     TOOL_UNSUPPORTED,
-    DEFAULT_PATIENT_ID,
 )
 from agents.intent.rule_extractor import RuleBasedIntentExtractor
 
@@ -178,9 +177,9 @@ class PatientUtilsTests(unittest.TestCase):
         result = resolve_patient_id_for_request("thuoc gi", provided_patient_id="demo-patient-002")
         self.assertEqual(result, "demo-patient-002")
 
-    def test_resolve_patient_id_for_request_falls_back_to_default(self):
+    def test_resolve_patient_id_for_request_returns_none_without_context(self):
         result = resolve_patient_id_for_request("thuoc gi")
-        self.assertEqual(result, DEFAULT_PATIENT_ID)
+        self.assertIsNone(result)
 
     def test_extract_patient_search_criteria_extracts_phone(self):
         criteria = extract_patient_search_criteria("tim benh nhan so dt 0912345678")
@@ -300,8 +299,8 @@ class GuardrailTests(unittest.TestCase):
         result = apply_all_patient_scope("tat ca benh nhan dang dung thuoc gi", plan)
         self.assertTrue(result.all_patients)
 
-    def test_apply_patient_id_hint_overrides_default(self):
-        plan = self._base_plan(tool_name=TOOL_GET_PATIENT, patient_id=DEFAULT_PATIENT_ID)
+    def test_apply_patient_id_hint_overrides_missing_context(self):
+        plan = self._base_plan(tool_name=TOOL_GET_PATIENT, patient_id=None)
         result = apply_patient_id_hint("", "demo-patient-003", plan)
         self.assertEqual(result.patient_id, "demo-patient-003")
 

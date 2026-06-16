@@ -22,7 +22,6 @@ from agents.intent.constants import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_ENCOUNTERS,
-    DEFAULT_PATIENT_ID,
 )
 from agents.intent.text_utils import string_or_none, clamp
 from agents.intent.patient_utils import normalize_patient_id
@@ -47,7 +46,8 @@ class OpenAIIntentExtractor:
             "The product is for Vietnamese users, so Vietnamese medical wording is expected. "
             "Select exactly one tool. Use FHIR tools for structured patient data. "
             "Do not answer the medical question. Do not invent patient data. "
-            f"If the user did not provide a patient id, use {DEFAULT_PATIENT_ID} for local demo. "
+            "Only provide patient_id when the user supplied a clear patient id or the caller already provided one. "
+            "If patient identity is still ambiguous, omit patient_id and keep any available patient search criteria instead. "
             "Vietnamese 'benh nhan' means patient, not condition. "
             "Questions about all patients, patient list, 'tat ca benh nhan', or 'danh sach benh nhan' must use search_patients. "
             "Questions that identify a patient by name, phone, birth date, or identifier must use search_patients unless a clear FHIR patient id is provided. "
@@ -58,7 +58,6 @@ class OpenAIIntentExtractor:
             "message": message,
             "normalized_message": normalize_text(message),
             "provided_patient_id": patient_id_hint,
-            "allowed_patient_id_default": DEFAULT_PATIENT_ID,
         }
 
         try:
@@ -122,8 +121,6 @@ def _plan_from_tool_call(
     confidence_score: float = _LLM_CONFIDENCE,
 ) -> IntentPlan:
     patient_id = normalize_patient_id(provided_patient_id) or normalize_patient_id(arguments.get("patient_id"))
-    if not patient_id:
-        patient_id = DEFAULT_PATIENT_ID
 
     limit = arguments.get("limit", 5)
     if not isinstance(limit, int):

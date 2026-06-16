@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Literal
 
-from app.config import get_settings
+from pydantic import BaseModel, Field
 
 
 class RecentMessage(BaseModel):
@@ -19,7 +19,8 @@ class ConversationContext(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    user_id: str = Field(default_factory=lambda: get_settings().demo_user_id)
+    user_id: str = Field(min_length=1)
+    user_role: Literal["USER", "DOCTOR", "ADMIN"]
     session_id: str | None = None
     message: str = Field(min_length=1)
     patient_id: str | None = None

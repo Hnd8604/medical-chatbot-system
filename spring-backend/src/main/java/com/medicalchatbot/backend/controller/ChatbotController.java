@@ -129,7 +129,7 @@ public class ChatbotController {
 
     @GetMapping("/quota/status")
     QuotaStatusResponse quotaStatus() {
-        return quotaService.demoUserStatus();
+        return quotaService.currentUserStatus();
     }
 
     @GetMapping("/usage/cost-summary")
@@ -137,7 +137,7 @@ public class ChatbotController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
-        return costManagementService.demoUserCostSummary(from, to);
+        return costManagementService.currentUserCostSummary(from, to);
     }
 
     @GetMapping("/model-pricing")

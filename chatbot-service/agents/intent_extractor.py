@@ -6,7 +6,6 @@ Mọi import cũ (from agents.intent_extractor import X) vẫn hoạt động b�
 from __future__ import annotations
 
 from agents.intent.constants import (
-    DEFAULT_PATIENT_ID,
     TOOL_GET_PATIENT,
     TOOL_SEARCH_PATIENTS,
     TOOL_GET_OBSERVATIONS,
@@ -14,6 +13,7 @@ from agents.intent.constants import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_MEDICATIONS,
     TOOL_UNSUPPORTED,
+    FHIR_PROTECTED_TOOLS,
     TOOL_TO_INTENT,
 )
 from agents.intent.vocabulary import (
@@ -68,10 +68,9 @@ from agents.intent.openai_extractor import _plan_from_tool_call as plan_from_too
 from agents.intent.openai_extractor import _parse_tool_arguments as parse_tool_arguments
 
 __all__ = [
-    "DEFAULT_PATIENT_ID",
     "TOOL_GET_PATIENT", "TOOL_SEARCH_PATIENTS", "TOOL_GET_OBSERVATIONS",
     "TOOL_GET_ENCOUNTERS", "TOOL_GET_CONDITIONS", "TOOL_GET_MEDICATIONS",
-    "TOOL_UNSUPPORTED", "TOOL_TO_INTENT",
+    "TOOL_UNSUPPORTED", "FHIR_PROTECTED_TOOLS", "TOOL_TO_INTENT",
     "MEDICATION_KEYWORDS", "OBSERVATION_KEYWORDS", "ENCOUNTER_KEYWORDS",
     "PATIENT_CONTACT_KEYWORDS", "PATIENT_LIST_KEYWORDS", "CONDITION_KEYWORDS",
     "PATIENT_INFO_KEYWORDS",

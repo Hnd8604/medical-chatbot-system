@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.NotificationType;
 import com.medicalchatbot.backend.repository.UserRepository;
@@ -27,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final ObjectProvider<AlertService> alertServiceProvider;
     private final ObjectProvider<NotificationService> notificationServiceProvider;
@@ -80,6 +82,15 @@ public class ApiExceptionHandler {
     @ExceptionHandler(RestClientResponseException.class)
     public ResponseEntity<Map<String, Object>> chatbotResponseError(RestClientResponseException ex) {
         log.error("[GATEWAY ERROR] Chatbot-service returned status {}: {}", ex.getStatusCode(), ex.getResponseBodyAsString());
+        String remoteDetail = extractRemoteDetail(ex);
+        if (ex.getStatusCode().is4xxClientError()) {
+            return ResponseEntity.status(ex.getStatusCode())
+                    .body(buildErrorResponse(
+                            ex.getStatusCode().value(),
+                            "CHATBOT_SERVICE_" + ex.getStatusCode().value(),
+                            remoteDetail != null ? remoteDetail : "Yêu cầu bị chatbot-service từ chối."
+                    ));
+        }
         if (ex.getStatusCode().is5xxServerError()) {
             triggerAlert(
                     "AI_SERVICE",
@@ -202,10 +213,31 @@ public class ApiExceptionHandler {
             return null;
         }
         try {
-            return userRepository.findIdByUsername(currentUserService.getCurrentUsername()).orElse(null);
+            return currentUserService.getCurrentUserIdOrNull();
         } catch (Exception ex) {
             log.debug("Could not resolve current user for notification", ex);
             return null;
         }
+    }
+
+    private String extractRemoteDetail(RestClientResponseException ex) {
+        String responseBody = ex.getResponseBodyAsString();
+        if (responseBody == null || responseBody.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode body = JSON.readTree(responseBody);
+            JsonNode detail = body.get("detail");
+            if (detail != null && detail.isTextual()) {
+                return detail.asText();
+            }
+            JsonNode message = body.get("message");
+            if (message != null && message.isTextual()) {
+                return message.asText();
+            }
+        } catch (Exception parseException) {
+            log.debug("Could not parse chatbot-service error body", parseException);
+        }
+        return responseBody;
     }
 }

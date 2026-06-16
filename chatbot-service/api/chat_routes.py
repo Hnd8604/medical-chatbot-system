@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from agents.answer_generator import AnswerGenerator, get_answer_generator
 from agents.intent_extractor import (
+    FHIR_PROTECTED_TOOLS,
     TOOL_GET_CONDITIONS,
     TOOL_GET_ENCOUNTERS,
     TOOL_GET_MEDICATIONS,
@@ -76,6 +77,17 @@ from services.semantic_cache import SemanticCacheService, get_semantic_cache
 router = APIRouter(tags=["chat"])
 
 
+def _ensure_role_can_access_plan(request: ChatRequest, plan_tool_name: str) -> None:
+    if request.user_role != "USER":
+        return
+    if plan_tool_name not in FHIR_PROTECTED_TOOLS:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Tài khoản USER không được phép truy cập dữ liệu bệnh nhân hoặc FHIR. Hãy dùng tài khoản DOCTOR hoặc ADMIN.",
+    )
+
+
 @router.post("/chat")
 async def chat(
     request: ChatRequest,
@@ -100,6 +112,7 @@ async def chat(
     )
     plan = _apply_selected_patient_context(request, plan)
     plan = _apply_context_reference_context(request, plan)
+    _ensure_role_can_access_plan(request, plan.tool_name)
 
     try:
         context_payload = await _answer_context_resource_if_applicable(client, request, plan)

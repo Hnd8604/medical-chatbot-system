@@ -18,7 +18,7 @@ import java.util.UUID;
 import com.medicalchatbot.backend.entity.Notification;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.NotificationType;
-import com.medicalchatbot.backend.repository.UserRepository;
+import com.medicalchatbot.backend.config.JwtAuthenticationFilter;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.NotificationService;
 import com.medicalchatbot.backend.service.QuotaService;
@@ -48,7 +48,7 @@ class NotificationControllerTest {
     private QuotaService quotaService;
 
     @MockitoBean
-    private UserRepository userRepository;
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
@@ -59,9 +59,7 @@ class NotificationControllerTest {
     @BeforeEach
     void setUp() {
         userId = UUID.randomUUID();
-        username = "testuser";
-        when(currentUserService.getCurrentUsername()).thenReturn(username);
-        when(userRepository.findIdByUsername(username)).thenReturn(Optional.of(userId));
+        when(currentUserService.requireCurrentUserId()).thenReturn(userId);
     }
 
     @Test

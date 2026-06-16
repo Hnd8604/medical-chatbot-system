@@ -208,12 +208,12 @@ async def _answer_all_patient_encounters(client: FhirClient, limit: int) -> dict
                 for item in encounters
             )
         else:
-            summaries.append(f"{patient_label}: khÃ´ng cÃ³ báº£n ghi láº§n khÃ¡m")
+            summaries.append(f"{patient_label}: không có bản ghi lần khám")
 
     answer = _format_all_patient_answer(
         summaries,
-        empty_message="KhÃ´ng tÃ¬m tháº¥y bá»‡nh nhÃ¢n nÃ o Ä‘á»ƒ kiá»ƒm tra láº§n khÃ¡m.",
-        prefix="Theo dá»¯ liá»‡u FHIR hiá»‡n cÃ³, láº§n khÃ¡m cá»§a cÃ¡c bá»‡nh nhÃ¢n lÃ ",
+        empty_message="Không tìm thấy bệnh nhân nào để kiểm tra lần khám.",
+        prefix="Theo dữ liệu FHIR hiện có, lần khám của các bệnh nhân là",
     )
     return {
         "answer": answer,
@@ -232,12 +232,12 @@ async def _answer_encounters(client: FhirClient, patient_id: str, limit: int) ->
     )
     encounters = normalize_encounter_bundle(bundle)
     if not encounters:
-        answer = f"KhÃ´ng tÃ¬m tháº¥y báº£n ghi láº§n khÃ¡m nÃ o cho Bá»‡nh nhÃ¢n Patient/{patient_id}."
+        answer = f"Không tìm thấy bản ghi lần khám nào cho Bệnh nhân Patient/{patient_id}."
     else:
         summary = "; ".join(_format_encounter(item) for item in encounters)
         answer = (
-            f"Theo dá»¯ liá»‡u FHIR hiá»‡n cÃ³, Bá»‡nh nhÃ¢n Patient/{patient_id} cÃ³ "
-            f"{len(encounters)} báº£n ghi láº§n khÃ¡m gáº§n Ä‘Ã¢y: {summary}."
+            f"Theo dữ liệu FHIR hiện có, Bệnh nhân Patient/{patient_id} có "
+            f"{len(encounters)} bản ghi lần khám gần đây: {summary}."
         )
     return {
         "answer": answer,
@@ -373,6 +373,18 @@ async def _answer_medications(client: FhirClient, patient_id: str, limit: int) -
     }
 
 async def _resolve_patient_id_for_tool(client: FhirClient, plan: IntentPlan) -> str | dict[str, Any]:
+    if not has_patient_search_criteria(plan) and not plan.patient_id:
+        return {
+            "answer": (
+                "Mình chưa xác định được bệnh nhân cụ thể. "
+                "Hãy chọn bệnh nhân trên giao diện hoặc cung cấp mã bệnh nhân, tên, số điện thoại, ngày sinh hay mã định danh."
+            ),
+            "intent": plan.intent,
+            "patient_id": None,
+            "evidence": [],
+            "usage": _zero_usage(),
+        }
+
     if not has_patient_search_criteria(plan):
         return plan.patient_id
 

@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from agents.answer_generator import AnswerGenerator, get_answer_generator
+from agents.model_router import ModelRouter, get_model_router
 from agents.intent_extractor import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_ENCOUNTERS,
@@ -83,6 +84,7 @@ async def chat(
     intent_extractor: IntentExtractor = Depends(get_intent_extractor),
     answer_generator: AnswerGenerator = Depends(get_answer_generator),
     cache_service: SemanticCacheService = Depends(get_semantic_cache),
+    model_router: ModelRouter = Depends(get_model_router),
 ) -> dict[str, Any]:
     current_user_context.set(request.user_id)
 
@@ -100,6 +102,9 @@ async def chat(
     )
     plan = _apply_selected_patient_context(request, plan)
     plan = _apply_context_reference_context(request, plan)
+    routed_model, complexity = model_router.route(request.message, plan)
+
+    routing_kwargs = dict(model=routed_model, query_complexity=complexity.value)
 
     try:
         context_payload = await _answer_context_resource_if_applicable(client, request, plan)
@@ -109,6 +114,7 @@ async def chat(
                 request.message,
                 plan,
                 answer_generator,
+                **routing_kwargs,
             )
 
         if plan.tool_name == TOOL_SEARCH_PATIENTS:
@@ -117,6 +123,7 @@ async def chat(
                 request.message,
                 plan,
                 answer_generator,
+                **routing_kwargs,
             )
         if plan.tool_name == TOOL_GET_MEDICATIONS:
             if plan.all_patients:
@@ -125,15 +132,17 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
+                    **routing_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
             return await _finalize_chat_response(
                 await _answer_medications(client, resolved_patient_id, plan.limit),
                 request.message,
                 plan,
                 answer_generator,
+                **routing_kwargs,
             )
         if plan.tool_name == TOOL_GET_ENCOUNTERS:
             if plan.all_patients:
@@ -142,15 +151,17 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
+                    **routing_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
             return await _finalize_chat_response(
                 await _answer_encounters(client, resolved_patient_id, plan.limit),
                 request.message,
                 plan,
                 answer_generator,
+                **routing_kwargs,
             )
         if plan.tool_name == TOOL_GET_OBSERVATIONS:
             if plan.all_patients:
@@ -159,15 +170,17 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
+                    **routing_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
             return await _finalize_chat_response(
                 await _answer_observations(client, resolved_patient_id, plan.limit, plan.observation_type),
                 request.message,
                 plan,
                 answer_generator,
+                **routing_kwargs,
             )
         if plan.tool_name == TOOL_GET_CONDITIONS:
             if plan.all_patients:
@@ -176,25 +189,28 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
+                    **routing_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
             return await _finalize_chat_response(
                 await _answer_conditions(client, resolved_patient_id, plan.limit),
                 request.message,
                 plan,
                 answer_generator,
+                **routing_kwargs,
             )
         if plan.tool_name == TOOL_GET_PATIENT:
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
             return await _finalize_chat_response(
                 await _answer_patient(client, resolved_patient_id),
                 request.message,
                 plan,
                 answer_generator,
+                **routing_kwargs,
             )
     except FhirClientError as exc:
         raise HTTPException(
@@ -216,4 +232,4 @@ async def chat(
         "intent_source": plan.source,
         "intent_reason": plan.reason,
     }
-    return await _finalize_chat_response(payload, request.message, plan, answer_generator)
+    return await _finalize_chat_response(payload, request.message, plan, answer_generator, **routing_kwargs)

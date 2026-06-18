@@ -34,6 +34,7 @@ class AnswerGenerator(Protocol):
         patient_id: str | None,
         evidence: list[dict[str, Any]],
         fallback_answer: str,
+        model: str | None = None,
     ) -> AnswerResult:
         ...
 
@@ -48,6 +49,7 @@ class TemplateAnswerGenerator:
         patient_id: str | None,
         evidence: list[dict[str, Any]],
         fallback_answer: str,
+        model: str | None = None,
     ) -> AnswerResult:
         return AnswerResult(answer=fallback_answer, source="template")
 
@@ -69,6 +71,7 @@ class OpenAIAnswerGenerator:
         patient_id: str | None,
         evidence: list[dict[str, Any]],
         fallback_answer: str,
+        model: str | None = None,
     ) -> AnswerResult:
         compact_evidence = compact_evidence_for_llm(evidence)
         if not compact_evidence:
@@ -100,7 +103,7 @@ class OpenAIAnswerGenerator:
 
         try:
             response = await self.client.chat.completions.create(
-                model=self.model,
+                model=model or self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
@@ -135,7 +138,7 @@ def get_answer_generator() -> AnswerGenerator:
     if settings.use_llm_answer and settings.openai_api_key:
         return OpenAIAnswerGenerator(
             api_key=settings.openai_api_key,
-            model=settings.llm_model,
+            model=settings.model_simple,
             timeout_seconds=settings.llm_request_timeout_seconds,
             base_url=settings.openai_base_url,
         )

@@ -68,7 +68,7 @@ async def _answer_patient(client: FhirClient, patient_id: str) -> dict[str, Any]
     gender = _gender_vi(patient.get("gender"))
     birth_date = _value_or_unknown(patient.get("birth_date"))
     answer = (
-        f"Theo dữ liệu FHIR hiện có, Bệnh nhân Patient/{patient_id} có họ tên {name}, "
+        f"Theo dữ liệu FHIR hiện có, Bệnh nhân {patient_id} có họ tên {name}, "
         f"giới tính {gender}, ngày sinh {birth_date}, số điện thoại {phone}."
     )
     summary = (
@@ -158,14 +158,14 @@ async def _answer_observations(
         if observation_type:
             answer = (
                 f"Không tìm thấy bản ghi {_display_vi(observation_type)} phù hợp "
-                f"cho Bệnh nhân Patient/{patient_id}."
+                f"cho Bệnh nhân {patient_id}."
             )
         else:
-            answer = f"Không tìm thấy bản ghi chỉ số/xét nghiệm nào cho Bệnh nhân Patient/{patient_id}."
+            answer = f"Không tìm thấy bản ghi chỉ số/xét nghiệm nào cho Bệnh nhân {patient_id}."
     else:
         summary = "; ".join(_format_observation(item) for item in observations)
         answer = (
-            f"Theo dữ liệu FHIR hiện có, Bệnh nhân Patient/{patient_id} có "
+            f"Theo dữ liệu FHIR hiện có, Bệnh nhân {patient_id} có "
             f"{len(observations)} bản ghi chỉ số/xét nghiệm gần đây: {summary}."
         )
     return {
@@ -208,12 +208,12 @@ async def _answer_all_patient_encounters(client: FhirClient, limit: int) -> dict
                 for item in encounters
             )
         else:
-            summaries.append(f"{patient_label}: khÃ´ng cÃ³ báº£n ghi láº§n khÃ¡m")
+            summaries.append(f"{patient_label}: không có bản ghi lần khám")
 
     answer = _format_all_patient_answer(
         summaries,
-        empty_message="KhÃ´ng tÃ¬m tháº¥y bá»‡nh nhÃ¢n nÃ o Ä‘á»ƒ kiá»ƒm tra láº§n khÃ¡m.",
-        prefix="Theo dá»¯ liá»‡u FHIR hiá»‡n cÃ³, láº§n khÃ¡m cá»§a cÃ¡c bá»‡nh nhÃ¢n lÃ ",
+        empty_message="Không tìm thấy bệnh nhân nào để kiểm tra lần khám.",
+        prefix="Theo dữ liệu FHIR hiện có, lần khám của các bệnh nhân là",
     )
     return {
         "answer": answer,
@@ -232,12 +232,12 @@ async def _answer_encounters(client: FhirClient, patient_id: str, limit: int) ->
     )
     encounters = normalize_encounter_bundle(bundle)
     if not encounters:
-        answer = f"KhÃ´ng tÃ¬m tháº¥y báº£n ghi láº§n khÃ¡m nÃ o cho Bá»‡nh nhÃ¢n Patient/{patient_id}."
+        answer = f"Không tìm thấy bản ghi lần khám nào cho Bệnh nhân {patient_id}."
     else:
         summary = "; ".join(_format_encounter(item) for item in encounters)
         answer = (
-            f"Theo dá»¯ liá»‡u FHIR hiá»‡n cÃ³, Bá»‡nh nhÃ¢n Patient/{patient_id} cÃ³ "
-            f"{len(encounters)} báº£n ghi láº§n khÃ¡m gáº§n Ä‘Ã¢y: {summary}."
+            f"Theo dữ liệu FHIR hiện có, Bệnh nhân {patient_id} có "
+            f"{len(encounters)} bản ghi lần khám gần đây: {summary}."
         )
     return {
         "answer": answer,
@@ -293,11 +293,11 @@ async def _answer_conditions(client: FhirClient, patient_id: str, limit: int) ->
     bundle = await client.search_patient_resources("Condition", patient_id, count=limit)
     conditions = normalize_condition_bundle(bundle)
     if not conditions:
-        answer = f"Không tìm thấy bản ghi chẩn đoán/tình trạng bệnh nào cho Bệnh nhân Patient/{patient_id}."
+        answer = f"Không tìm thấy bản ghi chẩn đoán/tình trạng bệnh nào cho Bệnh nhân {patient_id}."
     else:
         condition_names = ", ".join(_display_vi(item.get("code") or item.get("id")) for item in conditions)
         answer = (
-            f"Theo dữ liệu FHIR hiện có, Bệnh nhân Patient/{patient_id} có "
+            f"Theo dữ liệu FHIR hiện có, Bệnh nhân {patient_id} có "
             f"{len(conditions)} bản ghi chẩn đoán/tình trạng bệnh: {condition_names}."
         )
     return {
@@ -354,11 +354,11 @@ async def _answer_medications(client: FhirClient, patient_id: str, limit: int) -
     bundle = await client.search_patient_resources("MedicationRequest", patient_id, count=limit)
     medications = normalize_medication_request_bundle(bundle)
     if not medications:
-        answer = f"Không tìm thấy bản ghi thuốc nào cho Bệnh nhân Patient/{patient_id}."
+        answer = f"Không tìm thấy bản ghi thuốc nào cho Bệnh nhân {patient_id}."
     else:
         medication_names = ", ".join(_display_vi(item.get("medication") or item.get("id")) for item in medications)
         answer = (
-            f"Theo dữ liệu FHIR hiện có, Bệnh nhân Patient/{patient_id} có "
+            f"Theo dữ liệu FHIR hiện có, Bệnh nhân {patient_id} có "
             f"{len(medications)} y lệnh thuốc: {medication_names}."
         )
     return {

@@ -11,7 +11,7 @@ def get_intent_extractor() -> IntentExtractor:
     if settings.use_openai_llm and settings.openai_api_key:
         return OpenAIIntentExtractor(
             api_key=settings.openai_api_key,
-            model=settings.llm_model,
+            model=settings.model_simple,
             timeout_seconds=settings.llm_request_timeout_seconds,
             base_url=settings.openai_base_url,
         )

@@ -79,7 +79,7 @@ class OpenAIIntentExtractor:
         if not tool_calls:
             return await self.fallback.extract(message, provided_patient_id)
 
-        tool_call = tool_calls[0]
+        tool_call = tool_calls[0] # Lấy tool đầu tiên LLM chọn
         arguments = _parse_tool_arguments(tool_call.function.arguments)
         usage = {
             "input_tokens": getattr(response.usage, "prompt_tokens", 0) if response.usage else 0,

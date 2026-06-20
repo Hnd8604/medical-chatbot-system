@@ -49,8 +49,7 @@ public class FeedbackService {
                 feedback.getId(),
                 messageId,
                 feedback.getRating(),
-                feedback.getComment(),
-                feedback.getCreatedAt()
+                feedback.getComment()
         );
     }
 }

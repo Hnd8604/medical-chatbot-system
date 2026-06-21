@@ -14,6 +14,20 @@ from agents.intent.text_utils import (
 from agents.intent.vocabulary import PATIENT_LIST_KEYWORDS
 
 
+SELF_PATIENT_REFERENCE_PHRASES = [
+    "thong tin cua toi",
+    "thong tin ca nhan cua toi",
+    "ho so cua toi",
+    "toi la ai",
+    "so dien thoai cua toi",
+    "ngay sinh cua toi",
+]
+
+
+def is_self_patient_reference(message: str) -> bool:
+    return contains_any(normalize_text(message), SELF_PATIENT_REFERENCE_PHRASES)
+
+
 def is_patient_list_request(message: str) -> bool:
     return contains_any(normalize_text(message), PATIENT_LIST_KEYWORDS)
 
@@ -28,7 +42,7 @@ def has_patient_search_criteria(plan: object) -> bool:
 
 
 def extract_patient_search_criteria(message: str) -> dict[str, str]:
-    if resolve_explicit_patient_id(message) or is_patient_list_request(message):
+    if resolve_explicit_patient_id(message) or is_patient_list_request(message) or is_self_patient_reference(message):
         return {}
 
     criteria: dict[str, str] = {}

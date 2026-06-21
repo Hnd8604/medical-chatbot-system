@@ -17,6 +17,7 @@ from agents.intent.patient_utils import (
     has_patient_search_criteria,
     extract_patient_search_criteria,
     resolve_explicit_patient_id,
+    is_self_patient_reference,
 )
 from agents.intent.text_utils import normalize_text, contains_any
 from agents.intent.vocabulary import (
@@ -57,6 +58,13 @@ class RuleBasedIntentExtractor:
         search_criteria = extract_patient_search_criteria(message)
         has_criteria = bool(search_criteria)
         all_patient_scope = is_patient_list_request(message) and not resolve_explicit_patient_id(message)
+
+        if is_self_patient_reference(message):
+            return IntentPlan(
+                tool_name=TOOL_GET_PATIENT,
+                patient_id=patient_id,
+                confidence_score=0.85,
+            )
 
         if contains_any(text, MEDICATION_KEYWORDS):
             return IntentPlan(

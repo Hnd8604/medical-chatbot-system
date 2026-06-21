@@ -30,11 +30,13 @@ import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.ChatMessageRole;
+import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
+import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -70,6 +72,9 @@ class ChatApplicationServiceTest {
 
     @Mock
     private CurrentUserService currentUserService;
+
+    @Mock
+    private UserPatientLinkRepository userPatientLinkRepository;
 
     @Test
     void sessionMessagesRejectsSessionOutsideDemoUser() {
@@ -141,7 +146,7 @@ class ChatApplicationServiceTest {
 
         User user = org.mockito.Mockito.mock(User.class);
         when(user.getId()).thenReturn(userId);
-        when(user.getRole()).thenReturn(com.medicalchatbot.backend.enums.UserRole.DOCTOR);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
         when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
@@ -164,6 +169,8 @@ class ChatApplicationServiceTest {
 
         assertEquals("DOCTOR", chatbotRequest.userRole());
         assertEquals("demo-patient-001", chatbotRequest.patientId());
+        assertEquals(List.of(), chatbotRequest.allowedPatientIds());
+        assertEquals("STAFF", chatbotRequest.patientScope());
         assertEquals("demo-patient-001", chatbotRequest.conversationContext().activePatientId());
         assertEquals("Observation", chatbotRequest.conversationContext().lastResourceType());
         assertEquals(2, chatbotRequest.conversationContext().recentMessages().size());
@@ -215,7 +222,7 @@ class ChatApplicationServiceTest {
 
         User user = org.mockito.Mockito.mock(User.class);
         when(user.getId()).thenReturn(userId);
-        when(user.getRole()).thenReturn(com.medicalchatbot.backend.enums.UserRole.DOCTOR);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
         when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
@@ -273,11 +280,78 @@ class ChatApplicationServiceTest {
     }
 
     @Test
+    void userChatUsesPrimaryLinkedPatientWhenNoPatientRequested() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.USER);
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000604");
+        ChatSession session = new ChatSession(sessionId);
+        ChatApplicationService service = newService();
+        JsonNode response = new ObjectMapper().readTree("""
+                {
+                  "answer": "Thuoc cua toi...",
+                  "intent": "medications",
+                  "tool_name": "get_medication_requests",
+                  "patient_id": "demo-patient-001",
+                  "evidence": [],
+                  "memory_update": {
+                    "active_patient_id": "demo-patient-001"
+                  },
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "estimated_cost_usd": 0
+                  }
+                }
+                """);
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+        when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
+        when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
+        mockAssistantMessageSave();
+
+        service.chat(new ChatRequest(null, null, "Toi dang dung thuoc gi?"));
+
+        ArgumentCaptor<ChatbotChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatbotChatRequest.class);
+        verify(chatbotServiceClient).chat(requestCaptor.capture());
+        ChatbotChatRequest chatbotRequest = requestCaptor.getValue();
+
+        assertEquals("USER", chatbotRequest.userRole());
+        assertEquals("demo-patient-001", chatbotRequest.patientId());
+        assertEquals(List.of("demo-patient-001"), chatbotRequest.allowedPatientIds());
+        assertEquals("SELF", chatbotRequest.patientScope());
+    }
+
+    @Test
+    void userChatRejectsPatientOutsideLinkedScope() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.USER);
+        ChatApplicationService service = newService();
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.chat(new ChatRequest(null, "demo-patient-002", "Thuoc cua Patient/demo-patient-002"))
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(chatSessionRepository, never()).create(any(), any());
+        verify(chatbotServiceClient, never()).chat(any());
+    }
+
+    @Test
     void chatSavesSpringEstimatedCostWhenUsageHasTokens() throws Exception {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         User user = org.mockito.Mockito.mock(User.class);
         when(user.getId()).thenReturn(userId);
-        when(user.getRole()).thenReturn(com.medicalchatbot.backend.enums.UserRole.DOCTOR);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000603");
         ChatSession session = new ChatSession(sessionId);
         ChatApplicationService service = newService();
@@ -389,7 +463,8 @@ class ChatApplicationServiceTest {
                 quotaService,
                 costEstimationService,
                 new ObjectMapper(),
-                currentUserService
+                currentUserService,
+                new UserPatientScopeService(userPatientLinkRepository)
         );
     }
 

@@ -47,6 +47,7 @@ public class ChatApplicationService {
     private final CostEstimationService costEstimationService;
     private final ObjectMapper objectMapper;
     private final CurrentUserService currentUserService;
+    private final UserPatientScopeService userPatientScopeService;
 
     public ChatApplicationService(
             ChatSessionRepository chatSessionRepository,
@@ -57,7 +58,8 @@ public class ChatApplicationService {
             QuotaService quotaService,
             CostEstimationService costEstimationService,
             ObjectMapper objectMapper,
-            CurrentUserService currentUserService
+            CurrentUserService currentUserService,
+            UserPatientScopeService userPatientScopeService
     ) {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
@@ -68,6 +70,7 @@ public class ChatApplicationService {
         this.costEstimationService = costEstimationService;
         this.objectMapper = objectMapper;
         this.currentUserService = currentUserService;
+        this.userPatientScopeService = userPatientScopeService;
     }
 
     @Transactional
@@ -75,18 +78,30 @@ public class ChatApplicationService {
         User user = currentUserService.requireCurrentUser();
         UUID userId = user.getId();
         quotaService.assertQuotaAvailable(userId);
-        ChatSession session = request.sessionId() == null
-                ? chatSessionRepository.create(user, titleFromMessage(request.message()))
-                : requireSessionForUser(request.sessionId(), userId);
+        ChatSession session = null;
+        ChatSessionMemory sessionMemory = null;
+        if (request.sessionId() != null) {
+            session = requireSessionForUser(request.sessionId(), userId);
+            sessionMemory = session.memory();
+        }
+        UserPatientScopeService.PatientScope patientScope = userPatientScopeService.resolve(
+                user,
+                request.patientId(),
+                sessionMemory
+        );
+        if (session == null) {
+            session = chatSessionRepository.create(user, titleFromMessage(request.message()));
+            sessionMemory = session.memory();
+        }
         UUID sessionId = session.getId();
-        ChatSessionMemory sessionMemory = session.memory();
-        String effectivePatientId = firstNonBlank(request.patientId(), sessionMemory.activePatientId());
+        ChatSessionMemory scopedSessionMemory = userPatientScopeService.scopedMemory(sessionMemory, patientScope);
+        String effectivePatientId = patientScope.effectivePatientId();
         List<ChatContextMessage> recentMessages = chatSessionRepository.findRecentMessagesForContext(
                 sessionId,
                 userId,
                 RECENT_CONTEXT_MESSAGE_LIMIT
         );
-        ConversationContext conversationContext = conversationContext(sessionMemory, recentMessages);
+        ConversationContext conversationContext = conversationContext(scopedSessionMemory, recentMessages);
 
         chatMessageRepository.save(session, ChatMessageRole.USER, request.message(), userMessageMetadata(
                 request,
@@ -100,6 +115,8 @@ public class ChatApplicationService {
                 sessionId.toString(),
                 request.message(),
                 effectivePatientId,
+                patientScope.allowedPatientIds(),
+                patientScope.patientScope(),
                 conversationContext
         ));
         long latencyMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
@@ -111,7 +128,7 @@ public class ChatApplicationService {
                 answer,
                 assistantMessageMetadata(chatbotResponse)
         );
-        ChatSessionMemory nextMemory = nextSessionMemory(sessionMemory, effectivePatientId, chatbotResponse);
+        ChatSessionMemory nextMemory = nextSessionMemory(scopedSessionMemory, effectivePatientId, chatbotResponse);
         chatSessionRepository.updateMemory(session, nextMemory);
         saveUsage(user, session, chatbotResponse, latencyMs);
         saveAuditLog(user, session, request, effectivePatientId, chatbotResponse, latencyMs);

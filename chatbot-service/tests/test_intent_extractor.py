@@ -27,6 +27,7 @@ from agents.intent.patient_utils import (
     extract_patient_search_criteria,
     has_patient_search_criteria,
     is_patient_list_request,
+    is_self_patient_reference,
 )
 from agents.intent.observation_utils import infer_observation_type
 from agents.intent.guardrails import (
@@ -100,6 +101,9 @@ class TextUtilsTests(unittest.TestCase):
         result = normalize_text("đường")
         self.assertNotIn("đ", result)
         self.assertIn("d", result)
+
+    def test_normalize_text_replaces_vietnamese_d_stroke(self):
+        self.assertEqual(normalize_text("điện thoại"), "dien thoai")
 
     def test_contains_any_returns_true_on_match(self):
         self.assertTrue(contains_any("xet nghiem duong huyet", ["duong huyet"]))
@@ -198,6 +202,15 @@ class PatientUtilsTests(unittest.TestCase):
 
     def test_is_patient_list_request_false_for_single_patient(self):
         self.assertFalse(is_patient_list_request("thong tin benh nhan 1"))
+
+    def test_self_patient_reference_detects_my_profile(self):
+        self.assertTrue(is_self_patient_reference("Thong tin ca nhan cua toi la gi?"))
+
+    def test_self_patient_reference_detects_accented_phone(self):
+        self.assertTrue(is_self_patient_reference("Số điện thoại của tôi là gì?"))
+
+    def test_self_patient_reference_does_not_create_search_criteria(self):
+        self.assertEqual(extract_patient_search_criteria("Thong tin cua toi"), {})
 
 
 # ---------------------------------------------------------------------------

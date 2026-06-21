@@ -51,6 +51,7 @@ class OpenAIIntentExtractor:
             "Vietnamese 'benh nhan' means patient, not condition. "
             "Questions about all patients, patient list, 'tat ca benh nhan', or 'danh sach benh nhan' must use search_patients. "
             "Questions that identify a patient by name, phone, birth date, or identifier must use search_patients unless a clear FHIR patient id is provided. "
+            "Self-profile questions such as 'my profile', 'my personal information', 'thong tin cua toi', 'thong tin ca nhan cua toi', 'ho so cua toi', 'toi la ai', 'so dien thoai cua toi', or 'ngay sinh cua toi' must use get_patient_by_id with provided_patient_id when available; do not use search_patients for self-profile questions. "
             "Questions about phone, contact, 'so dien thoai', or 'dien thoai' must use get_patient_by_id only when a patient id is provided; otherwise use search_patients with name or phone criteria. "
             "Questions about encounters, visits, appointments, 'lan kham', 'lich su kham', or 'kham gan nhat' must use get_encounters."
         )

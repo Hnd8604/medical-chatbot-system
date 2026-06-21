@@ -47,6 +47,7 @@ from agents.intent.patient_utils import (
     extract_patient_search_criteria,
     has_patient_search_criteria,
     is_patient_list_request,
+    is_self_patient_reference,
 )
 from agents.intent.observation_utils import infer_observation_type
 from agents.intent.guardrails import (
@@ -80,6 +81,7 @@ __all__ = [
     "extract_identifier", "extract_patient_name", "clean_name_candidate", "normalize_patient_id",
     "resolve_patient_id_for_request", "resolve_explicit_patient_id", "resolve_patient_id",
     "extract_patient_search_criteria", "has_patient_search_criteria", "is_patient_list_request",
+    "is_self_patient_reference",
     "infer_observation_type",
     "enforce_contact_detail_routing", "enforce_patient_list_routing", "apply_all_patient_scope",
     "apply_patient_id_hint", "apply_patient_search_criteria_hint", "add_observation_type_hint",

@@ -24,4 +24,6 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     message: str = Field(min_length=1)
     patient_id: str | None = None
+    allowed_patient_ids: list[str] = Field(default_factory=list)
+    patient_scope: str | None = None
     conversation_context: ConversationContext | None = None

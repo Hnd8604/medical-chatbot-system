@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import Any
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +14,8 @@ from agents.intent_extractor import (
     TOOL_SEARCH_PATIENTS,
     IntentExtractor,
     get_intent_extractor,
+    is_self_patient_reference,
+    normalize_patient_id,
 )
 from api.chat_schemas import ChatRequest, ConversationContext, RecentMessage
 from chat.cache_flow import get_cached_chat_payload
@@ -77,15 +80,84 @@ from services.semantic_cache import SemanticCacheService, get_semantic_cache
 router = APIRouter(tags=["chat"])
 
 
-def _ensure_role_can_access_plan(request: ChatRequest, plan_tool_name: str) -> None:
-    if request.user_role != "USER":
-        return
-    if plan_tool_name not in FHIR_PROTECTED_TOOLS:
-        return
+USER_ALLOWED_FHIR_TOOLS = FHIR_PROTECTED_TOOLS - {TOOL_SEARCH_PATIENTS}
+
+
+def _allowed_patient_ids(request: ChatRequest) -> list[str]:
+    normalized = []
+    for patient_id in request.allowed_patient_ids:
+        value = normalize_patient_id(patient_id)
+        if value and value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def _user_scope_error(detail: str) -> None:
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Tài khoản USER không được phép truy cập dữ liệu bệnh nhân hoặc FHIR. Hãy dùng tài khoản DOCTOR hoặc ADMIN.",
+        detail=detail,
     )
+
+
+def _apply_user_patient_scope(request: ChatRequest, plan):
+    if request.user_role != "USER":
+        return plan
+
+    allowed_patient_ids = _allowed_patient_ids(request)
+    if not allowed_patient_ids:
+        _user_scope_error("Tai khoan USER chua duoc lien ket voi ho so FHIR nao.")
+
+    if plan.all_patients:
+        _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
+
+    if is_self_patient_reference(request.message) and plan.tool_name == TOOL_SEARCH_PATIENTS:
+        scoped_patient_id = _patient_id_hint(request) or allowed_patient_ids[0]
+        if scoped_patient_id not in allowed_patient_ids:
+            _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
+        return replace(
+            plan,
+            tool_name=TOOL_GET_PATIENT,
+            patient_id=scoped_patient_id,
+            search_name=None,
+            search_phone=None,
+            search_birth_date=None,
+            search_identifier=None,
+            all_patients=False,
+            source=f"{plan.source}_user_scope",
+        )
+
+    if plan.tool_name == TOOL_SEARCH_PATIENTS:
+        _user_scope_error("Tai khoan USER khong duoc tim kiem danh sach benh nhan.")
+
+    if plan.tool_name not in USER_ALLOWED_FHIR_TOOLS:
+        return plan
+
+    patient_id = normalize_patient_id(plan.patient_id) or _patient_id_hint(request) or allowed_patient_ids[0]
+    if patient_id not in allowed_patient_ids:
+        _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
+
+    return replace(
+        plan,
+        patient_id=patient_id,
+        search_name=None,
+        search_phone=None,
+        search_birth_date=None,
+        search_identifier=None,
+        all_patients=False,
+        source=f"{plan.source}_user_scope",
+    )
+
+
+def _ensure_role_can_access_plan(request: ChatRequest, plan) -> None:
+    if request.user_role != "USER":
+        return
+    if plan.tool_name not in FHIR_PROTECTED_TOOLS:
+        return
+    if plan.tool_name == TOOL_SEARCH_PATIENTS or plan.all_patients:
+        _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
+    patient_id = normalize_patient_id(plan.patient_id)
+    if not patient_id or patient_id not in _allowed_patient_ids(request):
+        _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
 
 
 @router.post("/chat")
@@ -110,9 +182,11 @@ async def chat(
         request.message,
         provided_patient_id=patient_hint,
     )
+    plan = _apply_user_patient_scope(request, plan)
     plan = _apply_selected_patient_context(request, plan)
     plan = _apply_context_reference_context(request, plan)
-    _ensure_role_can_access_plan(request, plan.tool_name)
+    plan = _apply_user_patient_scope(request, plan)
+    _ensure_role_can_access_plan(request, plan)
 
     try:
         context_payload = await _answer_context_resource_if_applicable(client, request, plan)

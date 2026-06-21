@@ -227,7 +227,11 @@ async function boot() {
 }
 
 async function initializeDashboard() {
-  resetMessages("Hoi cau tong quat hoac chon benh nhan o ben phai de bat dau.");
+  resetMessages(
+    hasFhirAccess()
+      ? "Hoi cau tong quat hoac chon benh nhan o ben phai de bat dau."
+      : "Hoi ve ho so FHIR cua ban, vi du thuoc, chi so, chan doan hoac lich su kham."
+  );
   renderEmptyPatientSections();
   renderDetails(null);
   currentSessionId = null;
@@ -313,9 +317,7 @@ function applyRoleUi() {
   doctorOnlySections.forEach((section) => {
     section.hidden = !canUseFhir;
   });
-  patientQuickPrompts.forEach((button) => {
-    button.hidden = !canUseFhir;
-  });
+  updateQuickPrompts(canUseFhir);
   userAccessNotice.hidden = canUseFhir;
   openAdminPanelButton.hidden = !isAdmin();
 
@@ -331,9 +333,34 @@ function applyRoleUi() {
 
   clearSelectedPatient();
   patientSearchInput.value = "";
-  clearPatientSearchResults("Tai khoan USER khong co quyen truy cap du lieu benh nhan.");
-  selectedPatientName.textContent = "Che do chat chung";
-  selectedPatientMeta.textContent = "Tai khoan hien tai khong duoc truy cap du lieu benh nhan/FHIR.";
+  clearPatientSearchResults("Tai khoan USER khong duoc tim kiem danh sach benh nhan.");
+  selectedPatientName.textContent = "Ho so cua toi";
+  selectedPatientMeta.textContent = "Chatbot tu dung ho so FHIR da lien ket voi tai khoan cua ban.";
+}
+
+function updateQuickPrompts(canUseFhir) {
+  messageInput.placeholder = canUseFhir
+    ? "Vi du: Benh nhan nay dang dung thuoc gi?"
+    : "Vi du: Toi dang dung thuoc gi?";
+
+  const prompts = canUseFhir
+    ? [
+        ["Thuoc", "Benh nhan nay dang dung thuoc gi?"],
+        ["Chi so", "Cho toi xem chi so gan day cua benh nhan nay"],
+        ["Lich kham", "Lich su kham gan day cua benh nhan nay"],
+      ]
+    : [
+        ["Thuoc cua toi", "Toi dang dung thuoc gi?"],
+        ["Chi so cua toi", "Chi so gan day cua toi"],
+        ["Lich kham cua toi", "Lich su kham gan day cua toi"],
+      ];
+
+  patientQuickPrompts.forEach((button, index) => {
+    const [label, prompt] = prompts[index] || prompts[0];
+    button.hidden = false;
+    button.textContent = label;
+    button.dataset.prompt = prompt;
+  });
 }
 
 async function handleLogin(event) {

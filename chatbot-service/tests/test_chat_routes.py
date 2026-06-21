@@ -44,6 +44,16 @@ class FakeAnswerGenerator:
 
 
 class FakePatientSearchClient:
+    async def get_patient(self, patient_id: str):
+        return {
+            "resourceType": "Patient",
+            "id": patient_id,
+            "name": [{"family": "Nguyen", "given": ["Van A"]}],
+            "gender": "male",
+            "birthDate": "2003-01-01",
+            "telecom": [{"system": "phone", "value": "0900000001"}],
+        }
+
     async def search_patients_flexible(self, **kwargs):
         return {
             "entry": [
@@ -69,6 +79,23 @@ class FakePatientSearchClient:
                 },
             ]
         }
+
+    async def search_patient_resources(self, resource_type: str, patient_id: str, **kwargs):
+        if resource_type == "MedicationRequest":
+            return {
+                "entry": [
+                    {
+                        "resource": {
+                            "resourceType": "MedicationRequest",
+                            "id": "med-1",
+                            "status": "active",
+                            "subject": {"reference": f"Patient/{patient_id}"},
+                            "medicationCodeableConcept": {"text": "Amlodipine"},
+                        }
+                    }
+                ]
+            }
+        return {"entry": []}
 
 
 class FakeResourceClient:
@@ -272,6 +299,108 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(ctx.exception.status_code, 403)
 
+    async def test_user_role_can_access_own_linked_patient(self) -> None:
+        request = make_request(
+            user_role="USER",
+            patient_id="demo-patient-001",
+            allowed_patient_ids=["demo-patient-001"],
+            patient_scope="SELF",
+            message="Toi dang dung thuoc gi?",
+        )
+        plan = IntentPlan(
+            tool_name=TOOL_GET_MEDICATIONS,
+            patient_id="demo-patient-001",
+            source="rules",
+        )
+
+        payload = await chat(
+            request=request,
+            client=FakePatientSearchClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        self.assertEqual(payload["patient_id"], "demo-patient-001")
+        self.assertEqual(payload["tool_name"], TOOL_GET_MEDICATIONS)
+        self.assertEqual(payload["answer_source"], "llm")
+
+    async def test_user_self_profile_search_plan_is_rerouted_to_own_patient(self) -> None:
+        request = make_request(
+            user_role="USER",
+            patient_id="demo-patient-001",
+            allowed_patient_ids=["demo-patient-001"],
+            patient_scope="SELF",
+            message="Thong tin ca nhan cua toi la gi?",
+        )
+        plan = IntentPlan(
+            tool_name=TOOL_SEARCH_PATIENTS,
+            search_name="toi",
+            source="llm",
+        )
+
+        payload = await chat(
+            request=request,
+            client=FakePatientSearchClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        self.assertEqual(payload["patient_id"], "demo-patient-001")
+        self.assertEqual(payload["tool_name"], TOOL_GET_PATIENT)
+        self.assertEqual(payload["intent"], "patient")
+
+    async def test_user_self_phone_search_plan_is_rerouted_to_own_patient(self) -> None:
+        request = make_request(
+            user_role="USER",
+            patient_id="demo-patient-001",
+            allowed_patient_ids=["demo-patient-001"],
+            patient_scope="SELF",
+            message="So dien thoai cua toi la gi?",
+        )
+        plan = IntentPlan(
+            tool_name=TOOL_SEARCH_PATIENTS,
+            search_name="toi",
+            source="llm",
+        )
+
+        payload = await chat(
+            request=request,
+            client=FakePatientSearchClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        self.assertEqual(payload["patient_id"], "demo-patient-001")
+        self.assertEqual(payload["tool_name"], TOOL_GET_PATIENT)
+
+    async def test_user_role_is_blocked_for_other_patient(self) -> None:
+        request = make_request(
+            user_role="USER",
+            patient_id="demo-patient-001",
+            allowed_patient_ids=["demo-patient-001"],
+            patient_scope="SELF",
+            message="Thuoc cua Patient/demo-patient-002",
+        )
+        plan = IntentPlan(
+            tool_name=TOOL_GET_MEDICATIONS,
+            patient_id="demo-patient-002",
+            source="rules",
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            await chat(
+                request=request,
+                client=FakePatientSearchClient(),
+                intent_extractor=FakeIntentExtractor(plan),
+                answer_generator=FakeAnswerGenerator(),
+                cache_service=FakeCacheService(),
+            )
+
+        self.assertEqual(ctx.exception.status_code, 403)
+
     async def test_doctor_role_can_access_fhir_chat_flow(self) -> None:
         request = make_request(user_role="DOCTOR", message="tim benh nhan Nguyen")
         plan = IntentPlan(
@@ -393,6 +522,16 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_rule_based_extractor_routes_phone_to_patient_tool(self) -> None:
         plan = await RuleBasedIntentExtractor().extract("so dien thoai cua benh nhan 001")
+
+        self.assertEqual(plan.tool_name, TOOL_GET_PATIENT)
+        self.assertEqual(plan.intent, "patient")
+        self.assertEqual(plan.patient_id, "demo-patient-001")
+
+    async def test_rule_based_extractor_routes_self_profile_to_patient_tool(self) -> None:
+        plan = await RuleBasedIntentExtractor().extract(
+            "Thong tin ca nhan cua toi la gi?",
+            provided_patient_id="demo-patient-001",
+        )
 
         self.assertEqual(plan.tool_name, TOOL_GET_PATIENT)
         self.assertEqual(plan.intent, "patient")

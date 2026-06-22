@@ -204,6 +204,44 @@ export interface AdminUserListResponse {
   users: AdminUserItem[];
 }
 
+export interface QuotaPolicyItem {
+  id: string;
+  name: string;
+  daily_request_limit: number;
+  daily_token_limit: number;
+  daily_cost_limit_usd: number;
+  rate_limit_per_minute: number | null;
+  created_at: string;
+}
+
+export interface QuotaPolicyUpsert {
+  name: string;
+  daily_request_limit: number;
+  daily_token_limit: number;
+  daily_cost_limit_usd: number;
+  rate_limit_per_minute?: number | null;
+}
+
+export interface ModelPricingItem {
+  id: string;
+  provider: string;
+  model: string;
+  input_price_per_1m_tokens: number;
+  output_price_per_1m_tokens: number;
+  currency: string;
+  active: boolean;
+  updated_at: string;
+}
+
+export interface ModelPricingUpsert {
+  provider: string;
+  model: string;
+  input_price_per_1m_tokens: number;
+  output_price_per_1m_tokens: number;
+  currency?: string;
+  active?: boolean;
+}
+
 export interface FhirBundle {
   resourceType?: "Bundle";
   entry?: Array<{ resource?: FhirResource }>;

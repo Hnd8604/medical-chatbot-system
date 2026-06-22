@@ -51,12 +51,18 @@ class QuotaServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
     @Test
     void demoUserStatusReturnsRemainingQuota() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         QuotaService service = newService();
 
-        when(userRepository.findIdByUsername("demo_user")).thenReturn(Optional.of(userId));
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getUsername()).thenReturn("user_demo");
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
                 "free_demo",
                 50,
@@ -74,9 +80,9 @@ class QuotaServiceTest {
                 new BigDecimal("0.25")
         ));
 
-        var status = service.demoUserStatus();
+        var status = service.currentUserStatus();
 
-        assertEquals("demo_user", status.user());
+        assertEquals("user_demo", status.user());
         assertEquals("free_demo", status.policy());
         assertEquals(12, status.usedRequests());
         assertEquals(150, status.usedTokens());
@@ -179,7 +185,8 @@ class QuotaServiceTest {
                 new ObjectMapper(),
                 alertService,
                 notificationService,
-                ZoneId.of("Asia/Saigon")
+                ZoneId.of("Asia/Saigon"),
+                currentUserService
         );
     }
 }

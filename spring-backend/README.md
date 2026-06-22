@@ -11,6 +11,15 @@ This Spring Boot service is the frontend-facing backend. It proxies selected pat
 - Local port: `8081`
 - Chatbot service base URL: `http://localhost:8000`
 - App PostgreSQL: `localhost:5433/medical_chatbot_app`
+- Auth: JWT Bearer tokens with `USER`, `DOCTOR`, and `ADMIN` roles.
+
+Local demo accounts:
+
+| Username | Password | Role |
+|---|---|---|
+| `user_demo` | `UserDemo123!` | `USER` |
+| `doctor_demo` | `DoctorDemo123!` | `DOCTOR` |
+| `admin_demo` | `AdminDemo123!` | `ADMIN` |
 
 ## Run
 
@@ -37,6 +46,12 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 
 - `GET /api/health`
 - `GET /api/chatbot/status`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `GET /api/admin/users?page=0&size=20`
+- `PATCH /api/admin/users/{id}/status`
+- `PATCH /api/admin/users/{id}/role`
 - `GET /api/patients?name=Nguyen&phone=0900000001&birth_date=2003-01-01&identifier=DEMO-001&limit=20`
 - `GET /api/patients/{patientId}`
 - `GET /api/patients/{patientId}/observations?limit=5`
@@ -103,4 +118,4 @@ usage_logs
 cache_entries
 ```
 
-The migration also creates a demo user named `demo_user` and a `free_demo` quota policy.
+The migrations create local demo users `user_demo`, `doctor_demo`, `admin_demo`, and a `free_demo` quota policy.

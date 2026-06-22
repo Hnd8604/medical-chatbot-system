@@ -27,6 +27,7 @@ from agents.intent.patient_utils import (
     extract_patient_search_criteria,
     has_patient_search_criteria,
     is_patient_list_request,
+    is_self_patient_reference,
 )
 from agents.intent.observation_utils import infer_observation_type
 from agents.intent.guardrails import (
@@ -45,7 +46,6 @@ from agents.intent.constants import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_MEDICATIONS,
     TOOL_UNSUPPORTED,
-    DEFAULT_PATIENT_ID,
 )
 from agents.intent.rule_extractor import RuleBasedIntentExtractor
 
@@ -101,6 +101,9 @@ class TextUtilsTests(unittest.TestCase):
         result = normalize_text("đường")
         self.assertNotIn("đ", result)
         self.assertIn("d", result)
+
+    def test_normalize_text_replaces_vietnamese_d_stroke(self):
+        self.assertEqual(normalize_text("điện thoại"), "dien thoai")
 
     def test_contains_any_returns_true_on_match(self):
         self.assertTrue(contains_any("xet nghiem duong huyet", ["duong huyet"]))
@@ -178,9 +181,9 @@ class PatientUtilsTests(unittest.TestCase):
         result = resolve_patient_id_for_request("thuoc gi", provided_patient_id="demo-patient-002")
         self.assertEqual(result, "demo-patient-002")
 
-    def test_resolve_patient_id_for_request_falls_back_to_default(self):
+    def test_resolve_patient_id_for_request_returns_none_without_context(self):
         result = resolve_patient_id_for_request("thuoc gi")
-        self.assertEqual(result, DEFAULT_PATIENT_ID)
+        self.assertIsNone(result)
 
     def test_extract_patient_search_criteria_extracts_phone(self):
         criteria = extract_patient_search_criteria("tim benh nhan so dt 0912345678")
@@ -199,6 +202,15 @@ class PatientUtilsTests(unittest.TestCase):
 
     def test_is_patient_list_request_false_for_single_patient(self):
         self.assertFalse(is_patient_list_request("thong tin benh nhan 1"))
+
+    def test_self_patient_reference_detects_my_profile(self):
+        self.assertTrue(is_self_patient_reference("Thong tin ca nhan cua toi la gi?"))
+
+    def test_self_patient_reference_detects_accented_phone(self):
+        self.assertTrue(is_self_patient_reference("Số điện thoại của tôi là gì?"))
+
+    def test_self_patient_reference_does_not_create_search_criteria(self):
+        self.assertEqual(extract_patient_search_criteria("Thong tin cua toi"), {})
 
 
 # ---------------------------------------------------------------------------
@@ -300,8 +312,8 @@ class GuardrailTests(unittest.TestCase):
         result = apply_all_patient_scope("tat ca benh nhan dang dung thuoc gi", plan)
         self.assertTrue(result.all_patients)
 
-    def test_apply_patient_id_hint_overrides_default(self):
-        plan = self._base_plan(tool_name=TOOL_GET_PATIENT, patient_id=DEFAULT_PATIENT_ID)
+    def test_apply_patient_id_hint_overrides_missing_context(self):
+        plan = self._base_plan(tool_name=TOOL_GET_PATIENT, patient_id=None)
         result = apply_patient_id_hint("", "demo-patient-003", plan)
         self.assertEqual(result.patient_id, "demo-patient-003")
 

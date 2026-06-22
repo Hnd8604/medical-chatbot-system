@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-from agents.intent.constants import DEFAULT_PATIENT_ID
 from agents.intent.text_utils import (
     normalize_text,
     contains_any,
@@ -13,6 +12,20 @@ from agents.intent.text_utils import (
     extract_patient_name,
 )
 from agents.intent.vocabulary import PATIENT_LIST_KEYWORDS
+
+
+SELF_PATIENT_REFERENCE_PHRASES = [
+    "thong tin cua toi",
+    "thong tin ca nhan cua toi",
+    "ho so cua toi",
+    "toi la ai",
+    "so dien thoai cua toi",
+    "ngay sinh cua toi",
+]
+
+
+def is_self_patient_reference(message: str) -> bool:
+    return contains_any(normalize_text(message), SELF_PATIENT_REFERENCE_PHRASES)
 
 
 def is_patient_list_request(message: str) -> bool:
@@ -29,7 +42,7 @@ def has_patient_search_criteria(plan: object) -> bool:
 
 
 def extract_patient_search_criteria(message: str) -> dict[str, str]:
-    if resolve_explicit_patient_id(message) or is_patient_list_request(message):
+    if resolve_explicit_patient_id(message) or is_patient_list_request(message) or is_self_patient_reference(message):
         return {}
 
     criteria: dict[str, str] = {}
@@ -52,16 +65,15 @@ def extract_patient_search_criteria(message: str) -> dict[str, str]:
     return criteria
 
 
-def resolve_patient_id_for_request(message: str, provided_patient_id: str | None = None) -> str:
+def resolve_patient_id_for_request(message: str, provided_patient_id: str | None = None) -> str | None:
     return (
         resolve_explicit_patient_id(message)
         or normalize_patient_id(provided_patient_id)
-        or DEFAULT_PATIENT_ID
     )
 
 
-def resolve_patient_id(message: str) -> str:
-    return resolve_explicit_patient_id(message) or DEFAULT_PATIENT_ID
+def resolve_patient_id(message: str) -> str | None:
+    return resolve_explicit_patient_id(message)
 
 
 def resolve_explicit_patient_id(message: str) -> str | None:

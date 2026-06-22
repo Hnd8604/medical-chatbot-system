@@ -36,17 +36,17 @@ async def _answer_patients(client: FhirClient, plan: IntentPlan) -> dict[str, An
     else:
         summary = "; ".join(_format_patient_summary(patient) for patient in patients)
         criteria_text = _format_patient_search_criteria(plan)
-        criteria_prefix = f" phu hop voi {criteria_text}" if criteria_text else ""
+        criteria_prefix = f" phù hợp với {criteria_text}" if criteria_text else ""
         answer = (
             f"Theo dữ liệu FHIR hiện có, hệ thống tìm thấy {len(patients)} bệnh nhân: "
             f"{summary}."
         )
         if criteria_prefix:
-            answer = f"Theo du lieu FHIR hien co, he thong tim thay {len(patients)} benh nhan{criteria_prefix}: {summary}."
+            answer = f"Theo dữ liệu FHIR hiện có, hệ thống tìm thấy {len(patients)} bệnh nhân{criteria_prefix}: {summary}."
         if has_patient_search_criteria(plan) and len(patients) > 1:
             answer = (
-                "Tim thay nhieu benh nhan phu hop. "
-                "Vui long chon dung benh nhan hoac cung cap them ngay sinh, so dien thoai, ma dinh danh: "
+                "Tìm thấy nhiều bệnh nhân phù hợp. "
+                "Vui lòng chọn đúng bệnh nhân hoặc cung cấp thêm ngày sinh, số điện thoại, mã định danh: "
                 f"{summary}."
             )
     return {
@@ -208,12 +208,12 @@ async def _answer_all_patient_encounters(client: FhirClient, limit: int) -> dict
                 for item in encounters
             )
         else:
-            summaries.append(f"{patient_label}: khÃ´ng cÃ³ báº£n ghi láº§n khÃ¡m")
+            summaries.append(f"{patient_label}: không có bản ghi lần khám")
 
     answer = _format_all_patient_answer(
         summaries,
-        empty_message="KhÃ´ng tÃ¬m tháº¥y bá»‡nh nhÃ¢n nÃ o Ä‘á»ƒ kiá»ƒm tra láº§n khÃ¡m.",
-        prefix="Theo dá»¯ liá»‡u FHIR hiá»‡n cÃ³, láº§n khÃ¡m cá»§a cÃ¡c bá»‡nh nhÃ¢n lÃ ",
+        empty_message="Không tìm thấy bệnh nhân nào để kiểm tra lần khám.",
+        prefix="Theo dữ liệu FHIR hiện có, lần khám của các bệnh nhân là",
     )
     return {
         "answer": answer,
@@ -232,12 +232,12 @@ async def _answer_encounters(client: FhirClient, patient_id: str, limit: int) ->
     )
     encounters = normalize_encounter_bundle(bundle)
     if not encounters:
-        answer = f"KhÃ´ng tÃ¬m tháº¥y báº£n ghi láº§n khÃ¡m nÃ o cho Bá»‡nh nhÃ¢n Patient/{patient_id}."
+        answer = f"Không tìm thấy bản ghi lần khám nào cho Bệnh nhân Patient/{patient_id}."
     else:
         summary = "; ".join(_format_encounter(item) for item in encounters)
         answer = (
-            f"Theo dá»¯ liá»‡u FHIR hiá»‡n cÃ³, Bá»‡nh nhÃ¢n Patient/{patient_id} cÃ³ "
-            f"{len(encounters)} báº£n ghi láº§n khÃ¡m gáº§n Ä‘Ã¢y: {summary}."
+            f"Theo dữ liệu FHIR hiện có, Bệnh nhân Patient/{patient_id} có "
+            f"{len(encounters)} bản ghi lần khám gần đây: {summary}."
         )
     return {
         "answer": answer,
@@ -373,6 +373,18 @@ async def _answer_medications(client: FhirClient, patient_id: str, limit: int) -
     }
 
 async def _resolve_patient_id_for_tool(client: FhirClient, plan: IntentPlan) -> str | dict[str, Any]:
+    if not has_patient_search_criteria(plan) and not plan.patient_id:
+        return {
+            "answer": (
+                "Mình chưa xác định được bệnh nhân cụ thể. "
+                "Hãy chọn bệnh nhân trên giao diện hoặc cung cấp mã bệnh nhân, tên, số điện thoại, ngày sinh hay mã định danh."
+            ),
+            "intent": plan.intent,
+            "patient_id": None,
+            "evidence": [],
+            "usage": _zero_usage(),
+        }
+
     if not has_patient_search_criteria(plan):
         return plan.patient_id
 
@@ -383,12 +395,12 @@ async def _resolve_patient_id_for_tool(client: FhirClient, plan: IntentPlan) -> 
 
     criteria_text = _format_patient_search_criteria(plan)
     if not patients:
-        answer = f"Khong tim thay benh nhan phu hop voi {criteria_text or 'tieu chi da cung cap'}."
+        answer = f"Không tìm thấy bệnh nhân phù hợp với {criteria_text or 'tiêu chí đã cung cấp'}."
     else:
         summary = "; ".join(_format_patient_summary(patient) for patient in patients)
         answer = (
-            "Tim thay nhieu benh nhan phu hop. "
-            "Vui long cung cap them ma benh nhan, ngay sinh hoac so dien thoai de xac dinh chinh xac: "
+            "Tìm thấy nhiều bệnh nhân phù hợp. "
+            "Vui lòng cung cấp thêm mã bệnh nhân, ngày sinh hoặc số điện thoại để xác định chính xác: "
             f"{summary}."
         )
 

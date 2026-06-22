@@ -7,6 +7,7 @@ import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
+import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.service.ChatbotServiceClient;
@@ -25,6 +26,9 @@ class SpringBackendApplicationTests {
 
 	@MockitoBean
 	private UserRepository userRepository;
+
+	@MockitoBean
+	private UserPatientLinkRepository userPatientLinkRepository;
 
 	@MockitoBean
 	private NotificationRepository notificationRepository;

@@ -9,8 +9,10 @@ from services.semantic_cache import get_semantic_cache
 
 current_user_context = contextvars.ContextVar(
     "current_user_context",
-    default=get_settings().demo_user_id,
+    default="",
 )
+
+NO_PATIENT_CACHE_KEY = "__no_patient__"
 
 
 def _zero_usage() -> dict[str, int | float]:
@@ -51,7 +53,7 @@ async def _finalize_chat_response(
     if answer_result.source == "llm":
         try:
             cache_svc = get_semantic_cache()
-            patient_id_for_cache = payload.get("patient_id") or plan.patient_id or get_settings().demo_patient_id
+            patient_id_for_cache = payload.get("patient_id") or plan.patient_id or NO_PATIENT_CACHE_KEY
 
             total_usage = combine_usage(
                 plan.usage,

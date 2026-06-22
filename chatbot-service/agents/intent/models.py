@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from agents.intent.constants import DEFAULT_PATIENT_ID, TOOL_TO_INTENT
+from agents.intent.constants import TOOL_TO_INTENT
 
 
 @dataclass(frozen=True)
 class IntentPlan:
     tool_name: str
-    patient_id: str = DEFAULT_PATIENT_ID
+    patient_id: str | None = None
     search_name: str | None = None
     search_phone: str | None = None
     search_birth_date: str | None = None

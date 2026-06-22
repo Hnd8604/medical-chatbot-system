@@ -19,10 +19,10 @@ FHIR_TOOL_DEFINITIONS = [
                 "properties": {
                     "patient_id": {
                         "type": "string",
-                        "description": "FHIR Patient id without the Patient/ prefix.",
+                        "description": "FHIR Patient id without the Patient/ prefix. Omit when the patient is not identified yet.",
                     },
                 },
-                "required": ["patient_id"],
+                "required": [],
                 "additionalProperties": False,
             },
         },
@@ -69,7 +69,10 @@ FHIR_TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_id": {"type": "string"},
+                    "patient_id": {
+                        "type": "string",
+                        "description": "FHIR Patient id without the Patient/ prefix. Omit when the patient is not identified yet.",
+                    },
                     "observation_type": {
                         "type": "string",
                         "description": "Optional observation category from the user question.",
@@ -79,7 +82,7 @@ FHIR_TOOL_DEFINITIONS = [
                         "description": "Maximum number of observations to retrieve.",
                     },
                 },
-                "required": ["patient_id"],
+                "required": [],
                 "additionalProperties": False,
             },
         },
@@ -92,13 +95,16 @@ FHIR_TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_id": {"type": "string"},
+                    "patient_id": {
+                        "type": "string",
+                        "description": "FHIR Patient id without the Patient/ prefix. Omit when the patient is not identified yet.",
+                    },
                     "limit": {
                         "type": "integer",
                         "description": "Maximum number of encounters to retrieve.",
                     },
                 },
-                "required": ["patient_id"],
+                "required": [],
                 "additionalProperties": False,
             },
         },
@@ -111,10 +117,13 @@ FHIR_TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_id": {"type": "string"},
+                    "patient_id": {
+                        "type": "string",
+                        "description": "FHIR Patient id without the Patient/ prefix. Omit when the patient is not identified yet.",
+                    },
                     "limit": {"type": "integer"},
                 },
-                "required": ["patient_id"],
+                "required": [],
                 "additionalProperties": False,
             },
         },
@@ -127,10 +136,13 @@ FHIR_TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_id": {"type": "string"},
+                    "patient_id": {
+                        "type": "string",
+                        "description": "FHIR Patient id without the Patient/ prefix. Omit when the patient is not identified yet.",
+                    },
                     "limit": {"type": "integer"},
                 },
-                "required": ["patient_id"],
+                "required": [],
                 "additionalProperties": False,
             },
         },

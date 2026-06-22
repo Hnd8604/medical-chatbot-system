@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 
-import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
 import java.time.OffsetDateTime;
@@ -31,12 +30,13 @@ import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.ChatMessageRole;
+import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
-import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
+import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,9 +48,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class ChatApplicationServiceTest {
-
-    @Mock
-    private UserRepository userRepository;
 
     @Mock
     private ChatSessionRepository chatSessionRepository;
@@ -73,13 +70,19 @@ class ChatApplicationServiceTest {
     @Mock
     private CostEstimationService costEstimationService;
 
+    @Mock
+    private CurrentUserService currentUserService;
+
+    @Mock
+    private UserPatientLinkRepository userPatientLinkRepository;
+
     @Test
     void sessionMessagesRejectsSessionOutsideDemoUser() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000601");
         ChatApplicationService service = newService();
 
-        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        when(currentUserService.requireCurrentUserId()).thenReturn(userId);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(false);
 
         ResponseStatusException exception = assertThrows(
@@ -141,7 +144,10 @@ class ChatApplicationServiceTest {
                 }
                 """);
 
-        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
         when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
         when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of(
@@ -161,7 +167,10 @@ class ChatApplicationServiceTest {
         verify(chatbotServiceClient).chat(requestCaptor.capture());
         ChatbotChatRequest chatbotRequest = requestCaptor.getValue();
 
+        assertEquals("DOCTOR", chatbotRequest.userRole());
         assertEquals("demo-patient-001", chatbotRequest.patientId());
+        assertEquals(List.of(), chatbotRequest.allowedPatientIds());
+        assertEquals("STAFF", chatbotRequest.patientScope());
         assertEquals("demo-patient-001", chatbotRequest.conversationContext().activePatientId());
         assertEquals("Observation", chatbotRequest.conversationContext().lastResourceType());
         assertEquals(2, chatbotRequest.conversationContext().recentMessages().size());
@@ -211,7 +220,10 @@ class ChatApplicationServiceTest {
                 }
                 """);
 
-        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
         when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
         when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
@@ -250,7 +262,9 @@ class ChatApplicationServiceTest {
                 "Đã vượt quá hạn mức 1 lượt gọi AI/ngày."
         );
 
-        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
         doThrow(new QuotaExceededException(quotaStatus.blockedReason(), quotaStatus))
                 .when(quotaService)
                 .assertQuotaAvailable(userId);
@@ -266,9 +280,78 @@ class ChatApplicationServiceTest {
     }
 
     @Test
+    void userChatUsesPrimaryLinkedPatientWhenNoPatientRequested() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.USER);
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000604");
+        ChatSession session = new ChatSession(sessionId);
+        ChatApplicationService service = newService();
+        JsonNode response = new ObjectMapper().readTree("""
+                {
+                  "answer": "Thuoc cua toi...",
+                  "intent": "medications",
+                  "tool_name": "get_medication_requests",
+                  "patient_id": "demo-patient-001",
+                  "evidence": [],
+                  "memory_update": {
+                    "active_patient_id": "demo-patient-001"
+                  },
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "estimated_cost_usd": 0
+                  }
+                }
+                """);
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+        when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
+        when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
+        mockAssistantMessageSave();
+
+        service.chat(new ChatRequest(null, null, "Toi dang dung thuoc gi?"));
+
+        ArgumentCaptor<ChatbotChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatbotChatRequest.class);
+        verify(chatbotServiceClient).chat(requestCaptor.capture());
+        ChatbotChatRequest chatbotRequest = requestCaptor.getValue();
+
+        assertEquals("USER", chatbotRequest.userRole());
+        assertEquals("demo-patient-001", chatbotRequest.patientId());
+        assertEquals(List.of("demo-patient-001"), chatbotRequest.allowedPatientIds());
+        assertEquals("SELF", chatbotRequest.patientScope());
+    }
+
+    @Test
+    void userChatRejectsPatientOutsideLinkedScope() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.USER);
+        ChatApplicationService service = newService();
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.chat(new ChatRequest(null, "demo-patient-002", "Thuoc cua Patient/demo-patient-002"))
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(chatSessionRepository, never()).create(any(), any());
+        verify(chatbotServiceClient, never()).chat(any());
+    }
+
+    @Test
     void chatSavesSpringEstimatedCostWhenUsageHasTokens() throws Exception {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
-        User user = new User(userId);
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000603");
         ChatSession session = new ChatSession(sessionId);
         ChatApplicationService service = newService();
@@ -289,7 +372,7 @@ class ChatApplicationServiceTest {
                 }
                 """);
 
-        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(user));
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
         when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
@@ -336,7 +419,7 @@ class ChatApplicationServiceTest {
                 "Latest answer"
         );
 
-        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        when(currentUserService.requireCurrentUserId()).thenReturn(userId);
         when(chatSessionRepository.findRecentSessionsForUser(userId, 20)).thenReturn(List.of(summary));
 
         ChatSessionListResponse result = service.sessions("   ", 20);
@@ -360,7 +443,7 @@ class ChatApplicationServiceTest {
                 "Amlodipine"
         );
 
-        when(userRepository.findByUsername("demo_user")).thenReturn(Optional.of(new User(userId)));
+        when(currentUserService.requireCurrentUserId()).thenReturn(userId);
         when(chatSessionRepository.searchSessionsForUser(userId, "thuoc", 30)).thenReturn(List.of(summary));
 
         ChatSessionListResponse result = service.sessions("  thuoc  ", 30);
@@ -372,7 +455,6 @@ class ChatApplicationServiceTest {
 
     private ChatApplicationService newService() {
         return new ChatApplicationService(
-                userRepository,
                 chatSessionRepository,
                 chatMessageRepository,
                 usageLogRepository,
@@ -380,7 +462,9 @@ class ChatApplicationServiceTest {
                 chatbotServiceClient,
                 quotaService,
                 costEstimationService,
-                new ObjectMapper()
+                new ObjectMapper(),
+                currentUserService,
+                new UserPatientScopeService(userPatientLinkRepository)
         );
     }
 

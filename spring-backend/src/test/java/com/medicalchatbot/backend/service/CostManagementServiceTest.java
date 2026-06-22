@@ -11,7 +11,6 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.dto.response.CostByDay;
@@ -19,7 +18,6 @@ import com.medicalchatbot.backend.dto.response.CostByModel;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
 import com.medicalchatbot.backend.dto.response.MissingPricingModel;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
-import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,13 +30,13 @@ import org.springframework.web.server.ResponseStatusException;
 class CostManagementServiceTest {
 
     @Mock
-    private UserRepository userRepository;
-
-    @Mock
     private UsageLogRepository usageLogRepository;
 
     @Mock
     private ModelPricingRepository modelPricingRepository;
+
+    @Mock
+    private CurrentUserService currentUserService;
 
     @Test
     void demoUserCostSummaryReturnsTotalsModelsDaysAndMissingPricing() {
@@ -63,7 +61,7 @@ class CostManagementServiceTest {
         );
         MissingPricingModel missingPricing = new MissingPricingModel("openai", "custom-model", 1);
 
-        when(userRepository.findIdByUsername("demo_user")).thenReturn(Optional.of(userId));
+        when(currentUserService.requireCurrentUserId()).thenReturn(userId);
         when(usageLogRepository.summarizeCost(
                 eq(userId),
                 any(OffsetDateTime.class),
@@ -97,7 +95,7 @@ class CostManagementServiceTest {
                 any(OffsetDateTime.class)
         )).thenReturn(List.of(missingPricing));
 
-        CostSummaryResponse result = service.demoUserCostSummary(
+        CostSummaryResponse result = service.currentUserCostSummary(
                 LocalDate.parse("2026-06-01"),
                 LocalDate.parse("2026-06-01")
         );
@@ -118,7 +116,7 @@ class CostManagementServiceTest {
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> service.demoUserCostSummary(
+                () -> service.currentUserCostSummary(
                         LocalDate.parse("2026-06-02"),
                         LocalDate.parse("2026-06-01")
                 )
@@ -129,10 +127,10 @@ class CostManagementServiceTest {
 
     private CostManagementService newService() {
         return new CostManagementService(
-                userRepository,
                 usageLogRepository,
                 modelPricingRepository,
-                ZoneId.of("Asia/Saigon")
+                ZoneId.of("Asia/Saigon"),
+                currentUserService
         );
     }
 }

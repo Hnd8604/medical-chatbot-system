@@ -21,6 +21,7 @@ import com.medicalchatbot.backend.dto.response.MissingPricingModel;
 import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
 import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
+import com.medicalchatbot.backend.config.JwtAuthenticationFilter;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.service.ChatApplicationService;
 import com.medicalchatbot.backend.service.ChatbotServiceClient;
@@ -69,6 +70,9 @@ class ChatbotControllerTest {
 
     @MockitoBean
     private CurrentUserService currentUserService;
+
+    @MockitoBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
@@ -328,7 +332,7 @@ class ChatbotControllerTest {
 
     @Test
     void quotaStatusReturnsDemoUserQuota() throws Exception {
-        when(quotaService.demoUserStatus()).thenReturn(new QuotaStatusResponse(
+        when(quotaService.currentUserStatus()).thenReturn(new QuotaStatusResponse(
                 "demo_user",
                 "free_demo",
                 50,
@@ -358,7 +362,7 @@ class ChatbotControllerTest {
 
     @Test
     void costSummaryReturnsDemoUserCostSummary() throws Exception {
-        when(costManagementService.demoUserCostSummary(
+        when(costManagementService.currentUserCostSummary(
                 LocalDate.parse("2026-06-01"),
                 LocalDate.parse("2026-06-01")
         )).thenReturn(new CostSummaryResponse(
@@ -406,7 +410,7 @@ class ChatbotControllerTest {
 
     @Test
     void costSummaryRejectsInvalidDateRange() throws Exception {
-        when(costManagementService.demoUserCostSummary(
+        when(costManagementService.currentUserCostSummary(
                 LocalDate.parse("2026-06-02"),
                 LocalDate.parse("2026-06-01")
         )).thenThrow(new org.springframework.web.server.ResponseStatusException(

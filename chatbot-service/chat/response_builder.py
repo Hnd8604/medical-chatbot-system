@@ -27,6 +27,9 @@ async def _finalize_chat_response(
     question: str,
     plan: IntentPlan,
     answer_generator: AnswerGenerator,
+    *,
+    model: str | None = None,
+    query_complexity: str | None = None,
 ) -> dict[str, Any]:
     payload = _with_plan_metadata(payload, plan)
     if payload.get("needs_patient_selection"):
@@ -45,10 +48,15 @@ async def _finalize_chat_response(
         patient_id=payload.get("patient_id") or plan.patient_id,
         evidence=payload.get("evidence") or [],
         fallback_answer=template_answer,
+        model=model,
     )
     payload["answer"] = answer_result.answer
     payload["answer_source"] = answer_result.source
     payload["answer_usage"] = answer_result.usage
+    if model:
+        payload["llm_model"] = model
+    if query_complexity:
+        payload["query_complexity"] = query_complexity
 
     if answer_result.source == "llm":
         try:
@@ -157,7 +165,7 @@ def _with_plan_metadata(payload: dict[str, Any], plan: IntentPlan) -> dict[str, 
     payload["intent_source"] = plan.source
     payload["confidence_score"] = getattr(plan, "confidence_score", 1.0)
     payload["llm_provider"] = settings.llm_provider
-    payload["llm_model"] = settings.llm_model
+    payload["llm_model"] = settings.model_simple
     if plan.all_patients:
         payload["all_patients"] = True
     if plan.observation_type:

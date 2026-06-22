@@ -36,7 +36,7 @@ async def get_cached_chat_payload(
         "tool_name": "cache_hit",
         "intent_source": "strict_cache",
         "llm_provider": cache_service.settings.llm_provider,
-        "llm_model": cache_service.settings.llm_model,
+        "llm_model": cache_service.settings.model_simple,
     }
     mock_plan = IntentPlan(
         tool_name="cache_hit",

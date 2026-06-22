@@ -103,7 +103,8 @@ class FhirClient:
         if sort:
             params["_sort"] = sort
         return await self._get(resource_type, params=params)
-
+        
+    # Nơi fhir gửi request đến HAPI FHIR server
     async def _get(
         self,
         path: str,

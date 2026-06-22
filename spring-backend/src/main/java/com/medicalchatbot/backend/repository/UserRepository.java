@@ -24,6 +24,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    long countByQuotaPolicyId(UUID quotaPolicyId);
+
     default Optional<UUID> findIdByUsername(String username) {
         return findByUsername(username).map(User::getId);
     }

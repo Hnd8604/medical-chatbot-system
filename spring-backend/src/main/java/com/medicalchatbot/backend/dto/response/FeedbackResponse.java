@@ -1,6 +1,5 @@
 package com.medicalchatbot.backend.dto.response;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -13,9 +12,6 @@ public record FeedbackResponse(
 
         int rating,
 
-        String comment,
-
-        @JsonProperty("created_at")
-        OffsetDateTime createdAt
+        String comment
 ) {
 }

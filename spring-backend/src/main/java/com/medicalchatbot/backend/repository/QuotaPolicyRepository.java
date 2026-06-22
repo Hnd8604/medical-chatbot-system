@@ -32,4 +32,8 @@ public interface QuotaPolicyRepository extends JpaRepository<QuotaPolicy, UUID> 
     WHERE u.username = :username
 """)
     Integer findRateLimitByUsername(String username);
+
+    Optional<QuotaPolicy> findByName(String name);
+
+    boolean existsByName(String name);
 }

@@ -51,6 +51,43 @@ public class ModelPricing {
     protected ModelPricing() {
     }
 
+    public ModelPricing(
+            String provider,
+            String model,
+            BigDecimal inputPricePer1mTokens,
+            BigDecimal outputPricePer1mTokens,
+            String currency,
+            boolean active
+    ) {
+        this.provider = provider;
+        this.model = model;
+        this.inputPricePer1mTokens = inputPricePer1mTokens;
+        this.outputPricePer1mTokens = outputPricePer1mTokens;
+        this.currency = currency;
+        this.active = active;
+    }
+
+    
+    public void applyUpdate(
+            String provider,
+            String model,
+            BigDecimal inputPricePer1mTokens,
+            BigDecimal outputPricePer1mTokens,
+            String currency,
+            boolean active
+    ) {
+        this.provider = provider;
+        this.model = model;
+        this.inputPricePer1mTokens = inputPricePer1mTokens;
+        this.outputPricePer1mTokens = outputPricePer1mTokens;
+        this.currency = currency;
+        this.active = active;
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
     public String getProvider() {
         return provider;
     }
@@ -69,5 +106,17 @@ public class ModelPricing {
 
     public String getCurrency() {
         return currency;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public OffsetDateTime getUpdatedAt() {
+        return updatedAt;
     }
 }

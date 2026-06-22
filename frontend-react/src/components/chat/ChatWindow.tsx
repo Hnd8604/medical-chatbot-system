@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { FileText, PanelRightClose, PanelRightOpen, Plus, Table2 } from "lucide-react";
+import { Check, FileText, PanelRightClose, PanelRightOpen, Plus, Star, Table2 } from "lucide-react";
 import type { ChatResponse, MessageView, NotificationItem, PatientCandidate, UserRole } from "../../lib/types";
 import { formatDateTime, genderLabel, safeJson } from "../../lib/formatters";
 import { STAFF_QUICK_PROMPTS, TEXT, USER_QUICK_PROMPTS } from "../../lib/constants";
@@ -25,7 +25,129 @@ interface ChatWindowProps {
   onMarkAllNotificationsRead: () => void;
   onSelectPatientCandidate: (candidate: PatientCandidate, pendingQuestion: string | null) => void;
   onSubmitMessage: (message: string) => void;
+  onSubmitFeedback: (messageId: string, rating: number, comment: string) => Promise<void>;
   onExportSession: (format: "pdf" | "csv") => void;
+}
+
+function StarRating({
+  value,
+  onChange,
+  readOnly = false,
+}: {
+  value: number;
+  onChange?: (value: number) => void;
+  readOnly?: boolean;
+}) {
+  const [hover, setHover] = useState(0);
+  const active = hover || value;
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={readOnly}
+          aria-label={`${star} sao`}
+          className={cn("focus-ring rounded p-0.5", readOnly ? "cursor-default" : "cursor-pointer")}
+          onMouseEnter={() => !readOnly && setHover(star)}
+          onMouseLeave={() => !readOnly && setHover(0)}
+          onClick={() => onChange?.(star)}
+        >
+          <Star className={cn("h-4 w-4 transition", star <= active ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MessageFeedbackControl({
+  message,
+  onSubmit,
+}: {
+  message: MessageView;
+  onSubmit: (messageId: string, rating: number, comment: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (message.feedback) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold leading-none text-emerald-600">
+          <Check className="h-3.5 w-3.5 shrink-0" />
+          <span>Đã đánh giá</span>
+        </span>
+        <StarRating value={message.feedback.rating} readOnly />
+        {message.feedback.comment ? <span className="italic">“{message.feedback.comment}”</span> : null}
+      </div>
+    );
+  }
+
+  async function handleSubmit() {
+    if (!rating || submitting) {
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit(message.id, rating, comment);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Không thể gửi đánh giá.");
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="mt-3 border-t border-border pt-2">
+        <button
+          type="button"
+          className="focus-ring inline-flex items-end gap-1.5 rounded-full px-2 py-1 text-xs font-medium leading-none text-muted-foreground transition hover:text-accent"
+          onClick={() => setOpen(true)}
+        >
+          <Star className="h-3.5 w-3.5 shrink-0" />
+          <span>Đánh giá</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 grid gap-2 border-t border-border pt-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Đánh giá câu trả lời</span>
+        <StarRating value={rating} onChange={setRating} />
+      </div>
+      <textarea
+        className="focus-ring min-h-[60px] w-full resize-none rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60"
+        placeholder="Nhận xét (không bắt buộc)..."
+        value={comment}
+        onChange={(event) => setComment(event.target.value)}
+      />
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" disabled={!rating || submitting} onClick={() => void handleSubmit()}>
+          {submitting ? "Đang gửi..." : "Gửi đánh giá"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={submitting}
+          onClick={() => {
+            setOpen(false);
+            setError(null);
+          }}
+        >
+          Hủy
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function parsePatientCandidates(value: unknown): PatientCandidate[] {
@@ -71,14 +193,17 @@ function MessageBubble({
   message,
   selectionDisabled,
   onSelectPatientCandidate,
+  onSubmitFeedback,
 }: {
   message: MessageView;
   selectionDisabled: boolean;
   onSelectPatientCandidate: (candidate: PatientCandidate, pendingQuestion: string | null) => void;
+  onSubmitFeedback: (messageId: string, rating: number, comment: string) => Promise<void>;
 }) {
   const isUser = message.role === "user";
   const isError = message.role === "error";
   const patientCandidates = parsePatientCandidates(message.response?.patient_candidates);
+  const canRate = !isUser && !isError && !message.pending && Boolean(message.id);
 
   return (
     <article className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -126,6 +251,7 @@ function MessageBubble({
             )}
           </div>
         ) : null}
+        {canRate ? <MessageFeedbackControl message={message} onSubmit={onSubmitFeedback} /> : null}
       </div>
     </article>
   );
@@ -148,6 +274,7 @@ export function ChatWindow({
   onMarkAllNotificationsRead,
   onSelectPatientCandidate,
   onSubmitMessage,
+  onSubmitFeedback,
   onExportSession,
 }: ChatWindowProps) {
   const [draft, setDraft] = useState("");
@@ -298,6 +425,7 @@ export function ChatWindow({
                 message={message}
                 selectionDisabled={sending}
                 onSelectPatientCandidate={onSelectPatientCandidate}
+                onSubmitFeedback={onSubmitFeedback}
               />
             ))}
           </div>

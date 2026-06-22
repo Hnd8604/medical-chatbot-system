@@ -13,6 +13,7 @@ import type {
   ChatSessionSummary,
   CostSummaryResponse,
   FhirResource,
+  MessageFeedback,
   MessageView,
   NotificationListResponse,
   PatientCandidate,
@@ -52,6 +53,7 @@ function mapHistoryMessage(item: ChatMessageItem): MessageView {
     role: item.role.toUpperCase() === "USER" ? "user" : "assistant",
     content: item.content,
     createdAt: item.created_at,
+    feedback: item.feedback ?? null,
   };
 }
 
@@ -337,6 +339,19 @@ export function ChatPage() {
     }
   }
 
+  async function submitFeedback(messageId: string, rating: number, comment: string) {
+    const trimmed = comment.trim();
+    await apiJson<MessageFeedback>(`/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ rating, comment: trimmed || null }),
+    });
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === messageId ? { ...item, feedback: { rating, comment: trimmed || null } } : item,
+      ),
+    );
+  }
+
   async function exportSession(format: "pdf" | "csv") {
     if (!currentSessionId) {
       return;
@@ -399,6 +414,7 @@ export function ChatPage() {
           onMarkAllNotificationsRead={() => void markAllNotificationsRead()}
           onSelectPatientCandidate={(candidate, pendingQuestion) => void selectPatientCandidate(candidate, pendingQuestion)}
           onSubmitMessage={(value) => void submitMessage(value)}
+          onSubmitFeedback={submitFeedback}
           onExportSession={(format) => void exportSession(format)}
         />
       </motion.div>

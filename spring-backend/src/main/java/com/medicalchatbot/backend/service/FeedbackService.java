@@ -37,7 +37,13 @@ public class FeedbackService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found."));
 
         User user = currentUserService.requireCurrentUser();
-        MessageFeedback feedback = feedbackRepository.save(message, user, request.rating(), request.comment());
+        MessageFeedback feedback = feedbackRepository
+                .findByMessage_IdAndUser_Id(messageId, user.getId())
+                .map(existing -> {
+                    existing.update(request.rating(), request.comment());
+                    return existing;
+                })
+                .orElseGet(() -> feedbackRepository.save(message, user, request.rating(), request.comment()));
 
         return new FeedbackResponse(
                 feedback.getId(),

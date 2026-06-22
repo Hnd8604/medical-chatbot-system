@@ -230,7 +230,19 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                         m.id as "id",
                         m.role as "role",
                         m.content as "content",
-                        m.created_at as "createdAt"
+                        m.created_at as "createdAt",
+                        (
+                            select f.rating from message_feedback f
+                            where f.message_id = m.id
+                            order by f.created_at desc
+                            limit 1
+                        ) as "feedbackRating",
+                        (
+                            select f.comment from message_feedback f
+                            where f.message_id = m.id
+                            order by f.created_at desc
+                            limit 1
+                        ) as "feedbackComment"
                     from chat_messages m
                     join chat_sessions s on s.id = m.session_id
                     where s.id = :sessionId and s.user_id = :userId
@@ -250,7 +262,13 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                         message.getId(),
                         message.getRole(),
                         message.getContent(),
-                        toOffsetDateTime(message.getCreatedAt())
+                        toOffsetDateTime(message.getCreatedAt()),
+                        message.getFeedbackRating() == null
+                                ? null
+                                : new ChatMessageItem.Feedback(
+                                        message.getFeedbackRating(),
+                                        message.getFeedbackComment()
+                                )
                 ))
                 .toList();
     }
@@ -289,5 +307,9 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
         String getContent();
 
         Instant getCreatedAt();
+
+        Integer getFeedbackRating();
+
+        String getFeedbackComment();
     }
 }

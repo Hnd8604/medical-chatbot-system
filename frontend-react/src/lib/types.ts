@@ -31,11 +31,17 @@ export interface ChatSessionListResponse {
   sessions: ChatSessionSummary[];
 }
 
+export interface MessageFeedback {
+  rating: number;
+  comment: string | null;
+}
+
 export interface ChatMessageItem {
   id: string;
   role: "USER" | "ASSISTANT" | "SYSTEM" | string;
   content: string;
   created_at: string;
+  feedback?: MessageFeedback | null;
 }
 
 export interface ChatMessagesResponse {
@@ -249,4 +255,5 @@ export interface MessageView {
   createdAt?: string;
   pending?: boolean;
   response?: ChatResponse;
+  feedback?: MessageFeedback | null;
 }

@@ -327,8 +327,8 @@ class ChatbotControllerTest {
     }
 
     @Test
-    void quotaStatusReturnsDemoUserQuota() throws Exception {
-        when(quotaService.demoUserStatus()).thenReturn(new QuotaStatusResponse(
+    void quotaStatusReturnsCurrentUserQuota() throws Exception {
+        when(quotaService.getCurrentUserStatus()).thenReturn(new QuotaStatusResponse(
                 "demo_user",
                 "free_demo",
                 50,
@@ -357,8 +357,8 @@ class ChatbotControllerTest {
     }
 
     @Test
-    void costSummaryReturnsDemoUserCostSummary() throws Exception {
-        when(costManagementService.demoUserCostSummary(
+    void costSummaryReturnsCurrentUserCostSummary() throws Exception {
+        when(costManagementService.getCurrentUserCostSummary(
                 LocalDate.parse("2026-06-01"),
                 LocalDate.parse("2026-06-01")
         )).thenReturn(new CostSummaryResponse(
@@ -406,7 +406,7 @@ class ChatbotControllerTest {
 
     @Test
     void costSummaryRejectsInvalidDateRange() throws Exception {
-        when(costManagementService.demoUserCostSummary(
+        when(costManagementService.getCurrentUserCostSummary(
                 LocalDate.parse("2026-06-02"),
                 LocalDate.parse("2026-06-01")
         )).thenThrow(new org.springframework.web.server.ResponseStatusException(

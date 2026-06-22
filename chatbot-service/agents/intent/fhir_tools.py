@@ -123,7 +123,7 @@ FHIR_TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": TOOL_GET_MEDICATIONS,
-            "description": "Retrieve patient medication requests.",
+            "description": "Retrieves the patient's medications. CRITICAL INSTRUCTION: In FHIR standard, this corresponds to MedicationRequest resources. You MUST use this tool whenever the user asks about the patient's medications, prescriptions, or drugs.",
             "parameters": {
                 "type": "object",
                 "properties": {

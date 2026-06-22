@@ -18,35 +18,51 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class CostManagementService {
 
-    private static final String DEMO_USERNAME = "demo_user";
-
     private final UserRepository userRepository;
     private final UsageLogRepository usageLogRepository;
     private final ModelPricingRepository modelPricingRepository;
+    private final CurrentUserService currentUserService;
     private final ZoneId costZone;
 
     @Autowired
     public CostManagementService(
             UserRepository userRepository,
             UsageLogRepository usageLogRepository,
-            ModelPricingRepository modelPricingRepository
+            ModelPricingRepository modelPricingRepository,
+            CurrentUserService currentUserService
     ) {
-        this(userRepository, usageLogRepository, modelPricingRepository, ZoneId.systemDefault());
+        this(userRepository, usageLogRepository, modelPricingRepository, currentUserService, ZoneId.systemDefault());
     }
 
     CostManagementService(
             UserRepository userRepository,
             UsageLogRepository usageLogRepository,
             ModelPricingRepository modelPricingRepository,
+            CurrentUserService currentUserService,
             ZoneId costZone
     ) {
         this.userRepository = userRepository;
         this.usageLogRepository = usageLogRepository;
         this.modelPricingRepository = modelPricingRepository;
+        this.currentUserService = currentUserService;
         this.costZone = costZone;
     }
 
-    public CostSummaryResponse demoUserCostSummary(LocalDate from, LocalDate to) {
+    // --- API DÀNH CHO USER ĐANG ĐĂNG NHẬP ---
+    public CostSummaryResponse getCurrentUserCostSummary(LocalDate from, LocalDate to) {
+        String username = currentUserService.getCurrentUsername();
+        UUID userId = getUserIdByUsername(username);
+        return getCostSummaryForUser(userId, from, to);
+    }
+
+    // --- API DÀNH CHO ADMIN/MANAGER ---
+    public CostSummaryResponse getUserCostSummaryByUsername(String username, LocalDate from, LocalDate to) {
+        UUID userId = getUserIdByUsername(username);
+        return getCostSummaryForUser(userId, from, to);
+    }
+
+    // --- CORE LOGIC TÍNH TOÁN ---
+    private CostSummaryResponse getCostSummaryForUser(UUID userId, LocalDate from, LocalDate to) {
         if (from == null || to == null || from.isAfter(to)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -54,7 +70,6 @@ public class CostManagementService {
             );
         }
 
-        UUID userId = getDemoUserId();
         OffsetDateTime startInclusive = from.atStartOfDay(costZone).toOffsetDateTime();
         OffsetDateTime endExclusive = to.plusDays(1).atStartOfDay(costZone).toOffsetDateTime();
         CostSummaryResponse totals = usageLogRepository.summarizeCost(userId, startInclusive, endExclusive);
@@ -77,11 +92,11 @@ public class CostManagementService {
         return new ModelPricingListResponse(modelPricingRepository.findActivePricing());
     }
 
-    private UUID getDemoUserId() {
-        return userRepository.findIdByUsername(DEMO_USERNAME)
+    private UUID getUserIdByUsername(String username) {
+        return userRepository.findIdByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi d\u00f9ng demo."
+                        HttpStatus.NOT_FOUND,
+                        "Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi d\u00f9ng: " + username
                 ));
     }
 }

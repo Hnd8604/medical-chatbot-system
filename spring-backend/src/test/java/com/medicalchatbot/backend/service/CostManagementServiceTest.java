@@ -40,10 +40,16 @@ class CostManagementServiceTest {
     @Mock
     private ModelPricingRepository modelPricingRepository;
 
+    // Thêm Mock mới
+    @Mock
+    private CurrentUserService currentUserService;
+
     @Test
-    void demoUserCostSummaryReturnsTotalsModelsDaysAndMissingPricing() {
+    void currentUserCostSummaryReturnsTotalsModelsDaysAndMissingPricing() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        String username = "test_user";
         CostManagementService service = newService();
+
         CostByModel byModel = new CostByModel(
                 "openai",
                 "gpt-4.1-mini",
@@ -63,7 +69,10 @@ class CostManagementServiceTest {
         );
         MissingPricingModel missingPricing = new MissingPricingModel("openai", "custom-model", 1);
 
-        when(userRepository.findIdByUsername("demo_user")).thenReturn(Optional.of(userId));
+        // Mock luồng lấy user hiện tại
+        when(currentUserService.getCurrentUsername()).thenReturn(username);
+        when(userRepository.findIdByUsername(username)).thenReturn(Optional.of(userId));
+
         when(usageLogRepository.summarizeCost(
                 eq(userId),
                 any(OffsetDateTime.class),
@@ -97,7 +106,8 @@ class CostManagementServiceTest {
                 any(OffsetDateTime.class)
         )).thenReturn(List.of(missingPricing));
 
-        CostSummaryResponse result = service.demoUserCostSummary(
+        // Gọi hàm mới
+        CostSummaryResponse result = service.getCurrentUserCostSummary(
                 LocalDate.parse("2026-06-01"),
                 LocalDate.parse("2026-06-01")
         );
@@ -113,12 +123,18 @@ class CostManagementServiceTest {
     }
 
     @Test
-    void demoUserCostSummaryRejectsInvalidRange() {
+    void currentUserCostSummaryRejectsInvalidRange() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        String username = "test_user";
         CostManagementService service = newService();
+
+        // Cần mock user vì hàm kiểm tra user trước khi check date range
+        when(currentUserService.getCurrentUsername()).thenReturn(username);
+        when(userRepository.findIdByUsername(username)).thenReturn(Optional.of(userId));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> service.demoUserCostSummary(
+                () -> service.getCurrentUserCostSummary(
                         LocalDate.parse("2026-06-02"),
                         LocalDate.parse("2026-06-01")
                 )
@@ -132,6 +148,7 @@ class CostManagementServiceTest {
                 userRepository,
                 usageLogRepository,
                 modelPricingRepository,
+                currentUserService, // Truyền mock mới vào
                 ZoneId.of("Asia/Saigon")
         );
     }

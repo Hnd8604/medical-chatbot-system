@@ -51,12 +51,20 @@ class QuotaServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    // THÊM MOCK MỚI CHO ĐỢT REFACTOR
+    @Mock
+    private CurrentUserService currentUserService;
+
     @Test
-    void demoUserStatusReturnsRemainingQuota() {
+    void currentUserStatusReturnsRemainingQuota() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        String username = "test_user";
         QuotaService service = newService();
 
-        when(userRepository.findIdByUsername("demo_user")).thenReturn(Optional.of(userId));
+        // Mock giả lập user đang đăng nhập
+        when(currentUserService.getCurrentUsername()).thenReturn(username);
+        when(userRepository.findIdByUsername(username)).thenReturn(Optional.of(userId));
+
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
                 "free_demo",
                 50,
@@ -74,9 +82,10 @@ class QuotaServiceTest {
                 new BigDecimal("0.25")
         ));
 
-        var status = service.demoUserStatus();
+        // GỌI HÀM MỚI VỪA REFACTOR THAY VÌ HÀM CŨ ĐÃ XÓA
+        var status = service.getCurrentUserStatus();
 
-        assertEquals("demo_user", status.user());
+        assertEquals("test_user", status.user());
         assertEquals("free_demo", status.policy());
         assertEquals(12, status.usedRequests());
         assertEquals(150, status.usedTokens());
@@ -179,6 +188,7 @@ class QuotaServiceTest {
                 new ObjectMapper(),
                 alertService,
                 notificationService,
+                currentUserService, // TRUYỀN THÊM DEPENDENCY NÀY VÀO CONSTRUCTOR
                 ZoneId.of("Asia/Saigon")
         );
     }

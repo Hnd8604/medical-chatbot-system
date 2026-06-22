@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
+import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.NotificationType;
@@ -30,8 +32,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class QuotaService {
 
-    private static final String DEMO_USERNAME = "demo_user";
-
     private final UserRepository userRepository;
     private final QuotaPolicyRepository quotaPolicyRepository;
     private final UsageLogRepository usageLogRepository;
@@ -39,6 +39,7 @@ public class QuotaService {
     private final ObjectMapper objectMapper;
     private final AlertService alertService;
     private final NotificationService notificationService;
+    private final CurrentUserService currentUserService;
     private final ZoneId quotaZone;
 
     @Autowired
@@ -49,7 +50,8 @@ public class QuotaService {
             AuditLogRepository auditLogRepository,
             ObjectMapper objectMapper,
             AlertService alertService,
-            NotificationService notificationService
+            NotificationService notificationService,
+            CurrentUserService currentUserService
     ) {
         this(
                 userRepository,
@@ -59,6 +61,7 @@ public class QuotaService {
                 objectMapper,
                 alertService,
                 notificationService,
+                currentUserService,
                 ZoneId.systemDefault()
         );
     }
@@ -71,6 +74,7 @@ public class QuotaService {
             ObjectMapper objectMapper,
             AlertService alertService,
             NotificationService notificationService,
+            CurrentUserService currentUserService,
             ZoneId quotaZone
     ) {
         this.userRepository = userRepository;
@@ -80,15 +84,29 @@ public class QuotaService {
         this.objectMapper = objectMapper;
         this.alertService = alertService;
         this.notificationService = notificationService;
+        this.currentUserService = currentUserService;
         this.quotaZone = quotaZone;
     }
 
-    public QuotaStatusResponse demoUserStatus() {
-        UUID userId = getDemoUserId();
-        return statusForUser(userId, DEMO_USERNAME);
+    // --- API DÀNH CHO USER BẤT KỲ ---
+    public QuotaStatusResponse getCurrentUserStatus() {
+        String username = currentUserService.getCurrentUsername();
+        UUID userId = getUserIdByUsername(username);
+        return statusForUser(userId, username);
+    }
+
+    // --- API DÀNH CHO MANAGER/ADMIN ---
+    public QuotaStatusResponse getUserStatusByUsername(String targetUsername) {
+        UUID userId = getUserIdByUsername(targetUsername);
+        return statusForUser(userId, targetUsername);
+    }
+
+    public List<QuotaPolicy> getAllQuotaPolicies() {
+        return quotaPolicyRepository.findAll();
     }
 
     public void assertQuotaAvailable(UUID userId) {
+        // Lấy username để build thông báo nếu cần, hoặc truyền null nếu chỉ check logic
         QuotaStatusResponse status = statusForUser(userId, null);
         if (status.allowed()) {
             return;
@@ -98,26 +116,27 @@ public class QuotaService {
                 "QUOTA_SYSTEM",
                 "QUOTA_EXCEEDED",
                 AlertSeverity.WARNING,
-                "User " + userId + " b\u1ecb ch\u1eb7n do: " + status.blockedReason(),
+                "User " + userId + " bị chặn do: " + status.blockedReason(),
                 objectMapper.valueToTree(status)
         );
         logQuotaBlocked(userId, status);
         throw new QuotaExceededException(status.blockedReason(), status);
     }
 
-    @Cacheable(value = "rateLimitConfig", key = "#userId")
+    @Cacheable(value = "rateLimitConfig", key = "#username")
     public int getRateLimitForUser(String username) {
         if ("anonymousUser".equals(username)) {
             return 5;
         }
-        return quotaPolicyRepository.findRateLimitByUsername(username);
+        Integer limit = quotaPolicyRepository.findRateLimitByUsername(username);
+        return limit != null ? limit : 5; // Fallback an toàn
     }
 
     private QuotaStatusResponse statusForUser(UUID userId, String username) {
         QuotaPolicyInfo policy = quotaPolicyRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Kh\u00f4ng t\u00ecm th\u1ea5y quota policy cho ng\u01b0\u1eddi d\u00f9ng."
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy quota policy cho người dùng."
                 ));
         ZonedDateTime now = ZonedDateTime.now(quotaZone);
         OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay(quotaZone).toOffsetDateTime();
@@ -137,7 +156,7 @@ public class QuotaService {
         String blockedReason = blockedReason(policy, usage, usedTokens);
 
         return new QuotaStatusResponse(
-                username,
+                username != null ? username : userId.toString(),
                 policy.policyName(),
                 policy.dailyRequestLimit(),
                 policy.dailyTokenLimit(),
@@ -155,23 +174,23 @@ public class QuotaService {
         );
     }
 
-    private UUID getDemoUserId() {
-        return userRepository.findIdByUsername(DEMO_USERNAME)
+    private UUID getUserIdByUsername(String username) {
+        return userRepository.findIdByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi d\u00f9ng demo."
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy người dùng: " + username
                 ));
     }
 
     private String blockedReason(QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {
         if (usage.usedRequests() >= policy.dailyRequestLimit()) {
-            return "\u0110\u00e3 v\u01b0\u1ee3t qu\u00e1 h\u1ea1n m\u1ee9c " + policy.dailyRequestLimit() + " l\u01b0\u1ee3t g\u1ecdi AI/ng\u00e0y.";
+            return "Đã vượt quá hạn mức " + policy.dailyRequestLimit() + " lượt gọi AI/ngày.";
         }
         if (usedTokens >= policy.dailyTokenLimit()) {
-            return "\u0110\u00e3 v\u01b0\u1ee3t qu\u00e1 h\u1ea1n m\u1ee9c " + policy.dailyTokenLimit() + " token/ng\u00e0y.";
+            return "Đã vượt quá hạn mức " + policy.dailyTokenLimit() + " token/ngày.";
         }
         if (usage.usedCostUsd().compareTo(policy.dailyCostLimitUsd()) >= 0) {
-            return "\u0110\u00e3 v\u01b0\u1ee3t qu\u00e1 h\u1ea1n m\u1ee9c chi ph\u00ed AI/ng\u00e0y.";
+            return "Đã vượt quá hạn mức chi phí AI/ngày.";
         }
         return null;
     }
@@ -214,13 +233,13 @@ public class QuotaService {
             if (!notificationService.hasQuotaWarningBeenSentToday(userId)) {
                 double maxPct = Math.max(requestUsagePct, tokenUsagePct);
                 String content = String.format(
-                        "H\u1ea1n m\u1ee9c s\u1eed d\u1ee5ng h\u1eb1ng ng\u00e0y c\u1ee7a b\u1ea1n \u0111\u00e3 \u0111\u1ea1t %.1f%%. Vui l\u00f2ng s\u1eed d\u1ee5ng ti\u1ebft ki\u1ec7m.",
+                        "Hạn mức sử dụng hằng ngày của bạn đã đạt %.1f%%. Vui lòng sử dụng tiết kiệm.",
                         maxPct * 100
                 );
                 notificationService.createNotification(
                         userId,
                         NotificationType.QUOTA_WARNING,
-                        "C\u1ea3nh b\u00e1o h\u1ea1n m\u1ee9c s\u1eed d\u1ee5ng (Quota Warning)",
+                        "Cảnh báo hạn mức sử dụng (Quota Warning)",
                         content
                 );
             }

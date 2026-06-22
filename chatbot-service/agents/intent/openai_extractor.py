@@ -27,7 +27,9 @@ from agents.intent.text_utils import string_or_none, clamp
 from agents.intent.patient_utils import normalize_patient_id
 from agents.intent.text_utils import normalize_phone
 from agents.intent.text_utils import normalize_birth_date
+import logging
 
+log = logging.getLogger(__name__)
 _LLM_CONFIDENCE = 0.92
 
 
@@ -54,6 +56,7 @@ class OpenAIIntentExtractor:
             "Self-profile questions such as 'my profile', 'my personal information', 'thong tin cua toi', 'thong tin ca nhan cua toi', 'ho so cua toi', 'toi la ai', 'so dien thoai cua toi', or 'ngay sinh cua toi' must use get_patient_by_id with provided_patient_id when available; do not use search_patients for self-profile questions. "
             "Questions about phone, contact, 'so dien thoai', or 'dien thoai' must use get_patient_by_id only when a patient id is provided; otherwise use search_patients with name or phone criteria. "
             "Questions about encounters, visits, appointments, 'lan kham', 'lich su kham', or 'kham gan nhat' must use get_encounters."
+            "Questions about medications, medicines, prescriptions, 'thuoc', 'don thuoc', 'dang dung thuoc gi', 'medication', 'current medications' must use get_medications. "
         )
         user_prompt = {
             "message": message,
@@ -72,10 +75,32 @@ class OpenAIIntentExtractor:
                 tool_choice="required",
                 temperature=0,
             )
+            log.info(
+                "Intent extraction response model=%s usage=%s",
+                self.model,
+                response.usage.model_dump() if response.usage else None,
+            )
+
+            log.debug(
+                "Intent extraction raw response=%s",
+                response.model_dump_json(indent=2)
+            )
         except Exception:
             return await self.fallback.extract(message, provided_patient_id)
 
         tool_calls = response.choices[0].message.tool_calls or []
+
+        log.info(
+            "tool_calls_count=%s",
+            len(tool_calls)
+        )
+
+        if tool_calls:
+            log.info(
+                "selected_tool=%s arguments=%s",
+                tool_calls[0].function.name,
+                tool_calls[0].function.arguments,
+            )
         if not tool_calls:
             return await self.fallback.extract(message, provided_patient_id)
 

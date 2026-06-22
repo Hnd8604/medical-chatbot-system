@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
+import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.NotificationType;
@@ -37,8 +39,8 @@ public class QuotaService {
     private final ObjectMapper objectMapper;
     private final AlertService alertService;
     private final NotificationService notificationService;
-    private final ZoneId quotaZone;
     private final CurrentUserService currentUserService;
+    private final ZoneId quotaZone;
 
     @Autowired
     public QuotaService(
@@ -82,13 +84,50 @@ public class QuotaService {
         this.objectMapper = objectMapper;
         this.alertService = alertService;
         this.notificationService = notificationService;
-        this.quotaZone = quotaZone;
         this.currentUserService = currentUserService;
+        this.quotaZone = quotaZone;
+    }
+
+    QuotaService(
+            UserRepository userRepository,
+            QuotaPolicyRepository quotaPolicyRepository,
+            UsageLogRepository usageLogRepository,
+            AuditLogRepository auditLogRepository,
+            ObjectMapper objectMapper,
+            AlertService alertService,
+            NotificationService notificationService,
+            CurrentUserService currentUserService,
+            ZoneId quotaZone
+    ) {
+        this(
+                userRepository,
+                quotaPolicyRepository,
+                usageLogRepository,
+                auditLogRepository,
+                objectMapper,
+                alertService,
+                notificationService,
+                quotaZone,
+                currentUserService
+        );
     }
 
     public QuotaStatusResponse currentUserStatus() {
         User user = currentUserService.requireCurrentUser();
         return statusForUser(user.getId(), user.getUsername());
+    }
+
+    public QuotaStatusResponse getCurrentUserStatus() {
+        return currentUserStatus();
+    }
+
+    public QuotaStatusResponse getUserStatusByUsername(String targetUsername) {
+        UUID userId = getUserIdByUsername(targetUsername);
+        return statusForUser(userId, targetUsername);
+    }
+
+    public List<QuotaPolicy> getAllQuotaPolicies() {
+        return quotaPolicyRepository.findAll();
     }
 
     public void assertQuotaAvailable(UUID userId) {
@@ -141,7 +180,7 @@ public class QuotaService {
         String blockedReason = blockedReason(policy, usage, usedTokens);
 
         return new QuotaStatusResponse(
-                username,
+                username != null ? username : userId.toString(),
                 policy.policyName(),
                 policy.dailyRequestLimit(),
                 policy.dailyTokenLimit(),
@@ -157,6 +196,14 @@ public class QuotaService {
                 blockedReason == null,
                 blockedReason
         );
+    }
+
+    private UUID getUserIdByUsername(String username) {
+        return userRepository.findIdByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy người dùng: " + username
+                ));
     }
 
     private String blockedReason(QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {

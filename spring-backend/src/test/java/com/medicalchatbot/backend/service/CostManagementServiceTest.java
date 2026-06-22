@@ -39,7 +39,7 @@ class CostManagementServiceTest {
     private CurrentUserService currentUserService;
 
     @Test
-    void demoUserCostSummaryReturnsTotalsModelsDaysAndMissingPricing() {
+    void currentUserCostSummaryReturnsTotalsModelsDaysAndMissingPricing() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         CostManagementService service = newService();
         CostByModel byModel = new CostByModel(
@@ -111,7 +111,7 @@ class CostManagementServiceTest {
     }
 
     @Test
-    void demoUserCostSummaryRejectsInvalidRange() {
+    void currentUserCostSummaryRejectsInvalidRange() {
         CostManagementService service = newService();
 
         ResponseStatusException exception = assertThrows(

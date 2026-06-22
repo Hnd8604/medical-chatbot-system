@@ -55,7 +55,7 @@ class QuotaServiceTest {
     private CurrentUserService currentUserService;
 
     @Test
-    void demoUserStatusReturnsRemainingQuota() {
+    void currentUserStatusReturnsRemainingQuota() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         QuotaService service = newService();
 

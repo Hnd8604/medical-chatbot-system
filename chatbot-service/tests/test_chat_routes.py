@@ -441,6 +441,8 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["patient_candidates"][0]["id"], "demo-patient-001")
         self.assertEqual(result["answer_source"], "template_patient_selection")
         self.assertEqual(result["pending_question"], "thuoc cua benh nhan Nguyen")
+        self.assertIn("Tìm thấy nhiều bệnh nhân phù hợp", result["answer"])
+        self.assertIn("Vui lòng", result["answer"])
 
     async def test_missing_patient_context_returns_clarification_instead_of_demo_patient(self) -> None:
         plan = IntentPlan(

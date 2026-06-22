@@ -36,17 +36,17 @@ async def _answer_patients(client: FhirClient, plan: IntentPlan) -> dict[str, An
     else:
         summary = "; ".join(_format_patient_summary(patient) for patient in patients)
         criteria_text = _format_patient_search_criteria(plan)
-        criteria_prefix = f" phu hop voi {criteria_text}" if criteria_text else ""
+        criteria_prefix = f" phù hợp với {criteria_text}" if criteria_text else ""
         answer = (
             f"Theo dữ liệu FHIR hiện có, hệ thống tìm thấy {len(patients)} bệnh nhân: "
             f"{summary}."
         )
         if criteria_prefix:
-            answer = f"Theo du lieu FHIR hien co, he thong tim thay {len(patients)} benh nhan{criteria_prefix}: {summary}."
+            answer = f"Theo dữ liệu FHIR hiện có, hệ thống tìm thấy {len(patients)} bệnh nhân{criteria_prefix}: {summary}."
         if has_patient_search_criteria(plan) and len(patients) > 1:
             answer = (
-                "Tim thay nhieu benh nhan phu hop. "
-                "Vui long chon dung benh nhan hoac cung cap them ngay sinh, so dien thoai, ma dinh danh: "
+                "Tìm thấy nhiều bệnh nhân phù hợp. "
+                "Vui lòng chọn đúng bệnh nhân hoặc cung cấp thêm ngày sinh, số điện thoại, mã định danh: "
                 f"{summary}."
             )
     return {
@@ -395,12 +395,12 @@ async def _resolve_patient_id_for_tool(client: FhirClient, plan: IntentPlan) -> 
 
     criteria_text = _format_patient_search_criteria(plan)
     if not patients:
-        answer = f"Khong tim thay benh nhan phu hop voi {criteria_text or 'tieu chi da cung cap'}."
+        answer = f"Không tìm thấy bệnh nhân phù hợp với {criteria_text or 'tiêu chí đã cung cấp'}."
     else:
         summary = "; ".join(_format_patient_summary(patient) for patient in patients)
         answer = (
-            "Tim thay nhieu benh nhan phu hop. "
-            "Vui long cung cap them ma benh nhan, ngay sinh hoac so dien thoai de xac dinh chinh xac: "
+            "Tìm thấy nhiều bệnh nhân phù hợp. "
+            "Vui lòng cung cấp thêm mã bệnh nhân, ngày sinh hoặc số điện thoại để xác định chính xác: "
             f"{summary}."
         )
 

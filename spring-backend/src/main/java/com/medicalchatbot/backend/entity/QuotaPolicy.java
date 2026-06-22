@@ -43,6 +43,35 @@ public class QuotaPolicy {
     protected QuotaPolicy() {
     }
 
+    public QuotaPolicy(
+            String name,
+            int dailyRequestLimit,
+            int dailyTokenLimit,
+            BigDecimal dailyCostLimitUsd,
+            Integer rateLimitPerMinute
+    ) {
+        this.name = name;
+        this.dailyRequestLimit = dailyRequestLimit;
+        this.dailyTokenLimit = dailyTokenLimit;
+        this.dailyCostLimitUsd = dailyCostLimitUsd;
+        this.rateLimitPerMinute = rateLimitPerMinute;
+    }
+
+   
+    public void applyUpdate(
+            String name,
+            int dailyRequestLimit,
+            int dailyTokenLimit,
+            BigDecimal dailyCostLimitUsd,
+            Integer rateLimitPerMinute
+    ) {
+        this.name = name;
+        this.dailyRequestLimit = dailyRequestLimit;
+        this.dailyTokenLimit = dailyTokenLimit;
+        this.dailyCostLimitUsd = dailyCostLimitUsd;
+        this.rateLimitPerMinute = rateLimitPerMinute;
+    }
+
     public UUID getId() {
         return id;
     }

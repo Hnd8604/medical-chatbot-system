@@ -10,6 +10,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByUsername(String username);
 
+    long countByQuotaPolicyId(UUID quotaPolicyId);
+
     default Optional<UUID> findIdByUsername(String username) {
         return findByUsername(username).map(User::getId);
     }

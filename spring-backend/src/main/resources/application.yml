@@ -40,3 +40,12 @@ telegram:
     token: ${TELEGRAM_BOT_TOKEN:}
   chat:
     id: ${TELEGRAM_CHAT_ID:}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html # truy cập: http://localhost:8081/swagger-ui/index.html
+    display-request-duration: true
+    tags-sorter: alpha
+    operations-sorter: alpha

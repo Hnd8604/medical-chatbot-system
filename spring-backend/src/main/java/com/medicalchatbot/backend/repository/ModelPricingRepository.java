@@ -50,4 +50,10 @@ public interface ModelPricingRepository extends JpaRepository<ModelPricing, UUID
             order by p.provider, p.model
             """)
     List<ModelPricingInfo> findActivePricing();
+
+    /**
+     * Tìm bản ghi pricing đang active cho (provider, model). Partial unique index
+     * {@code idx_model_pricing_active_provider_model} (V5) đảm bảo tối đa 1 bản ghi.
+     */
+    Optional<ModelPricing> findByProviderIgnoreCaseAndModelIgnoreCaseAndActiveTrue(String provider, String model);
 }

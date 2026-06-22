@@ -23,7 +23,7 @@ $HapiCompose = Join-Path $RootDir "infra\hapi-fhir\docker-compose.yml"
 $AppPostgresCompose = Join-Path $RootDir "infra\app-postgres\docker-compose.yml"
 $RedisCompose = Join-Path $RootDir "infra\redis\docker-compose.yml"
 $QdrantCompose = Join-Path $RootDir "infra\qdrant\docker-compose.yml"
-$FrontendDir = Join-Path $RootDir "frontend"
+$FrontendDir = Join-Path $RootDir "frontend-react"
 $ChatbotDir = Join-Path $RootDir "chatbot-service"
 $SpringDir = Join-Path $RootDir "spring-backend"
 
@@ -156,7 +156,7 @@ function Invoke-StepCommand {
 
 if ($Stop) {
     Write-Step "Stopping dev services"
-    Stop-ManagedProcess -Name "frontend" -Port 5173
+    Stop-ManagedProcess -Name "frontend" -Port 5174
     Stop-ManagedProcess -Name "spring-backend" -Port 8081
     Stop-ManagedProcess -Name "chatbot-service" -Port 8000
     docker compose -f $HapiCompose down
@@ -171,6 +171,7 @@ Write-Step "Checking required commands"
 Require-Command "docker"
 Require-Command "python"
 Require-Command "java"
+Require-Command "npm"
 
 Write-Step "Starting Docker infrastructure"
 docker compose -f $HapiCompose up -d
@@ -204,6 +205,11 @@ if (-not $SkipInstall) {
     Write-Step "Installing chatbot-service Python dependencies"
     Invoke-StepCommand "pip install" {
         python -m pip install -r (Join-Path $ChatbotDir "requirements.txt")
+    }
+
+    Write-Step "Installing frontend dependencies"
+    Invoke-StepCommand "npm install" {
+        npm install --prefix $FrontendDir
     }
 }
 
@@ -240,12 +246,12 @@ Wait-Http -Url "http://localhost:8081/api/health" -Retries 90 -DelaySeconds 2
 Write-Step "Starting frontend"
 Start-ManagedProcess `
     -Name "frontend" `
-    -FilePath "python" `
-    -ArgumentList @("-m", "http.server", "5173", "--bind", "127.0.0.1") `
+    -FilePath "npm.cmd" `
+    -ArgumentList @("run", "dev") `
     -WorkingDirectory $FrontendDir `
-    -Port 5173
+    -Port 5174
 
-Wait-Http -Url "http://localhost:5173" -Retries 30 -DelaySeconds 2
+Wait-Http -Url "http://localhost:5174" -Retries 30 -DelaySeconds 2
 
 if (-not $SkipFlowCheck) {
     Write-Step "Checking full chat flow through Spring"
@@ -296,7 +302,7 @@ Write-Step "Dev stack is ready"
 Write-Host "HAPI FHIR:        http://localhost:8080/fhir"
 Write-Host "chatbot-service: http://localhost:8000"
 Write-Host "spring-backend:  http://localhost:8081"
-Write-Host "frontend:        http://localhost:5173"
+Write-Host "frontend:        http://localhost:5174"
 Write-Host "HAPI DB:         localhost:5434 / hapi / admin / admin"
 Write-Host "App DB:          localhost:5433 / medical_chatbot_app / app_user / app_password"
 Write-Host "Logs directory:  $LogDir"

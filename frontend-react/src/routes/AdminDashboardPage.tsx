@@ -224,6 +224,7 @@ export function AdminDashboardPage() {
             <h2 className="mb-4 font-display text-2xl text-foreground">Liên kết nhanh</h2>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <QuickLink to="/admin/users" title="Quản lý user" description="Tìm kiếm, đổi role và khóa/mở khóa tài khoản." />
+              <QuickLink to="/admin/config" title="Cấu hình hệ thống" description="Quản lý chính sách quota và bảng giá model." />
               <QuickLink to="/usage" title="Usage cá nhân" description="Xem quota, token và chi phí của tài khoản hiện tại." />
               <QuickLink to="/chat" title="Quay về chat" description="Mở giao diện chatbot chính." />
               <div className="rounded-lg border border-dashed border-border bg-white/70 p-5">

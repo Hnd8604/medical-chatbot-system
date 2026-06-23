@@ -310,13 +310,15 @@ class ChatbotControllerTest {
                                         userMessageId,
                                         "user",
                                         "Bệnh nhân này dùng thuốc gì?",
-                                        OffsetDateTime.parse("2026-05-31T10:00:00Z")
+                                        OffsetDateTime.parse("2026-05-31T10:00:00Z"),
+                                        null
                                 ),
                                 new ChatMessageItem(
                                         assistantMessageId,
                                         "assistant",
                                         "Theo dữ liệu FHIR...",
-                                        OffsetDateTime.parse("2026-05-31T10:00:05Z")
+                                        OffsetDateTime.parse("2026-05-31T10:00:05Z"),
+                                        new ChatMessageItem.Feedback(5, "Rất hữu ích")
                                 )
                         )
                 ));
@@ -327,7 +329,10 @@ class ChatbotControllerTest {
                 .andExpect(jsonPath("$.messages[0].id").value(userMessageId.toString()))
                 .andExpect(jsonPath("$.messages[0].role").value("user"))
                 .andExpect(jsonPath("$.messages[0].content").value("Bệnh nhân này dùng thuốc gì?"))
-                .andExpect(jsonPath("$.messages[1].role").value("assistant"));
+                .andExpect(jsonPath("$.messages[0].feedback").isEmpty())
+                .andExpect(jsonPath("$.messages[1].role").value("assistant"))
+                .andExpect(jsonPath("$.messages[1].feedback.rating").value(5))
+                .andExpect(jsonPath("$.messages[1].feedback.comment").value("Rất hữu ích"));
     }
 
     @Test

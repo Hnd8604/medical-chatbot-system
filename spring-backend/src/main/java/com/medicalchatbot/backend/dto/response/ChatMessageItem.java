@@ -13,6 +13,15 @@ public record ChatMessageItem(
         String content,
 
         @JsonProperty("created_at")
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+
+        Feedback feedback
 ) {
+
+    public record Feedback(
+            int rating,
+
+            String comment
+    ) {
+    }
 }

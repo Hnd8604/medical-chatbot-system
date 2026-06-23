@@ -51,6 +51,11 @@ public class MessageFeedback {
         this.comment = comment;
     }
 
+    public void update(int rating, String comment) {
+        this.rating = rating;
+        this.comment = comment;
+    }
+
     public UUID getId() {
         return id;
     }

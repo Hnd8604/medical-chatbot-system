@@ -59,7 +59,7 @@ public class SecurityConfig {
                                 "/api/usage/cost-summary",
                                 "/api/notifications/**",
                                 "/api/model-pricing",
-                                "/api/chat/messages/**/feedback"
+                                "/api/chat/messages/*/feedback"
                         ).authenticated()
                         .anyRequest().permitAll()
                 )

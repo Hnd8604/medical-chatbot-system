@@ -160,6 +160,26 @@ export interface CacheMetricsResponse {
   hit_rate_percentage?: number;
 }
 
+export interface IntentAnalytics {
+  date: string;
+  intent: string;
+  count: number;
+}
+
+export interface ErrorAnalytics {
+  date: string;
+  service: string;
+  errorType: string;
+  count: number;
+}
+
+export interface PerformanceAnalytics {
+  model: string;
+  avgLatency: number;
+  p95Latency: number;
+  p99Latency: number;
+}
+
 export interface AdminAlertItem {
   id?: string;
   source?: string | null;

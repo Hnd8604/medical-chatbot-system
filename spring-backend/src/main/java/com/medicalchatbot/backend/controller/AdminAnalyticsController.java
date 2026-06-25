@@ -4,11 +4,13 @@ import com.medicalchatbot.backend.dto.response.ErrorAnalyticsResponse;
 import com.medicalchatbot.backend.dto.response.IntentAnalyticsResponse;
 import com.medicalchatbot.backend.dto.response.PerformanceAnalyticsResponse;
 import com.medicalchatbot.backend.service.AnalyticsService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -23,22 +25,28 @@ public class AdminAnalyticsController {
 
     @GetMapping("/intents")
     public List<IntentAnalyticsResponse> getIntentAnalytics(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "7") int size
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "10") int limit
     ) {
-        return analyticsService.getIntentAnalytics(page, size);
+        return analyticsService.getIntentAnalytics(from, to, limit);
     }
 
     @GetMapping("/errors")
     public List<ErrorAnalyticsResponse> getErrorAnalytics(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "7") int size
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "10") int limit
     ) {
-        return analyticsService.getErrorAnalytics(page, size);
+        return analyticsService.getErrorAnalytics(from, to, limit);
     }
 
     @GetMapping("/performance")
-    public List<PerformanceAnalyticsResponse> getPerformanceAnalytics() {
-        return analyticsService.getPerformanceAnalytics();
+    public List<PerformanceAnalyticsResponse> getPerformanceAnalytics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return analyticsService.getPerformanceAnalytics(from, to, limit);
     }
 }

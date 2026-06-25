@@ -120,9 +120,55 @@ export interface CostSummaryResponse {
   output_tokens: number;
   total_tokens: number;
   estimated_cost_usd: number;
-  models: unknown[];
-  days: unknown[];
-  missing_pricing_models: unknown[];
+  models: CostByModel[];
+  days: CostByDay[];
+  missing_pricing_models: MissingPricingModel[];
+}
+
+export interface CostByModel {
+  llm_provider?: string | null;
+  llm_model?: string | null;
+  request_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+}
+
+export interface CostByDay {
+  date: string;
+  request_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+}
+
+export interface MissingPricingModel {
+  llm_provider?: string | null;
+  llm_model?: string | null;
+  request_count: number;
+}
+
+export interface QuotaPolicy {
+  id: string;
+  name: string;
+  dailyRequestLimit: number;
+  dailyTokenLimit: number;
+  dailyCostLimitUsd: number;
+  rateLimitPerMinute?: number | null;
+}
+
+export interface ModelPricingInfo {
+  provider: string;
+  model: string;
+  input_price_per_1m_tokens: number;
+  output_price_per_1m_tokens: number;
+  currency: string;
+}
+
+export interface ModelPricingListResponse {
+  pricing: ModelPricingInfo[];
 }
 
 export interface PageResponse<T> {

@@ -1,4 +1,4 @@
-import { BarChart3, LogOut, MessageSquareText, Shield, Users } from "lucide-react";
+import { BarChart3, CircleDollarSign, LogOut, MessageSquareText, Shield, Users } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { cn } from "../../lib/cn";
@@ -60,6 +60,10 @@ export function DashboardLayout({ eyebrow, title, description, actions, children
                   <NavLink to="/admin/users" className={navClass}>
                     <Users className="h-4 w-4" />
                     Users
+                  </NavLink>
+                  <NavLink to="/admin/usage-cost" className={navClass}>
+                    <CircleDollarSign className="h-4 w-4" />
+                    Quota/Cost
                   </NavLink>
                 </>
               ) : null}

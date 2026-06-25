@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CircleDollarSign,
   FileText,
   LogOut,
   PanelLeftClose,
@@ -141,6 +142,16 @@ export function HistorySidebar({
             </Link>
           ) : null}
           {user.role === "ADMIN" ? (
+            <Link
+              to="/admin/usage-cost"
+              className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl bg-transparent text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Quota / Cost"
+              title="Quota / Cost"
+            >
+              <CircleDollarSign className="h-5 w-5" />
+            </Link>
+          ) : null}
+          {user.role === "ADMIN" ? (
             <Button
               type="button"
               variant="ghost"
@@ -247,6 +258,15 @@ export function HistorySidebar({
           >
             <Shield className="h-4 w-4" />
             Admin dashboard
+          </Link>
+        ) : null}
+        {user.role === "ADMIN" ? (
+          <Link
+            to="/admin/usage-cost"
+            className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
+          >
+            <CircleDollarSign className="h-4 w-4" />
+            Quota / Cost
           </Link>
         ) : null}
         {user.role === "ADMIN" ? (

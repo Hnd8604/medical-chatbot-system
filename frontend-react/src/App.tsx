@@ -7,6 +7,7 @@ import { ChatPage } from "./routes/ChatPage";
 import { UsagePage } from "./routes/UsagePage";
 import { AdminDashboardPage } from "./routes/AdminDashboardPage";
 import { AdminUsersPage } from "./routes/AdminUsersPage";
+import { AdminUsageCostPage } from "./routes/AdminUsageCostPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -75,6 +76,16 @@ export default function App() {
           <ProtectedRoute>
             <AdminRoute>
               <AdminUsersPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/usage-cost"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminUsageCostPage />
             </AdminRoute>
           </ProtectedRoute>
         }

@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.enums.NotificationType;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Column;
@@ -20,6 +21,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "notifications")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Notification {
 
     @Id
@@ -47,9 +53,6 @@ public class Notification {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    protected Notification() {
-    }
-
     public Notification(User user, NotificationType type, String title, String content) {
         this.user = user;
         this.type = type;
@@ -58,35 +61,7 @@ public class Notification {
         this.isRead = false;
     }
 
-    public UUID getId() {
-        return id;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public NotificationType getType() {
-        return type;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public boolean isRead() {
-        return isRead;
-    }
-
     public void markAsRead() {
         this.isRead = true;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
     }
 }

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Column;
@@ -15,6 +16,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "quota_policies")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class QuotaPolicy {
 
     @Id
@@ -40,9 +46,6 @@ public class QuotaPolicy {
     @Column(name = "rate_limit_per_minute")
     private Integer rateLimitPerMinute;
 
-    protected QuotaPolicy() {
-    }
-
     public QuotaPolicy(
             String name,
             int dailyRequestLimit,
@@ -57,7 +60,6 @@ public class QuotaPolicy {
         this.rateLimitPerMinute = rateLimitPerMinute;
     }
 
-   
     public void applyUpdate(
             String name,
             int dailyRequestLimit,
@@ -70,33 +72,5 @@ public class QuotaPolicy {
         this.dailyTokenLimit = dailyTokenLimit;
         this.dailyCostLimitUsd = dailyCostLimitUsd;
         this.rateLimitPerMinute = rateLimitPerMinute;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public int getDailyRequestLimit() {
-        return dailyRequestLimit;
-    }
-
-    public int getDailyTokenLimit() {
-        return dailyTokenLimit;
-    }
-
-    public BigDecimal getDailyCostLimitUsd() {
-        return dailyCostLimitUsd;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public Integer getRateLimitPerMinute() {
-        return rateLimitPerMinute;
     }
 }

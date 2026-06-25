@@ -8,18 +8,16 @@ import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@RequiredArgsConstructor
 public class UserPatientScopeService {
 
     private final UserPatientLinkRepository userPatientLinkRepository;
-
-    public UserPatientScopeService(UserPatientLinkRepository userPatientLinkRepository) {
-        this.userPatientLinkRepository = userPatientLinkRepository;
-    }
 
     public PatientScope resolve(User user, String requestedPatientId, ChatSessionMemory sessionMemory) {
         String requestPatientId = normalizePatientId(requestedPatientId);

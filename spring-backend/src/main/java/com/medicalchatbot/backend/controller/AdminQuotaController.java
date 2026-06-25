@@ -3,6 +3,7 @@ package com.medicalchatbot.backend.controller;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.service.QuotaService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,15 +12,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/admin/quotas")
 public class AdminQuotaController {
 
     private final QuotaService quotaService;
-
-    public AdminQuotaController(QuotaService quotaService) {
-        this.quotaService = quotaService;
-    }
-
 
     @GetMapping("/policies")
     public List<QuotaPolicy> getAllPolicies() {

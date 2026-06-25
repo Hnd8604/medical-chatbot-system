@@ -8,8 +8,7 @@ import com.medicalchatbot.backend.service.QuotaService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -17,10 +16,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+@Slf4j
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
-
-    private static final Logger log = LoggerFactory.getLogger(RateLimitInterceptor.class);
 
     private final StringRedisTemplate redisTemplate;
     private final long windowInSeconds = 60L; 

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Column;
@@ -18,6 +19,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "usage_logs")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UsageLog {
 
     @Id
@@ -74,9 +80,6 @@ public class UsageLog {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
-
-    protected UsageLog() {
-    }
 
     public UsageLog(
             User user,

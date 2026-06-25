@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -21,6 +22,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "chat_messages")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ChatMessage {
 
     @Id
@@ -45,38 +51,11 @@ public class ChatMessage {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    protected ChatMessage() {
-    }
-
     public ChatMessage(ChatSession session, String role, String content, JsonNode metadataJson) {
         this.session = session;
         this.role = role;
         this.content = content;
         this.metadataJson = cleanMetadata(metadataJson);
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public ChatSession getSession() {
-        return session;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public JsonNode getMetadataJson() {
-        return metadataJson;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
     }
 
     private JsonNode cleanMetadata(JsonNode value) {

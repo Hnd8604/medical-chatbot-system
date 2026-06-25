@@ -9,27 +9,19 @@ import com.medicalchatbot.backend.entity.MessageFeedback;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@RequiredArgsConstructor
 public class FeedbackService {
 
     private final MessageFeedbackRepository feedbackRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final CurrentUserService currentUserService;
-
-    public FeedbackService(
-            MessageFeedbackRepository feedbackRepository,
-            ChatMessageRepository chatMessageRepository,
-            CurrentUserService currentUserService
-    ) {
-        this.feedbackRepository = feedbackRepository;
-        this.chatMessageRepository = chatMessageRepository;
-        this.currentUserService = currentUserService;
-    }
 
     @Transactional
     public FeedbackResponse submitFeedback(UUID messageId, FeedbackRequest request) {

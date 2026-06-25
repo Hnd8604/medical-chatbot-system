@@ -8,6 +8,7 @@ import com.medicalchatbot.backend.dto.response.NotificationListResponse;
 import com.medicalchatbot.backend.entity.Notification;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.NotificationService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,19 +17,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/notifications")
 public class NotificationController {
 
     private final NotificationService notificationService;
     private final CurrentUserService currentUserService;
-
-    public NotificationController(
-            NotificationService notificationService,
-            CurrentUserService currentUserService
-    ) {
-        this.notificationService = notificationService;
-        this.currentUserService = currentUserService;
-    }
 
     private UUID getCurrentUserId() {
         return currentUserService.requireCurrentUserId();

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -16,6 +17,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "model_pricing")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ModelPricing {
 
     @Id
@@ -48,9 +54,6 @@ public class ModelPricing {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
-    protected ModelPricing() {
-    }
-
     public ModelPricing(
             String provider,
             String model,
@@ -67,7 +70,6 @@ public class ModelPricing {
         this.active = active;
     }
 
-    
     public void applyUpdate(
             String provider,
             String model,
@@ -82,41 +84,5 @@ public class ModelPricing {
         this.outputPricePer1mTokens = outputPricePer1mTokens;
         this.currency = currency;
         this.active = active;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getProvider() {
-        return provider;
-    }
-
-    public String getModel() {
-        return model;
-    }
-
-    public BigDecimal getInputPricePer1mTokens() {
-        return inputPricePer1mTokens;
-    }
-
-    public BigDecimal getOutputPricePer1mTokens() {
-        return outputPricePer1mTokens;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public boolean isActive() {
-        return active;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
     }
 }

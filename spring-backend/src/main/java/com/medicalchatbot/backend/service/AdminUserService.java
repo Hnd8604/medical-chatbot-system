@@ -10,6 +10,7 @@ import com.medicalchatbot.backend.enums.UserStatus;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -19,24 +20,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@RequiredArgsConstructor
 public class AdminUserService {
 
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
-
-    public AdminUserService(
-            UserRepository userRepository,
-            CurrentUserService currentUserService,
-            AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper
-    ) {
-        this.userRepository = userRepository;
-        this.currentUserService = currentUserService;
-        this.auditLogRepository = auditLogRepository;
-        this.objectMapper = objectMapper;
-    }
 
     @Transactional(readOnly = true)
     public AdminUserListResponse listUsers(int page, int size) {

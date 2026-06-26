@@ -316,7 +316,9 @@ public class ChatApplicationService {
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("operation", "chat");
         metadata.put("latency_ms", latencyMs);
-        metadata.put("intent", textOrNull(chatbotResponse, "intent"));
+        String intent = textOrNull(chatbotResponse, "intent");
+        metadata.put("intent", intent);
+        metadata.put("question_intent", intent);
         metadata.put("tool_name", toolName);
         metadata.put("intent_source", textOrNull(chatbotResponse, "intent_source"));
         metadata.put("answer_source", textOrNull(chatbotResponse, "answer_source"));

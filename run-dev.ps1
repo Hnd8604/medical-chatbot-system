@@ -131,11 +131,11 @@ function Stop-ManagedProcess {
         $connections = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
         foreach ($conn in $connections) {
             if ($conn.OwningProcess) {
-                $pid = $conn.OwningProcess
-                $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                $processId = $conn.OwningProcess
+                $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
                 if ($proc) {
-                    taskkill /F /T /PID $pid 2>&1 | Out-Null
-                    Write-Host "Stopped orphaned process on port $Port (PID $pid)."
+                    taskkill /F /T /PID $processId 2>&1 | Out-Null
+                    Write-Host "Stopped orphaned process on port $Port (PID $processId)."
                 }
             }
         }
@@ -242,6 +242,17 @@ Start-ManagedProcess `
     -Port 8081
 
 Wait-Http -Url "http://localhost:8081/api/health" -Retries 90 -DelaySeconds 2
+
+
+if (-not $SkipInstall) {
+    Write-Step "Installing frontend dependencies"
+    Invoke-StepCommand "npm install" {
+        $CurrentDir = Get-Location
+        Set-Location $FrontendDir
+        & "npm.cmd" install
+        Set-Location $CurrentDir
+    }
+}
 
 Write-Step "Starting frontend"
 Start-ManagedProcess `

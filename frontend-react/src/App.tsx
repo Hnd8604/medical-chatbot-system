@@ -8,6 +8,8 @@ import { UsagePage } from "./routes/UsagePage";
 import { AdminDashboardPage } from "./routes/AdminDashboardPage";
 import { AdminUsersPage } from "./routes/AdminUsersPage";
 import { AdminConfigPage } from "./routes/AdminConfigPage";
+import { AdminUsageCostPage } from "./routes/AdminUsageCostPage";
+import { AdminAuditLogsPage } from "./routes/AdminAuditLogsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -86,6 +88,26 @@ export default function App() {
           <ProtectedRoute>
             <AdminRoute>
               <AdminConfigPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/usage-cost"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminUsageCostPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/audit-logs"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminAuditLogsPage />
             </AdminRoute>
           </ProtectedRoute>
         }

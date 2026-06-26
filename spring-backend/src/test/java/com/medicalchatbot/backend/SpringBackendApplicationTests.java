@@ -14,6 +14,7 @@ import com.medicalchatbot.backend.service.ChatbotServiceClient;
 import com.medicalchatbot.backend.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(properties = {
@@ -59,6 +60,9 @@ class SpringBackendApplicationTests {
 
 	@MockitoBean
 	private ChatbotServiceClient chatbotServiceClient;
+
+	@MockitoBean
+	private JdbcTemplate jdbcTemplate;
 
 	@Test
 	void contextLoads() {

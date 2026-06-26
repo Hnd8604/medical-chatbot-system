@@ -226,6 +226,12 @@ export interface PerformanceAnalytics {
   p99Latency: number;
 }
 
+export interface RequestAnalyticsSummary {
+  from: string;
+  to: string;
+  request_count: number;
+}
+
 export interface AdminAlertItem {
   id?: string;
   source?: string | null;

@@ -3,6 +3,7 @@ package com.medicalchatbot.backend.service;
 import com.medicalchatbot.backend.dto.response.ErrorAnalyticsResponse;
 import com.medicalchatbot.backend.dto.response.IntentAnalyticsResponse;
 import com.medicalchatbot.backend.dto.response.PerformanceAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.RequestAnalyticsSummaryResponse;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -126,6 +127,24 @@ public class AnalyticsService {
                 rs.getDouble("p95Latency"),
                 rs.getDouble("p99Latency")
         ), range.from(), range.to(), safeLimit);
+    }
+
+    public RequestAnalyticsSummaryResponse getRequestSummary(LocalDate from, LocalDate to) {
+        DateRange range = normalizeRange(from, to);
+
+        String sql = """
+            SELECT COALESCE(SUM(request_count), 0) AS request_count
+            FROM usage_logs
+            WHERE operation = 'chat'
+              AND DATE(created_at) >= ? AND DATE(created_at) <= ?
+        """;
+
+        Long count = jdbcTemplate.queryForObject(sql, Long.class, range.from(), range.to());
+        return new RequestAnalyticsSummaryResponse(
+                range.from().toString(),
+                range.to().toString(),
+                count == null ? 0 : count
+        );
     }
 
     private DateRange normalizeRange(LocalDate from, LocalDate to) {

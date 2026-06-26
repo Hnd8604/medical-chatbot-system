@@ -3,6 +3,7 @@ package com.medicalchatbot.backend.controller;
 import com.medicalchatbot.backend.dto.response.ErrorAnalyticsResponse;
 import com.medicalchatbot.backend.dto.response.IntentAnalyticsResponse;
 import com.medicalchatbot.backend.dto.response.PerformanceAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.RequestAnalyticsSummaryResponse;
 import com.medicalchatbot.backend.service.AnalyticsService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,5 +49,13 @@ public class AdminAnalyticsController {
             @RequestParam(defaultValue = "10") int limit
     ) {
         return analyticsService.getPerformanceAnalytics(from, to, limit);
+    }
+
+    @GetMapping("/requests")
+    public RequestAnalyticsSummaryResponse getRequestSummary(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return analyticsService.getRequestSummary(from, to);
     }
 }

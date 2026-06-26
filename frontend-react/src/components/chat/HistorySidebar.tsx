@@ -1,6 +1,7 @@
 import {
   BarChart3,
   CircleDollarSign,
+  ClipboardList,
   FileText,
   LogOut,
   PanelLeftClose,
@@ -152,6 +153,16 @@ export function HistorySidebar({
             </Link>
           ) : null}
           {user.role === "ADMIN" ? (
+            <Link
+              to="/admin/audit-logs"
+              className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl bg-transparent text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Audit log"
+              title="Audit log"
+            >
+              <ClipboardList className="h-5 w-5" />
+            </Link>
+          ) : null}
+          {user.role === "ADMIN" ? (
             <Button
               type="button"
               variant="ghost"
@@ -267,6 +278,15 @@ export function HistorySidebar({
           >
             <CircleDollarSign className="h-4 w-4" />
             Quota / Cost
+          </Link>
+        ) : null}
+        {user.role === "ADMIN" ? (
+          <Link
+            to="/admin/audit-logs"
+            className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
+          >
+            <ClipboardList className="h-4 w-4" />
+            Audit log
           </Link>
         ) : null}
         {user.role === "ADMIN" ? (

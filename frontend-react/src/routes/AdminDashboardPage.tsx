@@ -1,30 +1,9 @@
 import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  BarChart3,
-  Bell,
-  CalendarDays,
-  Database,
-  Gauge,
-  ListFilter,
-  MessageSquare,
-  RefreshCw,
-  Users,
-} from "lucide-react";
+import { AlertTriangle, BarChart3, Bell, CalendarDays, Database, Gauge, ListFilter, MessageSquare, RefreshCw, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiJson, toQuery } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type {
-  AdminAlertItem,
-  AdminUserListResponse,
-  AuditLogItem,
-  CacheMetricsResponse,
-  ErrorAnalytics,
-  IntentAnalytics,
-  NotificationListResponse,
-  PageResponse,
-  PerformanceAnalytics,
-} from "../lib/types";
+import type { AdminAlertItem, AdminUserListResponse, CacheMetricsResponse, ErrorAnalytics, IntentAnalytics, NotificationListResponse, PageResponse, PerformanceAnalytics, RequestAnalyticsSummary } from "../lib/types";
 import { formatDateTime, formatNumber, formatPercent, formatUsd } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";
 import { EmptyState } from "../components/dashboard/EmptyState";
@@ -120,10 +99,7 @@ function displayKey(value: string) {
   return value.replace(/_/g, " ");
 }
 
-function summarizeByKey<T extends { date: string; count: number }>(
-  items: T[],
-  keyOf: (item: T) => string,
-) {
+function summarizeByKey<T extends { date: string; count: number }>(items: T[], keyOf: (item: T) => string) {
   const groups = new Map<string, T[]>();
   for (const item of items) {
     const key = keyOf(item);
@@ -160,13 +136,7 @@ function AnalyticsStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AnalyticsFilterInput({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function AnalyticsFilterInput({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="grid gap-1">
       <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
@@ -177,27 +147,14 @@ function AnalyticsFilterInput({
 
 function QuickLink({ to, title, description }: { to: string; title: string; description: string }) {
   return (
-    <Link
-      to={to}
-      className="focus-ring group rounded-lg border border-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-card"
-    >
+    <Link to={to} className="focus-ring group rounded-lg border border-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-card">
       <p className="font-semibold text-foreground">{title}</p>
       <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
     </Link>
   );
 }
 
-function AnalyticsShell({
-  title,
-  icon,
-  meta,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  meta?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function AnalyticsShell({ title, icon, meta, children }: { title: string; icon: React.ReactNode; meta?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border bg-white px-5 py-4">
@@ -213,23 +170,8 @@ function AnalyticsShell({
   );
 }
 
-function BreakdownCard({
-  title,
-  total,
-  days,
-  maxTotal,
-  tone = "blue",
-}: {
-  title: string;
-  total: number;
-  days: Array<{ date: string; count: number }>;
-  maxTotal: number;
-  tone?: "blue" | "red";
-}) {
-  const peak = days.reduce<{ date: string; count: number } | null>(
-    (best, item) => (!best || item.count > best.count ? item : best),
-    null,
-  );
+function BreakdownCard({ title, total, days, maxTotal, tone = "blue" }: { title: string; total: number; days: Array<{ date: string; count: number }>; maxTotal: number; tone?: "blue" | "red" }) {
+  const peak = days.reduce<{ date: string; count: number } | null>((best, item) => (!best || item.count > best.count ? item : best), null);
   const ratio = Math.max(4, Math.min(100, (total / Math.max(maxTotal, 1)) * 100));
   const barClass = tone === "red" ? "bg-danger" : "gradient-surface";
   const sortedDays = [...days].sort((a, b) => b.count - a.count);
@@ -250,10 +192,7 @@ function BreakdownCard({
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         {sortedDays.slice(0, 5).map((day) => (
-          <div
-            key={`${title}-${day.date}`}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1.5 text-xs"
-          >
+          <div key={`${title}-${day.date}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1.5 text-xs">
             <CalendarDays className={tone === "red" ? "h-3.5 w-3.5 text-danger" : "h-3.5 w-3.5 text-accent"} />
             <span className="text-muted-foreground">{formatAnalyticsDate(day.date)}</span>
             <span className={tone === "red" ? "font-semibold text-danger" : "font-semibold text-accent"}>{formatNumber(day.count)}</span>
@@ -310,11 +249,7 @@ function AnalyticsFilterBar({
             />
           </AnalyticsFilterInput>
           <AnalyticsFilterInput label="Hiển thị">
-            <select
-              value={limit}
-              onChange={(event) => onLimitChange(Number(event.target.value))}
-              className="focus-ring h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-foreground shadow-sm"
-            >
+            <select value={limit} onChange={(event) => onLimitChange(Number(event.target.value))} className="focus-ring h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-foreground shadow-sm">
               {[5, 10, 20].map((value) => (
                 <option key={value} value={value}>
                   Top {value}
@@ -341,7 +276,7 @@ function AnalyticsFilterBar({
 
 export function AdminDashboardPage() {
   const [usersTotal, setUsersTotal] = useState<number | null>(null);
-  const [auditPage, setAuditPage] = useState<PageResponse<AuditLogItem> | null>(null);
+  const [requestSummary, setRequestSummary] = useState<RequestAnalyticsSummary | null>(null);
   const [cacheMetrics, setCacheMetrics] = useState<CacheMetricsResponse | null>(null);
   const [alertPage, setAlertPage] = useState<PageResponse<AdminAlertItem> | null>(null);
   const [alerts, setAlerts] = useState<AdminAlertItem[]>([]);
@@ -398,19 +333,10 @@ export function AdminDashboardPage() {
   }
 
   async function loadAnalytics() {
-    await Promise.all([
-      loadIntentAnalytics(),
-      loadErrorAnalytics(),
-      loadPerformanceAnalytics(),
-    ]);
+    await Promise.all([loadIntentAnalytics(), loadErrorAnalytics(), loadPerformanceAnalytics()]);
   }
 
-  function applyAnalyticsPreset(
-    days: number,
-    currentFilter: AnalyticsFilter,
-    setFilter: React.Dispatch<React.SetStateAction<AnalyticsFilter>>,
-    loadFiltered: (filter: AnalyticsFilter) => Promise<void>,
-  ) {
+  function applyAnalyticsPreset(days: number, currentFilter: AnalyticsFilter, setFilter: React.Dispatch<React.SetStateAction<AnalyticsFilter>>, loadFiltered: (filter: AnalyticsFilter) => Promise<void>) {
     const nextFilter = {
       ...analyticsRange(days),
       limit: currentFilter.limit,
@@ -419,11 +345,7 @@ export function AdminDashboardPage() {
     void loadFiltered(nextFilter);
   }
 
-  async function loadAlerts(
-    status = alertStatusFilter,
-    severity = alertSeverityFilter,
-    page = 0,
-  ) {
+  async function loadAlerts(status = alertStatusFilter, severity = alertSeverityFilter, page = 0) {
     setAlertsLoading(true);
     const query = toQuery({
       status: status === "ALL" ? null : status,
@@ -463,9 +385,10 @@ export function AdminDashboardPage() {
     setLoading(true);
     setErrors([]);
 
-    const [usersResult, auditResult, cacheResult, notificationsResult] = await Promise.allSettled([
+    const summaryRange = analyticsRange(DEFAULT_ANALYTICS_DAYS);
+    const [usersResult, requestResult, cacheResult, notificationsResult] = await Promise.allSettled([
       apiJson<AdminUserListResponse>("/api/admin/users?page=0&size=1"),
-      apiJson<PageResponse<AuditLogItem>>("/api/audit-logs?action=CHAT_COMPLETED&page=0&size=1"),
+      apiJson<RequestAnalyticsSummary>(`/api/admin/analytics/requests?from=${summaryRange.from}&to=${summaryRange.to}`),
       apiJson<CacheMetricsResponse>("/api/metrics/cache"),
       apiJson<NotificationListResponse>("/api/notifications"),
     ]);
@@ -478,10 +401,10 @@ export function AdminDashboardPage() {
       nextErrors.push("Không thể tải số user.");
     }
 
-    if (auditResult.status === "fulfilled") {
-      setAuditPage(auditResult.value);
+    if (requestResult.status === "fulfilled") {
+      setRequestSummary(requestResult.value);
     } else {
-      nextErrors.push("Không thể tải thống kê request.");
+      setRequestSummary(null);
     }
 
     if (cacheResult.status === "fulfilled") {
@@ -521,7 +444,7 @@ export function AdminDashboardPage() {
     <DashboardLayout
       eyebrow="Admin Dashboard"
       title="Tổng quan hệ thống"
-      description="Theo dõi nhanh người dùng, request, cache và alert gần đây. Các số liệu chưa có endpoint riêng sẽ hiển thị trạng thái trống."
+      description="Theo dõi nhanh người dùng, request, cache, alert, notification và các phân tích hệ thống"
       actions={
         <Button type="button" variant="secondary" onClick={() => void loadDashboard()} disabled={loading}>
           {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
@@ -547,7 +470,7 @@ export function AdminDashboardPage() {
         <div className="grid gap-7">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Số user" value={formatNumber(usersTotal)} description="Tổng tài khoản trong hệ thống." />
-            <MetricCard label="Số request" value={formatNumber(pageTotal(auditPage))} description="Tổng audit log CHAT_COMPLETED." />
+            <MetricCard label="Request 7 ngày" value={requestSummary ? formatNumber(requestSummary.request_count) : "-"} description="Tổng request trong usage logs." />
             <MetricCard
               label="Cache hit rate"
               value={formatPercent(cacheMetrics?.hit_rate_percentage)}
@@ -555,23 +478,13 @@ export function AdminDashboardPage() {
               progress={cacheMetrics?.hit_rate_percentage ?? 0}
               progressTone="green"
             />
-            <MetricCard
-              label="Tiết kiệm ước tính"
-              value={formatUsd(cacheMetrics?.total_saved_cost_usd)}
-              description={`${formatNumber(cacheMetrics?.total_saved_tokens)} token đã tiết kiệm từ cache.`}
-            />
+            <MetricCard label="Tiết kiệm ước tính" value={formatUsd(cacheMetrics?.total_saved_cost_usd)} description={`${formatNumber(cacheMetrics?.total_saved_tokens)} token đã tiết kiệm từ cache.`} />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2">
-            <EmptyState
-              title="Số hội thoại: Chưa có dữ liệu."
-              description="Backend hiện chưa có endpoint tổng hợp số hội thoại toàn hệ thống cho admin dashboard."
-            />
-            <QuickLink
-              to="/admin/usage-cost"
-              title="Quota / Cost"
-              description="Policy, bảng giá model và cost theo username."
-            />
+          <section className="grid gap-4 md:grid-cols-3">
+            <EmptyState title="Số hội thoại: Chưa có dữ liệu." description="Backend hiện chưa có endpoint tổng hợp số hội thoại toàn hệ thống cho admin dashboard." />
+            <QuickLink to="/admin/usage-cost" title="Quota / Cost" description="Policy, bảng giá model và cost theo username." />
+            <QuickLink to="/admin/audit-logs" title="Audit log" description="Timeline thao tác, FHIR access, auth và cấu hình." />
           </section>
 
           <section className="grid gap-6">
@@ -603,22 +516,16 @@ export function AdminDashboardPage() {
                     <EmptyState title="Chưa có dữ liệu câu hỏi." />
                   ) : (
                     <>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <AnalyticsStat label="Tổng câu hỏi" value={formatNumber(intentTotal)} />
-                      <AnalyticsStat label="Nhóm intent" value={formatNumber(intentSummaries.length)} />
-                      <AnalyticsStat label="Cửa sổ" value={`${intentWindow} ngày`} />
-                    </div>
-                    <div className="grid gap-4 xl:grid-cols-2">
-                      {intentSummaries.map((summary) => (
-                        <BreakdownCard
-                          key={summary.key}
-                          title={summary.key}
-                          total={summary.total}
-                          days={summary.days}
-                          maxTotal={maxIntentTotal}
-                        />
-                      ))}
-                    </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <AnalyticsStat label="Tổng câu hỏi" value={formatNumber(intentTotal)} />
+                        <AnalyticsStat label="Nhóm intent" value={formatNumber(intentSummaries.length)} />
+                        <AnalyticsStat label="Cửa sổ" value={`${intentWindow} ngày`} />
+                      </div>
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        {intentSummaries.map((summary) => (
+                          <BreakdownCard key={summary.key} title={summary.key} total={summary.total} days={summary.days} maxTotal={maxIntentTotal} />
+                        ))}
+                      </div>
                     </>
                   )}
                 </div>
@@ -651,23 +558,16 @@ export function AdminDashboardPage() {
                     <EmptyState title="Chưa có lỗi nổi bật." />
                   ) : (
                     <>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <AnalyticsStat label="Tổng lỗi" value={formatNumber(errorTotal)} />
-                      <AnalyticsStat label="Nhóm service" value={formatNumber(errorSummaries.length)} />
-                      <AnalyticsStat label="Cửa sổ" value={`${errorWindow} ngày`} />
-                    </div>
-                    <div className="grid gap-4 xl:grid-cols-2">
-                      {errorSummaries.map((summary) => (
-                        <BreakdownCard
-                          key={summary.key}
-                          title={summary.key}
-                          total={summary.total}
-                          days={summary.days}
-                          maxTotal={maxErrorTotal}
-                          tone="red"
-                        />
-                      ))}
-                    </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <AnalyticsStat label="Tổng lỗi" value={formatNumber(errorTotal)} />
+                        <AnalyticsStat label="Nhóm service" value={formatNumber(errorSummaries.length)} />
+                        <AnalyticsStat label="Cửa sổ" value={`${errorWindow} ngày`} />
+                      </div>
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        {errorSummaries.map((summary) => (
+                          <BreakdownCard key={summary.key} title={summary.key} total={summary.total} days={summary.days} maxTotal={maxErrorTotal} tone="red" />
+                        ))}
+                      </div>
                     </>
                   )}
                 </div>
@@ -760,11 +660,7 @@ export function AdminDashboardPage() {
               <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <AnalyticsFilterInput label="Severity">
-                    <select
-                      value={alertSeverityFilter}
-                      onChange={(event) => setAlertSeverityFilter(event.target.value)}
-                      className="focus-ring h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-foreground shadow-sm"
-                    >
+                    <select value={alertSeverityFilter} onChange={(event) => setAlertSeverityFilter(event.target.value)} className="focus-ring h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-foreground shadow-sm">
                       <option value="ALL">Tất cả severity</option>
                       <option value="CRITICAL">Critical</option>
                       <option value="WARNING">Warning</option>
@@ -772,11 +668,7 @@ export function AdminDashboardPage() {
                     </select>
                   </AnalyticsFilterInput>
                   <AnalyticsFilterInput label="Status">
-                    <select
-                      value={alertStatusFilter}
-                      onChange={(event) => setAlertStatusFilter(event.target.value)}
-                      className="focus-ring h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-foreground shadow-sm"
-                    >
+                    <select value={alertStatusFilter} onChange={(event) => setAlertStatusFilter(event.target.value)} className="focus-ring h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-foreground shadow-sm">
                       <option value="ALL">Tất cả status</option>
                       <option value="OPEN">Open</option>
                       <option value="RESOLVED">Resolved</option>
@@ -785,13 +677,7 @@ export function AdminDashboardPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="blue">{alertPageLabel(alertPage)}</Badge>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="primary"
-                    onClick={() => void loadAlerts(alertStatusFilter, alertSeverityFilter)}
-                    disabled={alertsLoading}
-                  >
+                  <Button type="button" size="sm" variant="primary" onClick={() => void loadAlerts(alertStatusFilter, alertSeverityFilter)} disabled={alertsLoading}>
                     {alertsLoading ? <Spinner /> : <ListFilter className="h-4 w-4" />}
                     Áp dụng
                   </Button>
@@ -810,9 +696,7 @@ export function AdminDashboardPage() {
                       <article key={alert.id || index} className="grid gap-4 px-5 py-4 lg:grid-cols-[1fr_auto] lg:items-center">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Badge tone={severity === "CRITICAL" ? "red" : severity === "WARNING" ? "amber" : "blue"}>
-                              {severity}
-                            </Badge>
+                            <Badge tone={severity === "CRITICAL" ? "red" : severity === "WARNING" ? "amber" : "blue"}>{severity}</Badge>
                             <Badge tone={status === "RESOLVED" ? "slate" : "blue"}>{status}</Badge>
                             <span className="font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground">{alertType(alert)}</span>
                           </div>
@@ -821,13 +705,7 @@ export function AdminDashboardPage() {
                             {alert.source || "SYSTEM"} · {formatDateTime(alertTime(alert))}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={canResolve ? "secondary" : "ghost"}
-                          disabled={!canResolve || resolvingAlertId === alert.id}
-                          onClick={() => alert.id && void resolveAlert(alert.id)}
-                        >
+                        <Button type="button" size="sm" variant={canResolve ? "secondary" : "ghost"} disabled={!canResolve || resolvingAlertId === alert.id} onClick={() => alert.id && void resolveAlert(alert.id)}>
                           {resolvingAlertId === alert.id ? <Spinner /> : null}
                           {status === "RESOLVED" ? "Đã xử lý" : "Mark resolved"}
                         </Button>
@@ -875,6 +753,7 @@ export function AdminDashboardPage() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <QuickLink to="/admin/users" title="Quản lý user" description="Tìm kiếm, đổi role và khóa/mở khóa tài khoản." />
               <QuickLink to="/admin/usage-cost" title="Quota / Cost" description="Tra quota, usage và chi phí theo user." />
+              <QuickLink to="/admin/audit-logs" title="Audit log" description="Xem log theo thời gian và lọc theo user/action/resource." />
               <QuickLink to="/usage" title="Usage cá nhân" description="Xem quota, token và chi phí của tài khoản hiện tại." />
               <QuickLink to="/chat" title="Quay về chat" description="Mở giao diện chatbot chính." />
             </div>

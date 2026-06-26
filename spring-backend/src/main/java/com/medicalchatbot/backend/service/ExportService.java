@@ -17,10 +17,10 @@ import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -34,10 +34,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class ExportService {
-
-    private static final Logger log = LoggerFactory.getLogger(ExportService.class);
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -45,22 +45,6 @@ public class ExportService {
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
-
-    public ExportService(
-            ChatSessionRepository chatSessionRepository,
-            ChatMessageRepository chatMessageRepository,
-            AuditLogRepository auditLogRepository,
-            CurrentUserService currentUserService,
-            UserRepository userRepository,
-            ObjectMapper objectMapper
-    ) {
-        this.chatSessionRepository = chatSessionRepository;
-        this.chatMessageRepository = chatMessageRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.currentUserService = currentUserService;
-        this.userRepository = userRepository;
-        this.objectMapper = objectMapper;
-    }
 
     private User getCurrentUser() {
         String username = currentUserService.getCurrentUsername();

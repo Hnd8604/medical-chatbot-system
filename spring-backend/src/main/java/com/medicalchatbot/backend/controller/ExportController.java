@@ -1,6 +1,7 @@
 package com.medicalchatbot.backend.controller;
 
 import com.medicalchatbot.backend.service.ExportService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -15,14 +16,11 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/chat")
 public class ExportController {
 
     private final ExportService exportService;
-
-    public ExportController(ExportService exportService) {
-        this.exportService = exportService;
-    }
 
     @GetMapping("/sessions/{sessionId}/export")
     public ResponseEntity<byte[]> exportSession(

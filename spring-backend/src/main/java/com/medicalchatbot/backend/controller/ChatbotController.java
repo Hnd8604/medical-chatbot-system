@@ -21,6 +21,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Validated
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api")
 public class ChatbotController {
 
@@ -41,20 +43,6 @@ public class ChatbotController {
     private final QuotaService quotaService;
     private final CostManagementService costManagementService;
     private final FeedbackService feedbackService;
-
-    public ChatbotController(
-            ChatbotServiceClient chatbotServiceClient,
-            ChatApplicationService chatApplicationService,
-            QuotaService quotaService,
-            CostManagementService costManagementService,
-            FeedbackService feedbackService
-    ) {
-        this.chatbotServiceClient = chatbotServiceClient;
-        this.chatApplicationService = chatApplicationService;
-        this.quotaService = quotaService;
-        this.costManagementService = costManagementService;
-        this.feedbackService = feedbackService;
-    }
 
     @GetMapping("/chatbot/status")
     JsonNode chatbotStatus() {

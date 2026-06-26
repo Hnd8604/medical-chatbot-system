@@ -9,6 +9,7 @@ import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserStatus;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -24,22 +26,6 @@ public class AuthService {
     private final CurrentUserService currentUserService;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
-
-    public AuthService(
-            UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            JwtTokenService jwtTokenService,
-            CurrentUserService currentUserService,
-            AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper
-    ) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtTokenService = jwtTokenService;
-        this.currentUserService = currentUserService;
-        this.auditLogRepository = auditLogRepository;
-        this.objectMapper = objectMapper;
-    }
 
     @Transactional(readOnly = true)
     public AuthLoginResponse login(AuthLoginRequest request) {

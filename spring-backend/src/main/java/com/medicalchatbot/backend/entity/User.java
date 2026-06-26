@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -22,6 +23,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "app_users")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class User {
 
     @Id
@@ -63,55 +69,8 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
-    protected User() {
-    }
-
     public User(UUID id) {
         this.id = id;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public UserRole getRole() {
-        return role;
-    }
-
-    public UserStatus getStatus() {
-        return status;
-    }
-
-    public int getTokenVersion() {
-        return tokenVersion;
-    }
-
-    public QuotaPolicy getQuotaPolicy() {
-        return quotaPolicy;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
     }
 
     public void updateRole(UserRole role) {

@@ -3,6 +3,7 @@ package com.medicalchatbot.backend.entity;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Column;
@@ -17,6 +18,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "message_feedback")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class MessageFeedback {
 
     @Id
@@ -41,9 +47,6 @@ public class MessageFeedback {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    protected MessageFeedback() {
-    }
-
     public MessageFeedback(ChatMessage message, User user, int rating, String comment) {
         this.message = message;
         this.user = user;
@@ -54,29 +57,5 @@ public class MessageFeedback {
     public void update(int rating, String comment) {
         this.rating = rating;
         this.comment = comment;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public ChatMessage getMessage() {
-        return message;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public int getRating() {
-        return rating;
-    }
-
-    public String getComment() {
-        return comment;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
     }
 }

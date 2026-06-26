@@ -3,6 +3,7 @@ package com.medicalchatbot.backend.entity;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -18,6 +19,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "app_user_patient_links")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UserPatientLink {
 
     @Id
@@ -45,34 +51,4 @@ public class UserPatientLink {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
-    protected UserPatientLink() {
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public String getFhirPatientId() {
-        return fhirPatientId;
-    }
-
-    public String getRelationship() {
-        return relationship;
-    }
-
-    public boolean isPrimaryLink() {
-        return primaryLink;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }

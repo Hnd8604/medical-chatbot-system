@@ -2,6 +2,7 @@ package com.medicalchatbot.backend.controller;
 
 import com.medicalchatbot.backend.dto.response.CacheMetricsResponse;
 import com.medicalchatbot.backend.service.MetricsService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,14 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.OffsetDateTime;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/metrics")
 public class MetricsController {
 
     private final MetricsService metricsService;
-
-    public MetricsController(MetricsService metricsService) {
-        this.metricsService = metricsService;
-    }
 
     @GetMapping("/cache")
     public ResponseEntity<CacheMetricsResponse> getCacheMetrics(

@@ -27,12 +27,14 @@ import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@RequiredArgsConstructor
 public class ChatApplicationService {
 
     private static final int RECENT_CONTEXT_MESSAGE_LIMIT = 6;
@@ -48,30 +50,6 @@ public class ChatApplicationService {
     private final ObjectMapper objectMapper;
     private final CurrentUserService currentUserService;
     private final UserPatientScopeService userPatientScopeService;
-
-    public ChatApplicationService(
-            ChatSessionRepository chatSessionRepository,
-            ChatMessageRepository chatMessageRepository,
-            UsageLogRepository usageLogRepository,
-            AuditLogRepository auditLogRepository,
-            ChatbotServiceClient chatbotServiceClient,
-            QuotaService quotaService,
-            CostEstimationService costEstimationService,
-            ObjectMapper objectMapper,
-            CurrentUserService currentUserService,
-            UserPatientScopeService userPatientScopeService
-    ) {
-        this.chatSessionRepository = chatSessionRepository;
-        this.chatMessageRepository = chatMessageRepository;
-        this.usageLogRepository = usageLogRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.chatbotServiceClient = chatbotServiceClient;
-        this.quotaService = quotaService;
-        this.costEstimationService = costEstimationService;
-        this.objectMapper = objectMapper;
-        this.currentUserService = currentUserService;
-        this.userPatientScopeService = userPatientScopeService;
-    }
 
     @Transactional
     public ChatResponse chat(ChatRequest request) {

@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -19,6 +20,11 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "chat_sessions")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ChatSession {
 
     @Id
@@ -58,9 +64,6 @@ public class ChatSession {
     @Column(name = "last_resource_id", length = 100)
     private String lastResourceId;
 
-    protected ChatSession() {
-    }
-
     public ChatSession(User user, String title) {
         this.user = user;
         this.title = title;
@@ -68,50 +71,6 @@ public class ChatSession {
 
     public ChatSession(UUID id) {
         this.id = id;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public String getActivePatientId() {
-        return activePatientId;
-    }
-
-    public String getMemorySummary() {
-        return memorySummary;
-    }
-
-    public String getLastIntent() {
-        return lastIntent;
-    }
-
-    public String getLastToolName() {
-        return lastToolName;
-    }
-
-    public String getLastResourceType() {
-        return lastResourceType;
-    }
-
-    public String getLastResourceId() {
-        return lastResourceId;
     }
 
     public ChatSessionMemory memory() {

@@ -5,19 +5,17 @@ import java.math.RoundingMode;
 
 import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class CostEstimationService {
 
     private static final BigDecimal TOKENS_PER_MILLION = new BigDecimal("1000000");
     private static final int COST_SCALE = 6;
 
     private final ModelPricingRepository modelPricingRepository;
-
-    public CostEstimationService(ModelPricingRepository modelPricingRepository) {
-        this.modelPricingRepository = modelPricingRepository;
-    }
 
     public BigDecimal estimateUsd(
             String provider,

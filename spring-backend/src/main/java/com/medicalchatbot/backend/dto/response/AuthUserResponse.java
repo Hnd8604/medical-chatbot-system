@@ -14,16 +14,23 @@ public record AuthUserResponse(
         @JsonProperty("display_name")
         String displayName,
         UserRole role,
-        UserStatus status
+        UserStatus status,
+        @JsonProperty("onboarding_required")
+        boolean onboardingRequired
 ) {
     public static AuthUserResponse from(User user) {
+        return from(user, false);
+    }
+
+    public static AuthUserResponse from(User user, boolean onboardingRequired) {
         return new AuthUserResponse(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
                 user.getDisplayName(),
                 user.getRole(),
-                user.getStatus()
+                user.getStatus(),
+                onboardingRequired
         );
     }
 }

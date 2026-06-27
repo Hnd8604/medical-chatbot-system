@@ -1,8 +1,10 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import { Spinner } from "./components/ui/Spinner";
 import { ForbiddenPage } from "./components/dashboard/ForbiddenPage";
 import { LoginPage } from "./routes/LoginPage";
+import { RegisterPage } from "./routes/RegisterPage";
+import { OnboardingPage } from "./routes/OnboardingPage";
 import { ChatPage } from "./routes/ChatPage";
 import { UsagePage } from "./routes/UsagePage";
 import { AdminDashboardPage } from "./routes/AdminDashboardPage";
@@ -13,6 +15,7 @@ import { AdminAuditLogsPage } from "./routes/AdminAuditLogsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -27,6 +30,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user.role === "USER" && user.onboarding_required && location.pathname !== "/onboarding") {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return children;
@@ -46,6 +53,15 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <OnboardingPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/chat"
         element={

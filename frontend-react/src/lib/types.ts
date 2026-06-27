@@ -8,12 +8,23 @@ export interface AuthUser {
   display_name: string;
   role: UserRole;
   status: UserStatus;
+  onboarding_required: boolean;
 }
 
 export interface AuthLoginResponse {
   access_token: string;
   token_type: "Bearer";
   expires_in_seconds: number;
+  user: AuthUser;
+}
+
+export interface AuthRegisterResponse {
+  message: string;
+  user: AuthUser;
+}
+
+export interface AuthLinkPatientResponse {
+  message: string;
   user: AuthUser;
 }
 

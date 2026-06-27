@@ -2,25 +2,32 @@ package com.medicalchatbot.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.dto.response.AdminUserItemResponse;
+import com.medicalchatbot.backend.dto.response.AdminUserListResponse;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
+import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,6 +37,9 @@ class AdminUserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private UserPatientLinkRepository userPatientLinkRepository;
 
     @Mock
     private CurrentUserService currentUserService;
@@ -82,9 +92,33 @@ class AdminUserServiceTest {
         verify(userRepository, times(2)).save(target);
     }
 
+    @Test
+    void listUsersIncludesPatientLinks() {
+        User user = user(UUID.fromString("00000000-0000-0000-0000-000000000405"), "user_demo", UserRole.USER, UserStatus.ACTIVE);
+        UserPatientLink link = UserPatientLink.builder()
+                .user(user)
+                .fhirPatientId("demo-patient-001")
+                .relationship("SELF")
+                .primaryLink(true)
+                .build();
+        when(userRepository.findAllByOrderByCreatedAtDesc(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(user)));
+        when(userPatientLinkRepository.findLinksForUsers(List.of(user.getId())))
+                .thenReturn(List.of(link));
+
+        AdminUserListResponse response = newService().listUsers(0, 20);
+
+        assertEquals(1, response.users().size());
+        AdminUserItemResponse item = response.users().get(0);
+        assertEquals(1, item.patientLinks().size());
+        assertEquals("demo-patient-001", item.patientLinks().get(0).fhirPatientId());
+        assertEquals("SELF", item.patientLinks().get(0).relationship());
+    }
+
     private AdminUserService newService() {
         return new AdminUserService(
                 userRepository,
+                userPatientLinkRepository,
                 currentUserService,
                 auditLogRepository,
                 new ObjectMapper()

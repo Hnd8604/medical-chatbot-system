@@ -209,7 +209,12 @@ if (-not $SkipInstall) {
 
     Write-Step "Installing frontend dependencies"
     Invoke-StepCommand "npm install" {
-        npm install --prefix $FrontendDir
+        Push-Location $FrontendDir
+        try {
+            & "npm.cmd" install
+        } finally {
+            Pop-Location
+        }
     }
 }
 
@@ -237,22 +242,12 @@ Write-Step "Starting spring-backend"
 Start-ManagedProcess `
     -Name "spring-backend" `
     -FilePath (Join-Path $SpringDir "mvnw.cmd") `
-    -ArgumentList @("spring-boot:run") `
+    -ArgumentList @("clean", "spring-boot:run") `
     -WorkingDirectory $SpringDir `
     -Port 8081
 
 Wait-Http -Url "http://localhost:8081/api/health" -Retries 90 -DelaySeconds 2
 
-
-if (-not $SkipInstall) {
-    Write-Step "Installing frontend dependencies"
-    Invoke-StepCommand "npm install" {
-        $CurrentDir = Get-Location
-        Set-Location $FrontendDir
-        & "npm.cmd" install
-        Set-Location $CurrentDir
-    }
-}
 
 Write-Step "Starting frontend"
 Start-ManagedProcess `

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { ApiError } from "../lib/api";
@@ -13,13 +13,15 @@ import { Spinner } from "../components/ui/Spinner";
 export function LoginPage() {
   const { user, loading, login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as { registrationMessage?: string } | null;
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!loading && user) {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to={user.role === "USER" && user.onboarding_required ? "/onboarding" : "/chat"} replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -27,8 +29,10 @@ export function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await login(usernameOrEmail.trim(), password);
-      navigate("/chat", { replace: true });
+      const loggedInUser = await login(usernameOrEmail.trim(), password);
+      navigate(loggedInUser.role === "USER" && loggedInUser.onboarding_required ? "/onboarding" : "/chat", {
+        replace: true,
+      });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.detail || "Không thể đăng nhập. Vui lòng kiểm tra lại thông tin.");
@@ -86,6 +90,11 @@ export function LoginPage() {
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
+            {locationState?.registrationMessage ? (
+              <p className="rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm font-medium text-success">
+                {locationState.registrationMessage}
+              </p>
+            ) : null}
             <Field label={TEXT.usernameLabel}>
               <input
                 className={inputClass()}
@@ -116,6 +125,13 @@ export function LoginPage() {
               {TEXT.loginButton}
             </Button>
           </form>
+
+          <p className="mt-5 text-center text-sm text-muted-foreground">
+            Chưa có tài khoản?{" "}
+            <Link className="font-semibold text-accent hover:underline" to="/register">
+              Đăng ký
+            </Link>
+          </p>
 
           <details className="mt-7 rounded-2xl border border-border bg-muted/60 p-4 text-sm">
             <summary className="cursor-pointer font-semibold text-foreground">Tài khoản demo local</summary>

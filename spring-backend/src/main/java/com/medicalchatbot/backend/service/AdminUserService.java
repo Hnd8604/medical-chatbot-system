@@ -5,11 +5,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.response.AdminUserItemResponse;
 import com.medicalchatbot.backend.dto.response.AdminUserListResponse;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
+import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class AdminUserService {
 
     private final UserRepository userRepository;
+    private final UserPatientLinkRepository userPatientLinkRepository;
     private final CurrentUserService currentUserService;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
@@ -33,12 +39,19 @@ public class AdminUserService {
         Page<User> users = userRepository.findAllByOrderByCreatedAtDesc(
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
         );
+        List<User> content = users.getContent();
+        Map<UUID, List<UserPatientLink>> linksByUserId = linksByUserId(content);
         return new AdminUserListResponse(
                 users.getNumber(),
                 users.getSize(),
                 users.getTotalElements(),
                 users.getTotalPages(),
-                users.map(AdminUserItemResponse::from).getContent()
+                content.stream()
+                        .map(user -> AdminUserItemResponse.from(
+                                user,
+                                linksByUserId.getOrDefault(user.getId(), List.of())
+                        ))
+                        .toList()
         );
     }
 
@@ -54,7 +67,7 @@ public class AdminUserService {
         target.updateStatus(status);
         userRepository.save(target);
         logChange(actor, target, "ADMIN_UPDATE_USER_STATUS", "status", oldStatus.name(), status.name());
-        return AdminUserItemResponse.from(target);
+        return responseFor(target);
     }
 
     @Transactional
@@ -69,7 +82,22 @@ public class AdminUserService {
         target.updateRole(role);
         userRepository.save(target);
         logChange(actor, target, "ADMIN_UPDATE_USER_ROLE", "role", oldRole.name(), role.name());
-        return AdminUserItemResponse.from(target);
+        return responseFor(target);
+    }
+
+    private Map<UUID, List<UserPatientLink>> linksByUserId(List<User> users) {
+        List<UUID> userIds = users.stream()
+                .map(User::getId)
+                .toList();
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        return userPatientLinkRepository.findLinksForUsers(userIds).stream()
+                .collect(Collectors.groupingBy(link -> link.getUser().getId()));
+    }
+
+    private AdminUserItemResponse responseFor(User user) {
+        return AdminUserItemResponse.from(user, userPatientLinkRepository.findLinksForUser(user.getId()));
     }
 
     private User requireUser(UUID userId) {

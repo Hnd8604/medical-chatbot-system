@@ -2,19 +2,30 @@ package com.medicalchatbot.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
+import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
+import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
+import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
+import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
+import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
+import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,10 +44,19 @@ class AuthServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private UserPatientLinkRepository userPatientLinkRepository;
+
+    @Mock
+    private QuotaPolicyRepository quotaPolicyRepository;
+
+    @Mock
     private JwtTokenService jwtTokenService;
 
     @Mock
     private CurrentUserService currentUserService;
+
+    @Mock
+    private ChatbotServiceClient chatbotServiceClient;
 
     @Mock
     private AuditLogRepository auditLogRepository;
@@ -109,6 +129,156 @@ class AuthServiceTest {
     }
 
     @Test
+    void registerCreatesActiveUserWithFreeDemoQuota() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000305");
+        when(userRepository.existsByUsernameIgnoreCase("new_user")).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase("new@example.com")).thenReturn(false);
+        when(quotaPolicyRepository.findByName("free_demo")).thenReturn(Optional.of(quotaPolicy()));
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", userId);
+            return saved;
+        });
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of());
+
+        AuthRegisterResponse response = newService().register(new AuthRegisterRequest(
+                "Nguyễn Văn A",
+                "New_User",
+                "NEW@example.com",
+                "Password123!",
+                "Password123!"
+        ));
+
+        assertEquals("Đăng ký tài khoản thành công.", response.message());
+        assertEquals("new_user", response.user().username());
+        assertEquals("new@example.com", response.user().email());
+        assertEquals(UserRole.USER, response.user().role());
+        assertEquals(UserStatus.ACTIVE, response.user().status());
+        assertTrue(response.user().onboardingRequired());
+    }
+
+    @Test
+    void registerRejectsDuplicateUsername() {
+        when(userRepository.existsByUsernameIgnoreCase("new_user")).thenReturn(true);
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> newService().register(new AuthRegisterRequest(
+                        "Nguyễn Văn A",
+                        "new_user",
+                        "new@example.com",
+                        "Password123!",
+                        "Password123!"
+                ))
+        );
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+    }
+
+    @Test
+    void registerRejectsWeakPassword() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> newService().register(new AuthRegisterRequest(
+                        "Nguyễn Văn A",
+                        "new_user",
+                        "new@example.com",
+                        "password",
+                        "password"
+                ))
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @Test
+    void currentUserMarksUserWithoutPatientLinkAsOnboardingRequired() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000306");
+        User user = user(
+                userId,
+                "new_user",
+                "new@example.com",
+                "New User",
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                "Password123!"
+        );
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of());
+
+        assertTrue(newService().currentUser().onboardingRequired());
+    }
+
+    @Test
+    void linkPatientCreatesSelfPrimaryLinkWhenVerificationMatches() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000307");
+        User user = user(
+                userId,
+                "new_user",
+                "new@example.com",
+                "New User",
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                "Password123!"
+        );
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(userPatientLinkRepository.findSelfLinksForUser(userId)).thenReturn(List.of());
+        when(chatbotServiceClient.getPatient("demo-patient-001")).thenReturn(new ObjectMapper().readTree("""
+                {
+                  "id": "demo-patient-001",
+                  "birth_date": "2003-01-01",
+                  "phone": "0900000001"
+                }
+                """));
+        when(userPatientLinkRepository.existsSelfLinkForOtherUser("demo-patient-001", userId)).thenReturn(false);
+        when(userPatientLinkRepository.saveAndFlush(any(UserPatientLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+
+        assertEquals(
+                "Liên kết hồ sơ bệnh nhân thành công.",
+                newService().linkPatient(new AuthLinkPatientRequest(
+                        "Patient/demo-patient-001",
+                        "2003-01-01",
+                        "0900000001"
+                )).message()
+        );
+    }
+
+    @Test
+    void linkPatientRejectsMismatchedVerification() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000308");
+        User user = user(
+                userId,
+                "new_user",
+                "new@example.com",
+                "New User",
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                "Password123!"
+        );
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(userPatientLinkRepository.findSelfLinksForUser(userId)).thenReturn(List.of());
+        when(chatbotServiceClient.getPatient("demo-patient-001")).thenReturn(new ObjectMapper().readTree("""
+                {
+                  "id": "demo-patient-001",
+                  "birth_date": "2003-01-01",
+                  "phone": "0900000001"
+                }
+                """));
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> newService().linkPatient(new AuthLinkPatientRequest(
+                        "demo-patient-001",
+                        "2004-01-01",
+                        "0900000001"
+                ))
+        );
+
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, ex.getStatusCode());
+    }
+
+    @Test
     void logoutIncrementsTokenVersion() {
         User user = user(
                 UUID.fromString("00000000-0000-0000-0000-000000000304"),
@@ -131,12 +301,19 @@ class AuthServiceTest {
     private AuthService newService() {
         return new AuthService(
                 userRepository,
+                userPatientLinkRepository,
+                quotaPolicyRepository,
                 passwordEncoder,
                 jwtTokenService,
                 currentUserService,
+                chatbotServiceClient,
                 auditLogRepository,
                 new ObjectMapper()
         );
+    }
+
+    private QuotaPolicy quotaPolicy() {
+        return new QuotaPolicy("free_demo", 50, 100000, BigDecimal.ONE, 60);
     }
 
     private User user(

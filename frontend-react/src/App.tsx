@@ -1,17 +1,17 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { useAuth } from "./lib/auth";
+import { useAuth } from "./hooks/useAuth";
 import { Spinner } from "./components/ui/Spinner";
 import { ForbiddenPage } from "./components/dashboard/ForbiddenPage";
-import { LoginPage } from "./routes/LoginPage";
-import { RegisterPage } from "./routes/RegisterPage";
-import { OnboardingPage } from "./routes/OnboardingPage";
-import { ChatPage } from "./routes/ChatPage";
-import { UsagePage } from "./routes/UsagePage";
-import { AdminDashboardPage } from "./routes/AdminDashboardPage";
-import { AdminUsersPage } from "./routes/AdminUsersPage";
-import { AdminConfigPage } from "./routes/AdminConfigPage";
-import { AdminUsageCostPage } from "./routes/AdminUsageCostPage";
-import { AdminAuditLogsPage } from "./routes/AdminAuditLogsPage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { OnboardingPage } from "./pages/OnboardingPage";
+import { ChatPage } from "./pages/ChatPage";
+import { UsagePage } from "./pages/UsagePage";
+import { AdminDashboardPage } from "./pages/AdminDashboardPage";
+import { AdminUsersPage } from "./pages/AdminUsersPage";
+import { AdminConfigPage } from "./pages/AdminConfigPage";
+import { AdminUsageCostPage } from "./pages/AdminUsageCostPage";
+import { AdminAuditLogsPage } from "./pages/AdminAuditLogsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();

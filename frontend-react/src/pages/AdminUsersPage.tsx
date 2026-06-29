@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Search, ShieldAlert } from "lucide-react";
-import { apiJson } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { apiJson } from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 import type { AdminUserItem, AdminUserListResponse, UserRole, UserStatus } from "../lib/types";
 import { formatDateTime, roleLabel, statusLabel } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";

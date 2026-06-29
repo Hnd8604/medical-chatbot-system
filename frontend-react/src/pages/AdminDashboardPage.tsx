@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, BarChart3, Bell, CalendarDays, Database, Gauge, ListFilter, MessageSquare, RefreshCw, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { apiJson, toQuery } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { apiJson, toQuery } from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 import type { AdminAlertItem, AdminUserListResponse, CacheMetricsResponse, ErrorAnalytics, IntentAnalytics, NotificationListResponse, PageResponse, PerformanceAnalytics, RequestAnalyticsSummary } from "../lib/types";
 import { formatDateTime, formatNumber, formatPercent, formatUsd } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";

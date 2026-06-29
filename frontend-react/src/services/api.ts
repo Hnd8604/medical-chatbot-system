@@ -1,4 +1,4 @@
-import { ACCESS_TOKEN_KEY, API_BASE_URL } from "./constants";
+import { ACCESS_TOKEN_KEY, API_BASE_URL } from "../lib/constants";
 
 export class ApiError extends Error {
   status: number;

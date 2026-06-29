@@ -1,6 +1,6 @@
 import { BarChart3, CircleDollarSign, ClipboardList, LogOut, MessageSquareText, Settings, Shield, Users } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
-import { useAuth } from "../../lib/auth";
+import { useAuth } from "../../hooks/useAuth";
 import { cn } from "../../lib/cn";
 import { roleLabel } from "../../lib/formatters";
 import { Badge } from "../ui/Badge";

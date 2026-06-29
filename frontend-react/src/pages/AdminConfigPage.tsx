@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Gauge, Pencil, Plus, RefreshCw, Tag, Trash2 } from "lucide-react";
-import { apiJson } from "../lib/api";
+import { apiJson } from "../services/api";
 import type {
   ModelPricingItem,
   ModelPricingUpsert,

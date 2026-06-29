@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiJson } from "../../lib/api";
+import { apiJson } from "../../services/api";
 import { AdminUserItem, AdminUserListResponse, UserRole, UserStatus } from "../../lib/types";
 import { formatDateTime, roleLabel, statusLabel } from "../../lib/formatters";
 import { Button } from "../ui/Button";

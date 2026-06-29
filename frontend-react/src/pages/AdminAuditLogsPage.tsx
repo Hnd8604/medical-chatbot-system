@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Filter, RefreshCw, Search } from "lucide-react";
-import { apiJson, toQuery } from "../lib/api";
+import { apiJson, toQuery } from "../services/api";
 import type { AdminUserItem, AdminUserListResponse, AuditLogItem, PageResponse } from "../lib/types";
 import { formatDateTime, formatNumber, safeJson } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";

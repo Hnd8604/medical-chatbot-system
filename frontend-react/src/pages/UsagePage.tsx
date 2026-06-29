@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { apiJson, toQuery, todayIso } from "../lib/api";
+import { apiJson, toQuery, todayIso } from "../services/api";
 import type { CostSummaryResponse, QuotaStatusResponse } from "../lib/types";
 import { formatDate, formatNumber, formatUsd, numericValue } from "../lib/formatters";
 import { Button } from "../components/ui/Button";

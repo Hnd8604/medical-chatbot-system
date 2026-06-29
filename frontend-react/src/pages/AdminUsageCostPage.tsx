@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, Gauge, RefreshCw, Search, ShieldCheck, WalletCards } from "lucide-react";
-import { apiJson, todayIso, toQuery } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { apiJson, todayIso, toQuery } from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 import type {
   AdminUserItem,
   AdminUserListResponse,

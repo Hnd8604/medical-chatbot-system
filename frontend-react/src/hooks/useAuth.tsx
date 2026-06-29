@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { apiJson, ApiError } from "./api";
-import { ACCESS_TOKEN_KEY } from "./constants";
-import type { AuthLoginResponse, AuthUser } from "./types";
+import { apiJson, ApiError } from "../services/api";
+import { ACCESS_TOKEN_KEY } from "../lib/constants";
+import type { AuthLoginResponse, AuthUser } from "../lib/types";
 
 interface AuthContextValue {
   user: AuthUser | null;

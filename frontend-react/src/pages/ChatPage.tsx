@@ -1,8 +1,8 @@
 import { CSSProperties, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
-import { apiDownload, apiJson, ApiError, toQuery, todayIso } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { apiDownload, apiJson, ApiError, toQuery, todayIso } from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 import { isDateLike, isPhoneLike, normalizePatientId, resourceList } from "../lib/formatters";
 import type {
   ChatMessageItem,

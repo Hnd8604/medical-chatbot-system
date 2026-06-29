@@ -2,6 +2,8 @@ import { CSSProperties, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
 import { apiDownload, apiGet, apiPost, ApiError, toQuery, todayIso } from "../services/api";
+import { queryClient } from "../lib/queryClient";
+import { usageKeys } from "../hooks/useUsage";
 import { useAuth } from "../hooks/useAuth";
 import { isDateLike, isPhoneLike, normalizePatientId, resourceList } from "../lib/formatters";
 import type {
@@ -296,6 +298,9 @@ export function ChatPage() {
         await loadPatientProfile(response.patient_id);
       }
       await Promise.all([loadSessions(), loadUsage(), loadNotifications()]);
+      // Chat vừa tiêu thụ quota/token → đánh dấu cache usage là cũ để
+      // UsagePage tự nạp lại số liệu mới khi được mở.
+      void queryClient.invalidateQueries({ queryKey: usageKeys.all });
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Không thể gửi câu hỏi.";
       setMessages((current) =>

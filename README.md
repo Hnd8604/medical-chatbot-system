@@ -21,7 +21,7 @@ Medical Chatbot là demo webapp giúp staff/admin y tế tra cứu dữ liệu b
 
 ```text
 Staff / Admin Demo
-  -> Frontend static HTML/CSS/JS
+  -> Frontend (React + Vite)
   -> Spring Boot backend
   -> FastAPI chatbot-service
   -> HAPI FHIR REST API
@@ -47,7 +47,7 @@ Không để LLM sinh SQL.
 
 ```mermaid
 flowchart LR
-    Staff["Staff / Admin Demo"] --> FE["Frontend<br/>localhost:5173"]
+    Staff["Staff / Admin Demo"] --> FE["Frontend React + Vite<br/>localhost:5174"]
     FE --> Spring["Spring Boot Backend<br/>localhost:8081"]
     Spring --> AppDB[("App PostgreSQL<br/>localhost:5433")]
     Spring --> Chatbot["FastAPI chatbot-service<br/>localhost:8000"]
@@ -96,10 +96,11 @@ sequenceDiagram
 
 ```text
 Medical_Chatbot/
-  frontend/
+  frontend-react/
+    src/
     index.html
-    app.js
-    styles.css
+    package.json
+    vite.config.ts
 
   spring-backend/
     src/main/java/com/medicalchatbot/backend/
@@ -142,7 +143,7 @@ Medical_Chatbot/
 
 ### Frontend
 
-Folder: `frontend/`
+Folder: `frontend-react/`
 
 Vai trò:
 
@@ -313,13 +314,13 @@ Script sẽ tự động:
 - Cấu hình Java 21.
 - Start chatbot-service port `8000`.
 - Start Spring backend port `8081`.
-- Start frontend static server port `5173`.
+- Start frontend (React + Vite) port `5174`.
 - Chạy smoke test full chat flow qua Spring.
 
 Sau khi chạy thành công:
 
 ```text
-Frontend:        http://localhost:5173
+Frontend:        http://localhost:5174
 Spring backend:  http://localhost:8081
 chatbot-service: http://localhost:8000
 HAPI FHIR:       http://localhost:8080/fhir
@@ -392,21 +393,22 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 Mở terminal mới:
 
 ```powershell
-cd frontend
-python -m http.server 5173 --bind 127.0.0.1
+cd frontend-react
+npm install
+npm run dev
 ```
 
 Mở trình duyệt:
 
 ```text
-http://localhost:5173
+http://localhost:5174
 ```
 
 ## Port Và Credential Local
 
 | Service | URL / Host | Credential |
 |---|---|---|
-| Frontend | `http://localhost:5173` | none |
+| Frontend | `http://localhost:5174` | none |
 | Spring backend | `http://localhost:8081` | JWT login required |
 | chatbot-service | `http://localhost:8000` | none |
 | HAPI FHIR | `http://localhost:8080/fhir` | none |
@@ -663,12 +665,13 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 .\mvnw.cmd test -q
 ```
 
-### Frontend syntax check
+### Frontend type check
 
 Nếu máy có Node.js:
 
 ```powershell
-node --check frontend/app.js
+cd frontend-react
+npm run typecheck
 ```
 
 ### FHIR smoke test
@@ -705,7 +708,7 @@ Kiểm tra port:
 ```powershell
 Get-NetTCPConnection -LocalPort 8081 -State Listen
 Get-NetTCPConnection -LocalPort 8000 -State Listen
-Get-NetTCPConnection -LocalPort 5173 -State Listen
+Get-NetTCPConnection -LocalPort 5174 -State Listen
 ```
 
 Dừng stack:

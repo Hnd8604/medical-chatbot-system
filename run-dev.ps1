@@ -23,6 +23,8 @@ $HapiCompose = Join-Path $RootDir "infra\hapi-fhir\docker-compose.yml"
 $AppPostgresCompose = Join-Path $RootDir "infra\app-postgres\docker-compose.yml"
 $RedisCompose = Join-Path $RootDir "infra\redis\docker-compose.yml"
 $QdrantCompose = Join-Path $RootDir "infra\qdrant\docker-compose.yml"
+$LiteLLMCompose = Join-Path $RootDir "infra\litellm\docker-compose.yml"
+$LiteLLMEnv = Join-Path $RootDir "infra\litellm\.env"
 $FrontendDir = Join-Path $RootDir "frontend-react"
 $ChatbotDir = Join-Path $RootDir "chatbot-service"
 $SpringDir = Join-Path $RootDir "spring-backend"
@@ -163,6 +165,7 @@ if ($Stop) {
     docker compose -f $AppPostgresCompose down
     docker compose -f $RedisCompose down
     docker compose -f $QdrantCompose down
+    if (Test-Path $LiteLLMCompose) { docker compose -f $LiteLLMCompose down }
     Write-Host "Stopped dev stack. Docker volumes were preserved."
     exit 0
 }
@@ -178,6 +181,12 @@ docker compose -f $HapiCompose up -d
 docker compose -f $AppPostgresCompose up -d
 docker compose -f $RedisCompose up -d
 docker compose -f $QdrantCompose up -d
+if (Test-Path $LiteLLMEnv) {
+    Write-Step "Starting LiteLLM gateway"
+    docker compose -f $LiteLLMCompose --env-file $LiteLLMEnv up -d
+} else {
+    Write-Warning "infra\litellm\.env not found; skipping LiteLLM gateway. Copy infra\litellm\.env.example to .env and set your API keys to enable it."
+}
 
 Write-Step "Waiting for HAPI FHIR"
 Invoke-StepCommand "wait_for_hapi.py" {
@@ -226,6 +235,11 @@ if (Test-Path $JavaHome) {
 } else {
     Write-Warning "Configured JavaHome was not found: $JavaHome. Using current java on PATH."
     java -version
+}
+
+if (Test-Path $LiteLLMEnv) {
+    Write-Step "Waiting for LiteLLM gateway"
+    Wait-Http -Url "http://localhost:4000/health/liveliness" -Retries 30 -DelaySeconds 2
 }
 
 Write-Step "Starting chatbot-service"
@@ -306,6 +320,7 @@ if (-not $SkipFlowCheck) {
 
 Write-Step "Dev stack is ready"
 Write-Host "HAPI FHIR:        http://localhost:8080/fhir"
+if (Test-Path $LiteLLMEnv) { Write-Host "LiteLLM gateway: http://localhost:4000" }
 Write-Host "chatbot-service: http://localhost:8000"
 Write-Host "spring-backend:  http://localhost:8081"
 Write-Host "frontend:        http://localhost:5174"

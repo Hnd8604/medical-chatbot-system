@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from agents.intent.models import IntentPlan, IntentExtractor
 from agents.intent.rule_extractor import RuleBasedIntentExtractor
-from agents.intent.openai_extractor import OpenAIIntentExtractor
+from agents.intent.llm_extractor import LLMIntentExtractor
 
 
 def get_intent_extractor() -> IntentExtractor:
     from app.config import get_settings
     settings = get_settings()
-    if settings.use_openai_llm and settings.openai_api_key:
-        return OpenAIIntentExtractor(
-            api_key=settings.openai_api_key,
+    if settings.use_llm:
+        return LLMIntentExtractor(
+            api_key=settings.llm_api_key,
             model=settings.model_simple,
             timeout_seconds=settings.llm_request_timeout_seconds,
-            base_url=settings.openai_base_url,
+            base_url=settings.llm_base_url,
         )
     return RuleBasedIntentExtractor()

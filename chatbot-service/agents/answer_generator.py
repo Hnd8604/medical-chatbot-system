@@ -22,6 +22,7 @@ class AnswerResult:
     source: str = "template"
     usage: dict[str, int | float] = field(default_factory=lambda: dict(ZERO_USAGE))
     reason: str | None = None
+    model: str | None = None
 
 
 class AnswerGenerator(Protocol):
@@ -130,17 +131,18 @@ class OpenAIAnswerGenerator:
             "output_tokens": getattr(response.usage, "completion_tokens", 0) if response.usage else 0,
             "estimated_cost_usd": 0,
         }
-        return AnswerResult(answer=answer, source="llm", usage=usage)
+        used_model = getattr(response, "model", None) or model or self.model
+        return AnswerResult(answer=answer, source="llm", usage=usage, model=used_model)
 
 
 def get_answer_generator() -> AnswerGenerator:
     settings = get_settings()
-    if settings.use_llm_answer and settings.openai_api_key:
+    if settings.use_llm_answer and settings.llm_api_key:
         return OpenAIAnswerGenerator(
-            api_key=settings.openai_api_key,
+            api_key=settings.llm_api_key,
             model=settings.model_simple,
             timeout_seconds=settings.llm_request_timeout_seconds,
-            base_url=settings.openai_base_url,
+            base_url=settings.llm_base_url,
         )
     return TemplateAnswerGenerator()
 

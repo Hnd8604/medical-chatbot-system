@@ -537,6 +537,30 @@ Completed:
 - Added robust pre-flight checks: The script verifies if the target Docker container is running and performs a `gzip -t` integrity check on the backup file to prevent restoring from corrupted archives.
 - Enforced strict database recovery by running `psql` with `ON_ERROR_STOP=1`, halting the restoration process immediately if any SQL error occurs, thus preventing partial or corrupted data states.
 
+### 19. AI Gateway via LiteLLM
+
+Status: Done for current demo scope
+
+Completed:
+
+- Added LiteLLM proxy as an AI Gateway between `chatbot-service` and LLM providers (OpenAI, Groq) — `infra/litellm/{config.yaml,docker-compose.yml,.env.example,.gitignore}`, port `4000`, OpenAI-compatible.
+- Configured `model_list` aliases (`gpt-4o-mini`, `gpt-4.1-mini`, `groq-llama-8b`, `groq-llama-70b`), `num_retries`, `request_timeout`, and provider-level `fallbacks` in `config.yaml`.
+- Kept the proxy stateless/config-only; Spring remains source of truth for cost/quota (`usage_logs`, `model_pricing`, `QuotaService`).
+- Added `use_gateway` flag + `litellm_base_url`/`litellm_master_key` to `chatbot-service/app/config.py` with `llm_base_url`/`llm_api_key`/`use_openai_llm` properties; both factories (`agents/intent/factory.py`, `agents/answer_generator.py`) now route through the gateway when enabled, and call OpenAI directly when `use_gateway=false`.
+- Captured the real model used from `response.model` (`AnswerResult.model`) and mapped alias → `(provider, model)` in `chat/response_builder.py` so cost is computed against the correct `model_pricing` row even after gateway fallback or multi-provider routing.
+- Updated `run-dev.ps1` to start/stop LiteLLM conditionally (only when `infra/litellm/.env` exists) with a health wait on `/health/liveliness`.
+- Documented the module in `docs/M-litellm-gateway.md`.
+
+Verified:
+
+- `python -m unittest discover tests` — 152 tests passed (incl. new `tests/test_gateway_config.py`).
+- `python -m py_compile` on changed Python files passed.
+
+Not yet:
+
+- Cost-aware multi-provider routing (router still selects between the two OpenAI models; Groq aliases are wired and priced, to be activated in a follow-up).
+- LiteLLM DB-backed mode (virtual keys, per-key budget, spend dashboard).
+
 ## Current Capabilities
 
 The system can currently answer questions about:

@@ -14,6 +14,26 @@ current_user_context = contextvars.ContextVar(
 
 NO_PATIENT_CACHE_KEY = "__no_patient__"
 
+# Map alias model (tên dùng trong LiteLLM config + ModelRouter) sang (provider, model)
+# đúng với bảng model_pricing của Spring để tính cost chính xác khi đa provider.
+# Hỗ trợ cả tên alias lẫn tên model gốc mà gateway có thể trả về trong response.model.
+_MODEL_ALIAS_MAP: dict[str, tuple[str, str]] = {
+    "gpt-4o-mini": ("openai", "gpt-4o-mini"),
+    "gpt-4.1-mini": ("openai", "gpt-4.1-mini"),
+    "groq-llama-8b": ("groq", "llama-3.1-8b-instant"),
+    "groq-llama-70b": ("groq", "llama-3.3-70b-versatile"),
+    "llama-3.1-8b-instant": ("groq", "llama-3.1-8b-instant"),
+    "llama-3.3-70b-versatile": ("groq", "llama-3.3-70b-versatile"),
+}
+
+
+def _provider_and_pricing_model(model: str) -> tuple[str, str]:
+    key = (model or "").split("/")[-1].strip()
+    if key in _MODEL_ALIAS_MAP:
+        return _MODEL_ALIAS_MAP[key]
+    provider = "groq" if "llama" in key.lower() or "groq" in key.lower() else "openai"
+    return provider, key
+
 
 def _zero_usage() -> dict[str, int | float]:
     return {
@@ -53,8 +73,14 @@ async def _finalize_chat_response(
     payload["answer"] = answer_result.answer
     payload["answer_source"] = answer_result.source
     payload["answer_usage"] = answer_result.usage
-    if model:
-        payload["llm_model"] = model
+    # Ưu tiên model thực tế từ response (phản ánh cả fallback của gateway) để Spring
+    # tính cost đúng theo (provider, model) trong model_pricing; nếu không có thì dùng
+    # model đã route, cuối cùng mới tới mặc định trong _with_plan_metadata.
+    effective_model = answer_result.model or model
+    if effective_model:
+        provider, pricing_model = _provider_and_pricing_model(effective_model)
+        payload["llm_model"] = pricing_model
+        payload["llm_provider"] = provider
     if query_complexity:
         payload["query_complexity"] = query_complexity
 

@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 _LLM_CONFIDENCE = 0.92
 
 
-class OpenAIIntentExtractor:
+class LLMIntentExtractor:
     def __init__(self, api_key: str, model: str, timeout_seconds: float, base_url: str | None = None) -> None:
         from openai import AsyncOpenAI
 

@@ -60,13 +60,13 @@ from agents.intent.guardrails import (
 )
 from agents.intent.fhir_tools import FHIR_TOOL_DEFINITIONS
 from agents.intent.rule_extractor import RuleBasedIntentExtractor
-from agents.intent.openai_extractor import OpenAIIntentExtractor
+from agents.intent.llm_extractor import LLMIntentExtractor
 from agents.intent.factory import get_intent_extractor
 
-# plan_from_tool_call và parse_tool_arguments đã được nội hóa trong openai_extractor
+# plan_from_tool_call và parse_tool_arguments đã được nội hóa trong llm_extractor
 # Re-export để không break code nào còn import trực tiếp
-from agents.intent.openai_extractor import _plan_from_tool_call as plan_from_tool_call
-from agents.intent.openai_extractor import _parse_tool_arguments as parse_tool_arguments
+from agents.intent.llm_extractor import _plan_from_tool_call as plan_from_tool_call
+from agents.intent.llm_extractor import _parse_tool_arguments as parse_tool_arguments
 
 __all__ = [
     "TOOL_GET_PATIENT", "TOOL_SEARCH_PATIENTS", "TOOL_GET_OBSERVATIONS",
@@ -86,6 +86,6 @@ __all__ = [
     "enforce_contact_detail_routing", "enforce_patient_list_routing", "apply_all_patient_scope",
     "apply_patient_id_hint", "apply_patient_search_criteria_hint", "add_observation_type_hint",
     "FHIR_TOOL_DEFINITIONS",
-    "RuleBasedIntentExtractor", "OpenAIIntentExtractor",
+    "RuleBasedIntentExtractor", "LLMIntentExtractor",
     "get_intent_extractor", "plan_from_tool_call", "parse_tool_arguments",
 ]

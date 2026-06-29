@@ -318,7 +318,12 @@ export function ChatWindow({
 
   function renderQuickPrompts(centered = false) {
     return (
-      <div className={cn("flex gap-2 overflow-x-auto pb-1", centered ? "mt-4 justify-center" : "mb-3")}>
+      <div
+        className={cn(
+          "flex gap-2 pb-1",
+          centered ? "mt-4 flex-wrap justify-center" : "mb-3 overflow-x-auto",
+        )}
+      >
         {quickPrompts.map((prompt) => (
           <Button
             key={prompt}

@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, ShieldPlus, UserRoundPlus } from "lucide-react";
@@ -27,13 +27,9 @@ const initialForm: RegisterForm = {
 };
 
 function validateForm(form: RegisterForm) {
-  const displayName = form.displayName.trim();
   const username = form.username.trim();
   const email = form.email.trim();
 
-  if (displayName.length < 2 || displayName.length > 100) {
-    return "Họ tên phải có từ 2 đến 100 ký tự.";
-  }
   if (!/^[A-Za-z0-9._-]{3,30}$/.test(username)) {
     return "Tên đăng nhập phải có 3-30 ký tự và chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.";
   }
@@ -59,8 +55,6 @@ export function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const validationMessage = useMemo(() => validateForm(form), [form]);
 
   if (!loading && user) {
     return <Navigate to={user.role === "USER" && user.onboarding_required ? "/onboarding" : "/chat"} replace />;
@@ -184,7 +178,7 @@ export function RegisterPage() {
                 required
               />
             </Field>
-            <Field label="Mật khẩu" hint="Ít nhất 8 byte, có chữ và số.">
+            <Field label="Mật khẩu" hint="Ít nhất 8 ký tự, có chữ và số.">
               <div className="relative">
                 <input
                   className={inputClass("pr-12")}
@@ -218,10 +212,6 @@ export function RegisterPage() {
             {error ? (
               <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm font-medium text-danger">
                 {error}
-              </p>
-            ) : validationMessage ? (
-              <p className="rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm font-medium text-warning">
-                {validationMessage}
               </p>
             ) : null}
 

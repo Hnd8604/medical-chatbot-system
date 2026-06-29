@@ -1,7 +1,7 @@
 import { CSSProperties, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
-import { apiDownload, apiGet, apiPost, ApiError, toQuery, todayIso } from "../services/api";
+import { apiDelete, apiDownload, apiGet, apiPost, apiPut, ApiError, toQuery, todayIso } from "../services/api";
 import { queryClient } from "../lib/queryClient";
 import { usageKeys } from "../hooks/useUsage";
 import { useAuth } from "../hooks/useAuth";
@@ -343,14 +343,25 @@ export function ChatPage() {
 
   async function submitFeedback(messageId: string, rating: number, comment: string) {
     const trimmed = comment.trim();
-    await apiPost<MessageFeedback>(`/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, {
-      rating,
-      comment: trimmed || null,
-    });
+    const isUpdate = Boolean(messages.find((item) => item.id === messageId)?.feedback);
+    const path = `/api/chat/messages/${encodeURIComponent(messageId)}/feedback`;
+    const payload = { rating, comment: trimmed || null };
+    if (isUpdate) {
+      await apiPut<MessageFeedback>(path, payload);
+    } else {
+      await apiPost<MessageFeedback>(path, payload);
+    }
     setMessages((current) =>
       current.map((item) =>
         item.id === messageId ? { ...item, feedback: { rating, comment: trimmed || null } } : item,
       ),
+    );
+  }
+
+  async function deleteFeedback(messageId: string) {
+    await apiDelete(`/api/chat/messages/${encodeURIComponent(messageId)}/feedback`);
+    setMessages((current) =>
+      current.map((item) => (item.id === messageId ? { ...item, feedback: null } : item)),
     );
   }
 
@@ -417,6 +428,7 @@ export function ChatPage() {
           onSelectPatientCandidate={(candidate, pendingQuestion) => void selectPatientCandidate(candidate, pendingQuestion)}
           onSubmitMessage={(value) => void submitMessage(value)}
           onSubmitFeedback={submitFeedback}
+          onDeleteFeedback={deleteFeedback}
           onExportSession={(format) => void exportSession(format)}
         />
       </motion.div>

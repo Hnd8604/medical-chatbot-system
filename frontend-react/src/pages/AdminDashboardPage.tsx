@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, BarChart3, Bell, CalendarDays, Database, Gauge, ListFilter, MessageSquare, RefreshCw, Users } from "lucide-react";
-import { Link } from "react-router-dom";
 import { apiGet, apiPatch, toQuery } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import type { AdminAlertItem, AdminUserListResponse, CacheMetricsResponse, ErrorAnalytics, IntentAnalytics, NotificationListResponse, PageResponse, PerformanceAnalytics, RequestAnalyticsSummary } from "../lib/types";
@@ -145,14 +144,6 @@ function AnalyticsFilterInput({ label, children }: { label: string; children: Re
   );
 }
 
-function QuickLink({ to, title, description }: { to: string; title: string; description: string }) {
-  return (
-    <Link to={to} className="focus-ring group rounded-lg border border-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-card">
-      <p className="font-semibold text-foreground">{title}</p>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-    </Link>
-  );
-}
 
 function AnalyticsShell({ title, icon, meta, children }: { title: string; icon: React.ReactNode; meta?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -468,6 +459,7 @@ export function AdminDashboardPage() {
         <div className="grid gap-7">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="Số user" value={formatNumber(usersTotal)} description="Tổng tài khoản trong hệ thống." />
+            <MetricCard label="Số hội thoại" value="–" description="Chưa có endpoint tổng hợp." />
             <MetricCard label="Request 7 ngày" value={requestSummary ? formatNumber(requestSummary.request_count) : "-"} description="Tổng request trong usage logs." />
             <MetricCard
               label="Cache hit rate"
@@ -479,11 +471,6 @@ export function AdminDashboardPage() {
             <MetricCard label="Tiết kiệm ước tính" value={formatUsd(cacheMetrics?.total_saved_cost_usd)} description={`${formatNumber(cacheMetrics?.total_saved_tokens)} token đã tiết kiệm từ cache.`} />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <EmptyState title="Số hội thoại: Chưa có dữ liệu." description="Backend hiện chưa có endpoint tổng hợp số hội thoại toàn hệ thống cho admin dashboard." />
-            <QuickLink to="/admin/usage-cost" title="Quota / Cost" description="Policy, bảng giá model và cost theo username." />
-            <QuickLink to="/admin/audit-logs" title="Audit log" description="Timeline thao tác, FHIR access, auth và cấu hình." />
-          </section>
 
           <section className="grid gap-6">
             <div className="grid gap-6">
@@ -746,17 +733,6 @@ export function AdminDashboardPage() {
             </div>
           </section>
 
-          <section>
-            <h2 className="mb-4 font-display text-2xl text-foreground">Liên kết nhanh</h2>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <QuickLink to="/admin/users" title="Quản lý user" description="Tìm kiếm, đổi role và khóa/mở khóa tài khoản." />
-              <QuickLink to="/admin/config" title="Cấu hình hệ thống" description="Quản lý chính sách quota và bảng giá model." />
-              <QuickLink to="/admin/usage-cost" title="Quota / Cost" description="Tra quota, usage và chi phí theo user." />
-              <QuickLink to="/admin/audit-logs" title="Audit log" description="Xem log theo thời gian và lọc theo user/action/resource." />
-              <QuickLink to="/usage" title="Usage cá nhân" description="Xem quota, token và chi phí của tài khoản hiện tại." />
-              <QuickLink to="/chat" title="Quay về chat" description="Mở giao diện chatbot chính." />
-            </div>
-          </section>
         </div>
       )}
     </DashboardLayout>

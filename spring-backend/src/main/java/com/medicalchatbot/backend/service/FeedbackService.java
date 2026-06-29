@@ -24,19 +24,45 @@ public class FeedbackService {
     private final CurrentUserService currentUserService;
 
     @Transactional
-    public FeedbackResponse submitFeedback(UUID messageId, FeedbackRequest request) {
+    public FeedbackResponse createFeedback(UUID messageId, FeedbackRequest request) {
         ChatMessage message = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found."));
 
         User user = currentUserService.requireCurrentUser();
+        feedbackRepository.findByMessage_IdAndUser_Id(messageId, user.getId())
+                .ifPresent(existing -> {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT, "Feedback already exists for this message.");
+                });
+
+        MessageFeedback feedback = feedbackRepository.save(message, user, request.rating(), request.comment());
+        return toResponse(feedback, messageId);
+    }
+
+    @Transactional
+    public FeedbackResponse updateFeedback(UUID messageId, FeedbackRequest request) {
+        User user = currentUserService.requireCurrentUser();
         MessageFeedback feedback = feedbackRepository
                 .findByMessage_IdAndUser_Id(messageId, user.getId())
-                .map(existing -> {
-                    existing.update(request.rating(), request.comment());
-                    return existing;
-                })
-                .orElseGet(() -> feedbackRepository.save(message, user, request.rating(), request.comment()));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Feedback not found for this message."));
 
+        feedback.update(request.rating(), request.comment());
+        return toResponse(feedback, messageId);
+    }
+
+    @Transactional
+    public void deleteFeedback(UUID messageId) {
+        User user = currentUserService.requireCurrentUser();
+        MessageFeedback feedback = feedbackRepository
+                .findByMessage_IdAndUser_Id(messageId, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Feedback not found for this message."));
+
+        feedbackRepository.delete(feedback);
+    }
+
+    private FeedbackResponse toResponse(MessageFeedback feedback, UUID messageId) {
         return new FeedbackResponse(
                 feedback.getId(),
                 messageId,

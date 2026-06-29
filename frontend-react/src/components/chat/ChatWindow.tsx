@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Check, FileText, PanelRightClose, PanelRightOpen, Plus, Star, Table2 } from "lucide-react";
+import { Check, FileText, PanelRightClose, PanelRightOpen, Plus, Star, Table2, Trash2 } from "lucide-react";
 import type { ChatResponse, MessageView, NotificationItem, PatientCandidate, UserRole } from "../../lib/types";
 import { formatDateTime, genderLabel, safeJson } from "../../lib/formatters";
 import { STAFF_QUICK_PROMPTS, TEXT, USER_QUICK_PROMPTS } from "../../lib/constants";
@@ -26,6 +26,7 @@ interface ChatWindowProps {
   onSelectPatientCandidate: (candidate: PatientCandidate, pendingQuestion: string | null) => void;
   onSubmitMessage: (message: string) => void;
   onSubmitFeedback: (messageId: string, rating: number, comment: string) => Promise<void>;
+  onDeleteFeedback: (messageId: string) => Promise<void>;
   onExportSession: (format: "pdf" | "csv") => void;
 }
 
@@ -64,27 +65,25 @@ function StarRating({
 function MessageFeedbackControl({
   message,
   onSubmit,
+  onDelete,
 }: {
   message: MessageView;
   onSubmit: (messageId: string, rating: number, comment: string) => Promise<void>;
+  onDelete: (messageId: string) => Promise<void>;
 }) {
+  const existing = message.feedback ?? null;
   const [open, setOpen] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
+  const [rating, setRating] = useState(existing?.rating ?? 0);
+  const [comment, setComment] = useState(existing?.comment ?? "");
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (message.feedback) {
-    return (
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold leading-none text-emerald-600">
-          <Check className="h-3.5 w-3.5 shrink-0" />
-          <span>Đã đánh giá</span>
-        </span>
-        <StarRating value={message.feedback.rating} readOnly />
-        {message.feedback.comment ? <span className="italic">“{message.feedback.comment}”</span> : null}
-      </div>
-    );
+  function openForm() {
+    setRating(existing?.rating ?? 0);
+    setComment(existing?.comment ?? "");
+    setError(null);
+    setOpen(true);
   }
 
   async function handleSubmit() {
@@ -95,19 +94,65 @@ function MessageFeedbackControl({
     setError(null);
     try {
       await onSubmit(message.id, rating, comment);
+      setOpen(false);
+      setSubmitting(false);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Không thể gửi đánh giá.");
       setSubmitting(false);
     }
   }
 
+  async function handleDelete() {
+    if (deleting) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await onDelete(message.id);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Không thể xóa đánh giá.");
+      setDeleting(false);
+    }
+  }
+
   if (!open) {
+    if (existing) {
+      return (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
+          <button
+            type="button"
+            title="Bấm để sửa đánh giá"
+            className="focus-ring inline-flex items-center gap-2 rounded-full px-1 py-0.5 transition hover:opacity-80"
+            onClick={openForm}
+          >
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold leading-none text-emerald-600">
+              <Check className="h-3.5 w-3.5 shrink-0" />
+              <span>Đã đánh giá</span>
+            </span>
+            <StarRating value={existing.rating} readOnly />
+            {existing.comment ? <span className="italic">“{existing.comment}”</span> : null}
+          </button>
+          <button
+            type="button"
+            title="Xóa đánh giá"
+            disabled={deleting}
+            className="focus-ring inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium leading-none text-muted-foreground transition hover:text-danger disabled:opacity-50"
+            onClick={() => void handleDelete()}
+          >
+            <Trash2 className="h-3.5 w-3.5 shrink-0" />
+            <span>{deleting ? "Đang xóa..." : "Xóa"}</span>
+          </button>
+          {error ? <span className="text-danger">{error}</span> : null}
+        </div>
+      );
+    }
     return (
       <div className="mt-3 border-t border-border pt-2">
         <button
           type="button"
           className="focus-ring inline-flex items-end gap-1.5 rounded-full px-2 py-1 text-xs font-medium leading-none text-muted-foreground transition hover:text-accent"
-          onClick={() => setOpen(true)}
+          onClick={openForm}
         >
           <Star className="h-3.5 w-3.5 shrink-0" />
           <span>Đánh giá</span>
@@ -119,7 +164,9 @@ function MessageFeedbackControl({
   return (
     <div className="mt-3 grid gap-2 border-t border-border pt-2">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Đánh giá câu trả lời</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          {existing ? "Sửa đánh giá" : "Đánh giá câu trả lời"}
+        </span>
         <StarRating value={rating} onChange={setRating} />
       </div>
       <textarea
@@ -131,7 +178,7 @@ function MessageFeedbackControl({
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       <div className="flex items-center gap-2">
         <Button type="button" size="sm" disabled={!rating || submitting} onClick={() => void handleSubmit()}>
-          {submitting ? "Đang gửi..." : "Gửi đánh giá"}
+          {submitting ? "Đang gửi..." : existing ? "Lưu thay đổi" : "Gửi đánh giá"}
         </Button>
         <Button
           type="button"
@@ -194,11 +241,13 @@ function MessageBubble({
   selectionDisabled,
   onSelectPatientCandidate,
   onSubmitFeedback,
+  onDeleteFeedback,
 }: {
   message: MessageView;
   selectionDisabled: boolean;
   onSelectPatientCandidate: (candidate: PatientCandidate, pendingQuestion: string | null) => void;
   onSubmitFeedback: (messageId: string, rating: number, comment: string) => Promise<void>;
+  onDeleteFeedback: (messageId: string) => Promise<void>;
 }) {
   const isUser = message.role === "user";
   const isError = message.role === "error";
@@ -251,7 +300,9 @@ function MessageBubble({
             )}
           </div>
         ) : null}
-        {canRate ? <MessageFeedbackControl message={message} onSubmit={onSubmitFeedback} /> : null}
+        {canRate ? (
+          <MessageFeedbackControl message={message} onSubmit={onSubmitFeedback} onDelete={onDeleteFeedback} />
+        ) : null}
       </div>
     </article>
   );
@@ -275,6 +326,7 @@ export function ChatWindow({
   onSelectPatientCandidate,
   onSubmitMessage,
   onSubmitFeedback,
+  onDeleteFeedback,
   onExportSession,
 }: ChatWindowProps) {
   const [draft, setDraft] = useState("");
@@ -431,6 +483,7 @@ export function ChatWindow({
                 selectionDisabled={sending}
                 onSelectPatientCandidate={onSelectPatientCandidate}
                 onSubmitFeedback={onSubmitFeedback}
+                onDeleteFeedback={onDeleteFeedback}
               />
             ))}
           </div>

@@ -15,6 +15,7 @@ import com.medicalchatbot.backend.service.ChatbotServiceClient;
 import com.medicalchatbot.backend.service.CostManagementService;
 import com.medicalchatbot.backend.service.FeedbackService;
 import com.medicalchatbot.backend.service.QuotaService;
+import org.springframework.http.HttpStatus;
 import java.time.LocalDate;
 import java.util.UUID;
 import jakarta.validation.Valid;
@@ -24,12 +25,15 @@ import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @Validated
@@ -134,10 +138,24 @@ public class ChatbotController {
     }
 
     @PostMapping("/chat/messages/{messageId}/feedback")
-    FeedbackResponse submitFeedback(
+    FeedbackResponse createFeedback(
             @PathVariable UUID messageId,
             @Valid @RequestBody FeedbackRequest request
     ) {
-        return feedbackService.submitFeedback(messageId, request);
+        return feedbackService.createFeedback(messageId, request);
+    }
+
+    @PutMapping("/chat/messages/{messageId}/feedback")
+    FeedbackResponse updateFeedback(
+            @PathVariable UUID messageId,
+            @Valid @RequestBody FeedbackRequest request
+    ) {
+        return feedbackService.updateFeedback(messageId, request);
+    }
+
+    @DeleteMapping("/chat/messages/{messageId}/feedback")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteFeedback(@PathVariable UUID messageId) {
+        feedbackService.deleteFeedback(messageId);
     }
 }

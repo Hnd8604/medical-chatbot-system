@@ -1,13 +1,12 @@
 import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, ShieldPlus, UserRoundPlus } from "lucide-react";
+import { Eye, EyeOff, UserRoundPlus } from "lucide-react";
 import { apiPost, ApiError } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import type { AuthRegisterResponse } from "../lib/types";
 import { Button } from "../components/ui/Button";
 import { Field, inputClass } from "../components/ui/Field";
-import { SectionLabel } from "../components/ui/SectionLabel";
 import { Spinner } from "../components/ui/Spinner";
 
 interface RegisterForm {
@@ -98,52 +97,24 @@ export function RegisterPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-background px-5 py-8 text-foreground">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-        <motion.section
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55 }}
-          className="space-y-7"
-        >
-          <SectionLabel>Tài khoản USER</SectionLabel>
-          <div className="space-y-5">
-            <h1 className="max-w-3xl font-display text-5xl leading-[1.08] text-foreground md:text-7xl">
-              Tạo tài khoản <span className="gradient-text">Medical Chatbot</span>
-            </h1>
-            <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
-              Tài khoản mới được cấp quyền USER và có thể sử dụng ngay sau khi liên kết với hồ sơ FHIR của chính bạn.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-white p-5 shadow-card">
-              <UserRoundPlus className="mb-4 h-7 w-7 text-accent" />
-              <h2 className="font-semibold">Đăng ký nhanh</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Không cần admin duyệt. Bạn chỉ cần email, tên đăng nhập và mật khẩu hợp lệ.
-              </p>
-            </div>
-            <div className="rounded-2xl bg-foreground p-5 text-white shadow-lift dark-dots">
-              <ShieldPlus className="mb-4 h-7 w-7 text-white" />
-              <h2 className="font-semibold">Phạm vi an toàn</h2>
-              <p className="mt-2 text-sm leading-6 text-white/75">
-                USER chỉ truy cập được hồ sơ FHIR đã xác minh là của chính mình.
-              </p>
-            </div>
-          </div>
-        </motion.section>
+    <main className="grid min-h-screen place-items-center bg-background px-5 py-10 text-foreground">
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-md"
+      >
+        <div className="mb-8 flex flex-col items-center text-center">
+          <span className="grid h-14 w-14 place-items-center rounded-2xl gradient-surface text-white shadow-lift">
+            <UserRoundPlus className="h-7 w-7" />
+          </span>
+          <h1 className="mt-5 font-display text-3xl">Tạo tài khoản</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Tài khoản mới được cấp quyền USER và dùng được ngay sau khi liên kết với hồ sơ FHIR của bạn.
+          </p>
+        </div>
 
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.1 }}
-          className="rounded-3xl border border-border bg-white p-6 shadow-lift md:p-8"
-        >
-          <div className="mb-7">
-            <p className="font-mono text-xs uppercase tracking-[0.15em] text-accent">Đăng ký</p>
-            <h2 className="mt-2 font-display text-3xl">Tạo tài khoản mới</h2>
-          </div>
-
+        <div className="rounded-3xl border border-border bg-white p-6 shadow-lift md:p-8">
           <form className="space-y-5" onSubmit={handleSubmit}>
             <Field label="Họ tên">
               <input
@@ -218,14 +189,14 @@ export function RegisterPage() {
             </Button>
           </form>
 
-          <p className="mt-5 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Đã có tài khoản?{" "}
             <Link className="font-semibold text-accent hover:underline" to="/login">
               Đăng nhập
             </Link>
           </p>
-        </motion.section>
-      </div>
+        </div>
+      </motion.section>
     </main>
   );
 }

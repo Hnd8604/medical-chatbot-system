@@ -37,7 +37,10 @@ chatbot:
 
 jwt:
   secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-please-1234567890}
-  expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
+  # Access token: TTL ngắn để giảm rủi ro khi lộ token; client tự gọi /api/auth/refresh để gia hạn.
+  expiration-minutes: ${JWT_EXPIRATION_MINUTES:30}
+  # Refresh token: opaque, lưu trong Redis, có rotation. Mặc định 7 ngày = 10080 phút.
+  refresh-expiration-minutes: ${JWT_REFRESH_EXPIRATION_MINUTES:10080}
 
 telegram:
   bot:

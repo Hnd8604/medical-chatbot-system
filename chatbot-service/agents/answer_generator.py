@@ -77,7 +77,7 @@ class LLMAnswerGenerator:
         compact_evidence = compact_evidence_for_llm(evidence)
         if not compact_evidence:
             return AnswerResult(
-                answer=fallback_answer,
+                answer=fallback_answer, # không có evidence → sử dụng câu trả lời fallback
                 source="template_no_evidence",
                 reason="No evidence was available for LLM answer generation.",
             )
@@ -113,7 +113,7 @@ class LLMAnswerGenerator:
             )
         except Exception as exc:
             return AnswerResult(
-                answer=fallback_answer,
+                answer=fallback_answer,  # fallback khi không thể call đc LLM
                 source="template_fallback",
                 reason=str(exc),
             )
@@ -121,7 +121,7 @@ class LLMAnswerGenerator:
         answer = clean_llm_answer(response.choices[0].message.content or "")
         if not answer:
             return AnswerResult(
-                answer=fallback_answer,
+                answer=fallback_answer,  # fallback khi LLM trả về empty answer
                 source="template_fallback",
                 reason="LLM returned an empty answer.",
             )

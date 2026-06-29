@@ -60,14 +60,14 @@ async def _finalize_chat_response(
         payload["pending_question"] = question
         return payload
 
-    template_answer = payload.get("answer") or ""
+    template_answer = payload.get("answer") or "" # lấy câu trả lời đã xây dựng từ trước
     answer_result = await answer_generator.generate(
         question=question,
         intent=payload.get("intent") or plan.intent,
         tool_name=plan.tool_name,
         patient_id=payload.get("patient_id") or plan.patient_id,
         evidence=payload.get("evidence") or [],
-        fallback_answer=template_answer,
+        fallback_answer=template_answer,  # fallback khi không thể call đc LLM hoặc LLM trả về empty answer
         model=model,
     )
     payload["answer"] = answer_result.answer

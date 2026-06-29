@@ -10,9 +10,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
 import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
+import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
 import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
 import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
+import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
 import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
 import com.medicalchatbot.backend.dto.response.AuthUserResponse;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
@@ -44,6 +46,7 @@ public class AuthService {
     private final QuotaPolicyRepository quotaPolicyRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
+    private final RefreshTokenService refreshTokenService;
     private final CurrentUserService currentUserService;
     private final ChatbotServiceClient chatbotServiceClient;
     private final AuditLogRepository auditLogRepository;
@@ -70,9 +73,45 @@ public class AuthService {
         logLoginSuccess(user);
         return new AuthLoginResponse(
                 jwtTokenService.generateToken(user),
+                refreshTokenService.issue(user),
                 "Bearer",
                 jwtTokenService.expiresInSeconds(),
                 userResponse(user)
+        );
+    }
+
+    /**
+     * Xoay refresh token: nhận refresh token cũ, cấp cặp access + refresh token mới.
+     * Refresh token cũ bị vô hiệu hóa ngay (rotation).
+     */
+    @Transactional
+    public AuthRefreshResponse refresh(AuthRefreshRequest request) {
+        RefreshTokenService.RotationResult rotation = refreshTokenService.rotate(request.refreshToken());
+
+        User user = userRepository.findById(rotation.userId())
+                .orElseThrow(() -> {
+                    refreshTokenService.revokeAllForUser(rotation.userId());
+                    return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Nguoi dung khong ton tai.");
+                });
+
+        if (user.getStatus() == UserStatus.LOCKED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Tai khoan da bi khoa.");
+        }
+        if (user.getStatus() == UserStatus.DISABLED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Tai khoan da bi vo hieu hoa.");
+        }
+        // token_version đã đổi (vd user đã logout / đổi mật khẩu) => mọi phiên cũ hết hiệu lực.
+        if (user.getTokenVersion() != rotation.tokenVersion()) {
+            refreshTokenService.revokeAllForUser(user.getId());
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phien dang nhap da het hieu luc.");
+        }
+
+        logTokenRefresh(user);
+        return new AuthRefreshResponse(
+                jwtTokenService.generateToken(user),
+                refreshTokenService.issue(user),
+                "Bearer",
+                jwtTokenService.expiresInSeconds()
         );
     }
 
@@ -169,6 +208,7 @@ public class AuthService {
         User user = currentUserService.requireCurrentUser();
         user.incrementTokenVersion();
         userRepository.save(user);
+        refreshTokenService.revokeAllForUser(user.getId());
 
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("operation", "logout");
@@ -336,6 +376,13 @@ public class AuthService {
         metadata.put("credential", credential);
         metadata.put("reason", reason);
         auditLogRepository.save(user, null, "LOGIN_FAILURE", "auth", credential, metadata);
+    }
+
+    private void logTokenRefresh(User user) {
+        ObjectNode metadata = objectMapper.createObjectNode();
+        metadata.put("operation", "token_refresh");
+        metadata.put("result", "success");
+        auditLogRepository.save(user, null, "TOKEN_REFRESH", "app_user", user.getId().toString(), metadata);
     }
 
     private void logRegisterSuccess(User user) {

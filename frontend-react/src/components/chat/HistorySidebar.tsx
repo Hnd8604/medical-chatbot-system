@@ -72,7 +72,7 @@ export function HistorySidebar({
 
   if (collapsed) {
     return (
-      <aside className={cn("flex min-h-0 flex-col border-r border-border bg-white/90 p-3 backdrop-blur", className)}>
+      <aside className={cn("flex min-h-0 flex-col border-r border-border bg-white p-3", className)}>
         <header className="flex flex-col items-center gap-3 border-b border-border pb-3">
           <button
             type="button"
@@ -196,7 +196,7 @@ export function HistorySidebar({
   }
 
   return (
-    <aside className={cn("flex min-h-0 flex-col border-r border-border bg-white/90 backdrop-blur", className)}>
+    <aside className={cn("flex min-h-0 flex-col border-r border-border bg-white", className)}>
       <header className="space-y-4 border-b border-border p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -290,10 +290,14 @@ export function HistorySidebar({
           </Link>
         ) : null}
         {user.role === "ADMIN" ? (
-          <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={onOpenAdmin}>
+          <button
+            type="button"
+            onClick={onOpenAdmin}
+            className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
+          >
             <UsersRound className="h-4 w-4" />
             Quản lý người dùng
-          </Button>
+          </button>
         ) : null}
       </div>
 

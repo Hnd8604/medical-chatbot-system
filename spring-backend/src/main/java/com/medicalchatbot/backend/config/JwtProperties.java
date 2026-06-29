@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotBlank;
 @ConfigurationProperties(prefix = "jwt")
 public record JwtProperties(
         @NotBlank String secret,
-        @Min(1) long expirationMinutes
+        @Min(1) long expirationMinutes,
+        @Min(1) long refreshExpirationMinutes
 ) {
 }

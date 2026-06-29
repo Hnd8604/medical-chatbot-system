@@ -1,7 +1,7 @@
 # M12 — Database Design / ERD
 
 Tài liệu này mô tả sơ đồ quan hệ thực thể (ERD) của database ứng dụng (PostgreSQL),
-được reverse từ 12 file Flyway migration trong
+được reverse từ 14 file Flyway migration trong
 [`src/main/resources/db/migration/`](../src/main/resources/db/migration/).
 
 > **Phạm vi**: Đây là DB *ứng dụng*. Dữ liệu lâm sàng của bệnh nhân (Patient,
@@ -205,6 +205,8 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     updated_at      timestamptz [not null, default: `now()`]
     Indexes {
       quota_policy_id
+      `lower(username)` [unique, name: "ux_app_users_username_lower"]
+      `lower(email)` [unique, name: "ux_app_users_email_lower", note: "partial: WHERE email IS NOT NULL"]
     }
   }
 
@@ -316,7 +318,9 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     updated_at      timestamptz [not null, default: `now()`]
     Indexes {
       (user_id, fhir_patient_id) [unique]
-      user_id
+      user_id [name: "idx_app_user_patient_links_user"]
+      user_id [unique, name: "ux_app_user_patient_links_primary", note: "partial: WHERE is_primary"]
+      `lower(fhir_patient_id)` [unique, name: "ux_app_user_patient_links_self_patient_lower", note: "partial: WHERE relationship = 'SELF'"]
     }
   }
 

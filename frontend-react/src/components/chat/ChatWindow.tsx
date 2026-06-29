@@ -210,7 +210,7 @@ function MessageBubble({
       <div
         className={`max-w-[82%] rounded-2xl border px-4 py-3 shadow-sm ${
           isUser
-            ? "border-accent/15 bg-accent/10 text-foreground"
+            ? "border-slate-200 bg-slate-100 text-foreground"
             : isError
               ? "border-danger/20 bg-danger/10 text-danger"
               : "border-border bg-white text-foreground"
@@ -378,7 +378,7 @@ export function ChatWindow({
           type="button"
           variant="secondary"
           size="icon"
-          className="pointer-events-auto hidden bg-white/90 backdrop-blur xl:inline-flex"
+          className="pointer-events-auto hidden bg-white xl:inline-flex"
           onClick={onToggleRightPanel}
           aria-label={rightPanelCollapsed ? "Mở panel bên phải" : "Đóng panel bên phải"}
           title={rightPanelCollapsed ? "Mở panel bên phải" : "Đóng panel bên phải"}
@@ -399,7 +399,7 @@ export function ChatWindow({
           type="button"
           variant="secondary"
           size="sm"
-          className="pointer-events-auto bg-white/90 backdrop-blur"
+          className="pointer-events-auto bg-white"
           disabled={sessionExportDisabled}
           onClick={() => onExportSession("pdf")}
           aria-label="Xuất PDF cho phiên hiện tại"
@@ -411,7 +411,7 @@ export function ChatWindow({
           type="button"
           variant="secondary"
           size="sm"
-          className="pointer-events-auto bg-white/90 backdrop-blur"
+          className="pointer-events-auto bg-white"
           disabled={sessionExportDisabled}
           onClick={() => onExportSession("csv")}
           aria-label="Xuất CSV cho phiên hiện tại"
@@ -447,7 +447,7 @@ export function ChatWindow({
       </div>
 
       {hasConversation ? (
-        <footer className="shrink-0 bg-white/90 px-4 py-3 backdrop-blur">
+        <footer className="shrink-0 bg-white px-4 py-3">
           <div className="mx-auto max-w-3xl">
             {renderQuickPrompts(false)}
             {renderComposer()}

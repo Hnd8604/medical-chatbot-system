@@ -2,7 +2,7 @@ package com.medicalchatbot.backend.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public record AuthLoginResponse(
+public record AuthRefreshResponse(
         @JsonProperty("access_token")
         String accessToken,
         @JsonProperty("refresh_token")
@@ -10,7 +10,6 @@ public record AuthLoginResponse(
         @JsonProperty("token_type")
         String tokenType,
         @JsonProperty("expires_in_seconds")
-        long expiresInSeconds,
-        AuthUserResponse user
+        long expiresInSeconds
 ) {
 }

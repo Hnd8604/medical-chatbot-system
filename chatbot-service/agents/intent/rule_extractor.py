@@ -37,17 +37,17 @@ def _compute_rule_confidence(
     all_patient_scope: bool,
     tool_name: str,
 ) -> float:
-    if tool_name == TOOL_UNSUPPORTED:
+    if tool_name == TOOL_UNSUPPORTED:  # không thể rút ra được intent nào
         return 0.30
-    if matched and has_criteria:
+    if matched and has_criteria:  # có khớp với từ khóa và có tiêu chí tìm kiếm
         return 0.90
-    if matched:
+    if matched: # chỉ khớp với từ khóa
         return 0.85
-    if all_patient_scope:
+    if all_patient_scope: # chỉ là patient list request
         return 0.75
-    if has_criteria:
+    if has_criteria: # có tiêu chí tìm kiếm
         return 0.70
-    # PATIENT_INFO_KEYWORDS fallthrough
+    
     return 0.65
 
 

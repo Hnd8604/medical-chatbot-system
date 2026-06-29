@@ -189,11 +189,11 @@ export function PatientInsightPanel({
       className={cn(
         mobile
           ? "h-full min-h-0 overflow-auto bg-white"
-          : "hidden min-h-0 overflow-auto border-l border-border bg-white/90 backdrop-blur xl:block",
+          : "hidden min-h-0 overflow-auto border-l border-border bg-white xl:block",
         className,
       )}
     >
-      <div className="sticky top-0 z-10 border-b border-border bg-white/90 p-4 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-border bg-white p-4">
         <Badge tone={isStaff ? "green" : "blue"}>{isStaff ? "Bệnh nhân" : "SELF"}</Badge>
         <h2 className="mt-3 font-display text-2xl">{isStaff ? "Thông số bệnh nhân" : TEXT.myProfile}</h2>
       </div>

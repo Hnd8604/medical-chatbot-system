@@ -2,9 +2,11 @@ package com.medicalchatbot.backend.controller;
 
 import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
 import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
+import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
 import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
 import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
+import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
 import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
 import com.medicalchatbot.backend.dto.response.AuthUserResponse;
 import com.medicalchatbot.backend.service.AuthService;
@@ -33,6 +35,11 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthRegisterResponse> register(@Valid @RequestBody AuthRegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
+
+    @PostMapping("/refresh")
+    public AuthRefreshResponse refresh(@Valid @RequestBody AuthRefreshRequest request) {
+        return authService.refresh(request);
     }
 
     @GetMapping("/me")

@@ -139,7 +139,7 @@ class JwtAuthenticationFilterTest {
     }
 
     private JwtTokenService tokenService(long expirationMinutes) {
-        return new JwtTokenService(new JwtProperties(SECRET, expirationMinutes));
+        return new JwtTokenService(new JwtProperties(SECRET, expirationMinutes, 10080));
     }
 
     private User user(UUID id, String username, UserRole role, UserStatus status, int tokenVersion) {

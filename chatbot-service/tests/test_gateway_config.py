@@ -5,41 +5,25 @@ from chat.response_builder import _provider_and_pricing_model
 
 
 class GatewaySettingsTests(unittest.TestCase):
-    def test_gateway_enabled_uses_litellm_base_url_and_key(self):
+    def test_master_key_enables_llm_via_gateway(self):
         settings = Settings(
-            use_gateway=True,
             litellm_base_url="http://localhost:4000",
             litellm_master_key="sk-local-dev",
-            openai_api_key="sk-openai",
-            openai_base_url="https://api.openai.com/v1",
         )
         self.assertEqual(settings.llm_base_url, "http://localhost:4000")
         self.assertEqual(settings.llm_api_key, "sk-local-dev")
         self.assertTrue(settings.use_llm)
+        self.assertTrue(settings.use_llm_answer)
 
-    def test_gateway_enabled_without_master_key_disables_llm(self):
-        settings = Settings(
-            use_gateway=True,
-            litellm_master_key=None,
-            openai_api_key="sk-openai",
-        )
+    def test_without_master_key_disables_llm(self):
+        settings = Settings(litellm_master_key=None)
         self.assertFalse(settings.use_llm)
+        self.assertFalse(settings.use_llm_answer)
 
-    def test_gateway_disabled_falls_back_to_openai(self):
-        settings = Settings(
-            use_gateway=False,
-            litellm_base_url="http://localhost:4000",
-            litellm_master_key="sk-local-dev",
-            openai_api_key="sk-openai",
-            openai_base_url="https://api.openai.com/v1",
-        )
-        self.assertEqual(settings.llm_base_url, "https://api.openai.com/v1")
-        self.assertEqual(settings.llm_api_key, "sk-openai")
+    def test_llm_answer_requires_enable_flag(self):
+        settings = Settings(litellm_master_key="sk-local-dev", enable_llm_answer=False)
         self.assertTrue(settings.use_llm)
-
-    def test_gateway_disabled_without_openai_key_disables_llm(self):
-        settings = Settings(use_gateway=False, openai_api_key=None)
-        self.assertFalse(settings.use_llm)
+        self.assertFalse(settings.use_llm_answer)
 
 
 class ProviderMappingTests(unittest.TestCase):

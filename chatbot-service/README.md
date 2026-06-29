@@ -29,17 +29,21 @@ $env:FHIR_BASE_URL="http://localhost:8080/fhir"
 
 The chat endpoint extracts a FHIR tool plan before calling HAPI FHIR.
 
-Set these variables in `chatbot-service/.env` to enable OpenAI tool calling and final answer generation:
+LLM calls go through the LiteLLM gateway only — the service no longer calls OpenAI/Groq
+directly and holds no provider API key. Set these variables in `chatbot-service/.env`:
 
 ```env
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-4.1-mini
-OPENAI_API_KEY=replace_me
+MODEL_SIMPLE=gpt-4o-mini
+MODEL_COMPLEX=gpt-4.1-mini
+LITELLM_BASE_URL=http://localhost:4000
+LITELLM_MASTER_KEY=sk-local-dev
 LLM_REQUEST_TIMEOUT_SECONDS=20
 ENABLE_LLM_ANSWER=true
 ```
 
-If `OPENAI_API_KEY` is missing, the service automatically uses a local rule-based extractor and template answer fallback so demos still run.
+Provider API keys (`OPENAI_API_KEY`, `GROQ_API_KEY`) live only in `infra/litellm/.env`.
+If `LITELLM_MASTER_KEY` is missing, the service automatically uses a local rule-based extractor and template answer fallback so demos still run.
 
 Supported tool plans:
 

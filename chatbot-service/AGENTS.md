@@ -13,8 +13,8 @@ Implemented:
 - Patient search by FHIR REST criteria: name, phone, birth date, and identifier.
 - Ambiguous patient handling with `needs_patient_selection`, `patient_candidates`, and `pending_question`.
 - `POST /chat` endpoint for patient, observation, condition, and medication questions.
-- OpenAI tool/function calling intent extraction when `OPENAI_API_KEY` is configured.
-- Rule-based fallback intent extraction for local demos without an LLM API key.
+- Tool/function calling intent extraction via the LiteLLM gateway when `LITELLM_MASTER_KEY` is configured (provider keys live only in the gateway; no direct provider calls).
+- Rule-based fallback intent extraction for local demos without an LLM gateway key.
 - LLM final answer generation from normalized FHIR evidence when `ENABLE_LLM_ANSWER=true`.
 - Template fallback answer generation when LLM answer generation is disabled or fails.
 - Central FHIR HTTP client using HAPI FHIR REST APIs.
@@ -90,7 +90,7 @@ get_medication_requests
 unsupported_question
 ```
 
-Without `OPENAI_API_KEY`, `RuleBasedIntentExtractor` keeps local demo behavior working.
+Without `LITELLM_MASTER_KEY`, `RuleBasedIntentExtractor` keeps local demo behavior working.
 
 ## Answer Generation
 

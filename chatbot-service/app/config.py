@@ -11,13 +11,10 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="openai")
     model_simple: str = Field(default="gpt-4o-mini")
     model_complex: str = Field(default="gpt-4.1-mini")
-    openai_api_key: str | None = Field(default=None)
-    openai_base_url: str | None = Field(default=None)
     llm_request_timeout_seconds: float = Field(default=20)
     enable_llm_answer: bool = Field(default=True)
 
-    # AI Gateway (LiteLLM)
-    use_gateway: bool = Field(default=False)
+
     litellm_base_url: str = Field(default="http://localhost:4000")
     litellm_master_key: str | None = Field(default=None)
 
@@ -40,17 +37,17 @@ class Settings(BaseSettings):
         return self.fhir_base_url.rstrip("/")
 
     @property
-    def llm_base_url(self) -> str | None:
-        return self.litellm_base_url if self.use_gateway else self.openai_base_url
+    def llm_base_url(self) -> str:
+        return self.litellm_base_url
 
     @property
     def llm_api_key(self) -> str | None:
-        return self.litellm_master_key if self.use_gateway else self.openai_api_key
+        return self.litellm_master_key
 
     @property
     def use_llm(self) -> bool:
-        """Có credential LLM được cấu hình hay không (qua gateway hoặc trực tiếp)."""
-        return bool(self.litellm_master_key) if self.use_gateway else bool(self.openai_api_key)
+        """Có master key của LiteLLM gateway hay không (đường LLM duy nhất)."""
+        return bool(self.litellm_master_key)
 
     @property
     def use_llm_answer(self) -> bool:

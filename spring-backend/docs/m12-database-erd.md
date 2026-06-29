@@ -1,7 +1,7 @@
 # M12 — Database Design / ERD
 
 Tài liệu này mô tả sơ đồ quan hệ thực thể (ERD) của database ứng dụng (PostgreSQL),
-được reverse từ 14 file Flyway migration trong
+được reverse từ 17 file Flyway migration trong
 [`src/main/resources/db/migration/`](../src/main/resources/db/migration/).
 
 > **Phạm vi**: Đây là DB *ứng dụng*. Dữ liệu lâm sàng của bệnh nhân (Patient,
@@ -189,6 +189,7 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     daily_cost_limit_usd  numeric    [not null]
     rate_limit_per_minute integer    [default: 20]
     created_at            timestamptz [not null, default: `now()`]
+    Note: "3 tier seed sẵn (V16/V17): free (30 req · 50k token · $0.5 · 10 rpm), pro (200 · 500k · $5 · 30), enterprise (2000 · 5M · $50 · 120)"
   }
 
   Table app_users {
@@ -303,9 +304,9 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     comment    text
     created_at timestamptz [not null, default: `now()`]
     Indexes {
-      (message_id, user_id) [unique]
-      message_id
+      message_id [name: "idx_message_feedback_message_id"]
     }
+    Note: "V15 đã bỏ unique (message_id, user_id); chống trùng nay do FeedbackService đảm nhiệm ở tầng ứng dụng"
   }
 
   Table app_user_patient_links {

@@ -246,7 +246,7 @@ class ChatApplicationServiceTest {
         ChatApplicationService service = newService();
         QuotaStatusResponse quotaStatus = new QuotaStatusResponse(
                 null,
-                "free_demo",
+                "free",
                 1,
                 100000,
                 BigDecimal.ONE,

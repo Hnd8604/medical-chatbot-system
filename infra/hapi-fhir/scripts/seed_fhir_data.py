@@ -36,6 +36,7 @@ def main() -> int:
             SEED_DIR / "demo-data-transaction-bundle.json",
             SEED_DIR / "extended-demo-data-transaction-bundle.json",
             SEED_DIR / "detailed-demo-data-transaction-bundle.json",
+            SEED_DIR / "additional-demo-data-transaction-bundle.json",
         ]
         if not seed_files:
             print(f"No seed JSON files found in: {SEED_DIR}", file=sys.stderr)

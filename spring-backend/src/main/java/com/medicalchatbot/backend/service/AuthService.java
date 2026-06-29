@@ -127,10 +127,10 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng.");
         }
 
-        QuotaPolicy quotaPolicy = quotaPolicyRepository.findByName("free_demo")
+        QuotaPolicy quotaPolicy = quotaPolicyRepository.findByName("free")
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Chưa cấu hình quota policy mặc định free_demo."
+                        "Chưa cấu hình quota policy mặc định 'free'."
                 ));
 
         User user = User.builder()

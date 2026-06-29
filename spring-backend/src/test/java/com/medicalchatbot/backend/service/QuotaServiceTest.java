@@ -64,10 +64,10 @@ class QuotaServiceTest {
         when(user.getUsername()).thenReturn("user_demo");
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
-                "free_demo",
-                50,
+                "free",
+                30,
                 1000,
-                new BigDecimal("1.00")
+                new BigDecimal("0.50")
         )));
         when(usageLogRepository.summarizeSuccessfulUsage(
                 eq(userId),
@@ -83,12 +83,12 @@ class QuotaServiceTest {
         var status = service.currentUserStatus();
 
         assertEquals("user_demo", status.user());
-        assertEquals("free_demo", status.policy());
+        assertEquals("free", status.policy());
         assertEquals(12, status.usedRequests());
         assertEquals(150, status.usedTokens());
-        assertEquals(38, status.remainingRequests());
+        assertEquals(18, status.remainingRequests());
         assertEquals(850, status.remainingTokens());
-        assertEquals(new BigDecimal("0.75"), status.remainingCostUsd());
+        assertEquals(new BigDecimal("0.25"), status.remainingCostUsd());
         assertEquals(true, status.allowed());
     }
 
@@ -98,10 +98,10 @@ class QuotaServiceTest {
         QuotaService service = newService();
 
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
-                "free_demo",
+                "free",
                 1,
                 1000,
-                new BigDecimal("1.00")
+                new BigDecimal("0.50")
         )));
         when(usageLogRepository.summarizeSuccessfulUsage(
                 eq(userId),
@@ -146,9 +146,9 @@ class QuotaServiceTest {
         QuotaService service = newService();
 
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
-                "free_demo",
-                50,
-                100000,
+                "free",
+                30,
+                50000,
                 new BigDecimal("0.01")
         )));
         when(usageLogRepository.summarizeSuccessfulUsage(

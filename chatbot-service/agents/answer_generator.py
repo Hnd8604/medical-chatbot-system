@@ -55,7 +55,7 @@ class TemplateAnswerGenerator:
         return AnswerResult(answer=fallback_answer, source="template")
 
 
-class OpenAIAnswerGenerator:
+class LLMAnswerGenerator:
     def __init__(self, api_key: str, model: str, timeout_seconds: float, base_url: str | None = None) -> None:
         from openai import AsyncOpenAI
 
@@ -138,7 +138,7 @@ class OpenAIAnswerGenerator:
 def get_answer_generator() -> AnswerGenerator:
     settings = get_settings()
     if settings.use_llm_answer and settings.llm_api_key:
-        return OpenAIAnswerGenerator(
+        return LLMAnswerGenerator(
             api_key=settings.llm_api_key,
             model=settings.model_simple,
             timeout_seconds=settings.llm_request_timeout_seconds,

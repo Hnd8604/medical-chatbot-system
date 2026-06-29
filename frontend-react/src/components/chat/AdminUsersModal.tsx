@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiJson } from "../../services/api";
+import { apiGet, apiPatch } from "../../services/api";
 import { AdminUserItem, AdminUserListResponse, UserRole, UserStatus } from "../../lib/types";
 import { formatDateTime, roleLabel, statusLabel } from "../../lib/formatters";
 import { Button } from "../ui/Button";
@@ -24,7 +24,7 @@ export function AdminUsersModal({ open, onClose, onError }: AdminUsersModalProps
   async function loadUsers() {
     setLoading(true);
     try {
-      const data = await apiJson<AdminUserListResponse>("/api/admin/users?page=0&size=50");
+      const data = await apiGet<AdminUserListResponse>("/api/admin/users?page=0&size=50");
       setUsers(data.users);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Không thể tải danh sách người dùng.");
@@ -36,10 +36,7 @@ export function AdminUsersModal({ open, onClose, onError }: AdminUsersModalProps
   async function patchUser(id: string, path: "role" | "status", value: UserRole | UserStatus) {
     setUpdatingId(id);
     try {
-      await apiJson(`/api/admin/users/${encodeURIComponent(id)}/${path}`, {
-        method: "PATCH",
-        body: JSON.stringify({ [path]: value }),
-      });
+      await apiPatch(`/api/admin/users/${encodeURIComponent(id)}/${path}`, { [path]: value });
       await loadUsers();
     } catch (error) {
       onError(error instanceof Error ? error.message : "Không thể cập nhật người dùng.");

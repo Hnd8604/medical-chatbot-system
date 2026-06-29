@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Search, ShieldAlert } from "lucide-react";
-import { apiJson } from "../services/api";
+import { apiGet, apiPatch } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import type { AdminUserItem, AdminUserListResponse, UserRole, UserStatus } from "../lib/types";
 import { formatDateTime, roleLabel, statusLabel } from "../lib/formatters";
@@ -73,7 +73,7 @@ export function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiJson<AdminUserListResponse>("/api/admin/users?page=0&size=100");
+      const data = await apiGet<AdminUserListResponse>("/api/admin/users?page=0&size=100");
       setUsers(data.users || []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Không thể tải danh sách người dùng.");
@@ -86,10 +86,7 @@ export function AdminUsersPage() {
     setUpdatingId(id);
     setError(null);
     try {
-      await apiJson(`/api/admin/users/${encodeURIComponent(id)}/${path}`, {
-        method: "PATCH",
-        body: JSON.stringify({ [path]: value }),
-      });
+      await apiPatch(`/api/admin/users/${encodeURIComponent(id)}/${path}`, { [path]: value });
       await loadUsers();
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Không thể cập nhật người dùng.");

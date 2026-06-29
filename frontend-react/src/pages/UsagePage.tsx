@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { apiJson, toQuery, todayIso } from "../services/api";
+import { apiGet, toQuery, todayIso } from "../services/api";
 import type { CostSummaryResponse, QuotaStatusResponse } from "../lib/types";
 import { formatDate, formatNumber, formatUsd, numericValue } from "../lib/formatters";
 import { Button } from "../components/ui/Button";
@@ -55,8 +55,8 @@ export function UsagePage() {
     setError(null);
     try {
       const [quotaData, costData] = await Promise.all([
-        apiJson<QuotaStatusResponse>("/api/quota/status"),
-        apiJson<CostSummaryResponse>(`/api/usage/cost-summary${toQuery(range)}`),
+        apiGet<QuotaStatusResponse>("/api/quota/status"),
+        apiGet<CostSummaryResponse>(`/api/usage/cost-summary${toQuery(range)}`),
       ]);
       setQuota(quotaData);
       setCost(costData);

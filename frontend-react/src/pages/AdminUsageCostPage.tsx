@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, Gauge, RefreshCw, Search, ShieldCheck, WalletCards } from "lucide-react";
-import { apiJson, todayIso, toQuery } from "../services/api";
+import { apiGet, todayIso, toQuery } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import type {
   AdminUserItem,
@@ -101,9 +101,9 @@ export function AdminUsageCostPage() {
 
   async function loadReferenceData() {
     const [policyData, pricingData, userData] = await Promise.all([
-      apiJson<QuotaPolicy[]>("/api/admin/quotas/policies"),
-      apiJson<ModelPricingListResponse>("/api/admin/costs/pricing"),
-      apiJson<AdminUserListResponse>("/api/admin/users?page=0&size=100"),
+      apiGet<QuotaPolicy[]>("/api/admin/quotas/policies"),
+      apiGet<ModelPricingListResponse>("/api/admin/costs/pricing"),
+      apiGet<AdminUserListResponse>("/api/admin/users?page=0&size=100"),
     ]);
     setPolicies(policyData || []);
     setPricing(pricingData.pricing || []);
@@ -123,8 +123,8 @@ export function AdminUsageCostPage() {
       const safeUsername = encodeURIComponent(targetUsername.trim());
       const query = toQuery({ from, to });
       const [quotaData, costData] = await Promise.all([
-        apiJson<QuotaStatusResponse>(`/api/admin/quotas/users/${safeUsername}`),
-        apiJson<CostSummaryResponse>(`/api/admin/costs/users/${safeUsername}${query}`),
+        apiGet<QuotaStatusResponse>(`/api/admin/quotas/users/${safeUsername}`),
+        apiGet<CostSummaryResponse>(`/api/admin/costs/users/${safeUsername}${query}`),
       ]);
       setQuota(quotaData);
       setCost(costData);

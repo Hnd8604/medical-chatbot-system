@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, BarChart3, Bell, CalendarDays, Database, Gauge, ListFilter, MessageSquare, RefreshCw, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { apiJson, toQuery } from "../services/api";
+import { apiGet, apiPatch, toQuery } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import type { AdminAlertItem, AdminUserListResponse, CacheMetricsResponse, ErrorAnalytics, IntentAnalytics, NotificationListResponse, PageResponse, PerformanceAnalytics, RequestAnalyticsSummary } from "../lib/types";
 import { formatDateTime, formatNumber, formatPercent, formatUsd } from "../lib/formatters";
@@ -302,7 +302,7 @@ export function AdminDashboardPage() {
   async function loadIntentAnalytics(filter = intentFilter) {
     setIntentLoading(true);
     try {
-      setIntentData(await apiJson<IntentAnalytics[]>(`/api/admin/analytics/intents?${analyticsParams(filter)}`));
+      setIntentData(await apiGet<IntentAnalytics[]>(`/api/admin/analytics/intents?${analyticsParams(filter)}`));
     } catch {
       setErrors((current) => [...current, "Không thể tải question analytics."]);
     } finally {
@@ -313,7 +313,7 @@ export function AdminDashboardPage() {
   async function loadErrorAnalytics(filter = errorFilter) {
     setErrorLoading(true);
     try {
-      setErrorData(await apiJson<ErrorAnalytics[]>(`/api/admin/analytics/errors?${analyticsParams(filter)}`));
+      setErrorData(await apiGet<ErrorAnalytics[]>(`/api/admin/analytics/errors?${analyticsParams(filter)}`));
     } catch {
       setErrors((current) => [...current, "Không thể tải error analytics."]);
     } finally {
@@ -324,7 +324,7 @@ export function AdminDashboardPage() {
   async function loadPerformanceAnalytics(filter = performanceFilter) {
     setPerformanceLoading(true);
     try {
-      setPerformanceData(await apiJson<PerformanceAnalytics[]>(`/api/admin/analytics/performance?${analyticsParams(filter)}`));
+      setPerformanceData(await apiGet<PerformanceAnalytics[]>(`/api/admin/analytics/performance?${analyticsParams(filter)}`));
     } catch {
       setErrors((current) => [...current, "Không thể tải performance analytics."]);
     } finally {
@@ -356,7 +356,7 @@ export function AdminDashboardPage() {
     });
 
     try {
-      const result = await apiJson<PageResponse<AdminAlertItem>>(`/api/admin/alerts${query}`);
+      const result = await apiGet<PageResponse<AdminAlertItem>>(`/api/admin/alerts${query}`);
       setAlertPage(result);
       setAlerts(result.content || []);
     } catch {
@@ -370,9 +370,7 @@ export function AdminDashboardPage() {
     setResolvingAlertId(alertId);
     try {
       const resolvedBy = encodeURIComponent(user?.username || "admin");
-      await apiJson<void>(`/api/admin/alerts/${alertId}/resolve?resolvedBy=${resolvedBy}`, {
-        method: "PATCH",
-      });
+      await apiPatch<void>(`/api/admin/alerts/${alertId}/resolve?resolvedBy=${resolvedBy}`);
       await loadAlerts();
     } catch {
       setErrors((current) => [...current, "Không thể đánh dấu alert đã xử lý."]);
@@ -387,10 +385,10 @@ export function AdminDashboardPage() {
 
     const summaryRange = analyticsRange(DEFAULT_ANALYTICS_DAYS);
     const [usersResult, requestResult, cacheResult, notificationsResult] = await Promise.allSettled([
-      apiJson<AdminUserListResponse>("/api/admin/users?page=0&size=1"),
-      apiJson<RequestAnalyticsSummary>(`/api/admin/analytics/requests?from=${summaryRange.from}&to=${summaryRange.to}`),
-      apiJson<CacheMetricsResponse>("/api/metrics/cache"),
-      apiJson<NotificationListResponse>("/api/notifications"),
+      apiGet<AdminUserListResponse>("/api/admin/users?page=0&size=1"),
+      apiGet<RequestAnalyticsSummary>(`/api/admin/analytics/requests?from=${summaryRange.from}&to=${summaryRange.to}`),
+      apiGet<CacheMetricsResponse>("/api/metrics/cache"),
+      apiGet<NotificationListResponse>("/api/notifications"),
     ]);
 
     const nextErrors: string[] = [];

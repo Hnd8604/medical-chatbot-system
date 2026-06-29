@@ -13,9 +13,17 @@ export interface AuthUser {
 
 export interface AuthLoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: "Bearer";
   expires_in_seconds: number;
   user: AuthUser;
+}
+
+export interface AuthRefreshResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: "Bearer";
+  expires_in_seconds: number;
 }
 
 export interface AuthRegisterResponse {

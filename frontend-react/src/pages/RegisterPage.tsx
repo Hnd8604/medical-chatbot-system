@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, ShieldPlus, UserRoundPlus } from "lucide-react";
-import { apiJson, ApiError } from "../services/api";
+import { apiPost, ApiError } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import type { AuthRegisterResponse } from "../lib/types";
 import { Button } from "../components/ui/Button";
@@ -75,15 +75,12 @@ export function RegisterPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await apiJson<AuthRegisterResponse>("/api/auth/register", {
-        method: "POST",
-        body: JSON.stringify({
-          display_name: form.displayName.trim(),
-          username: form.username.trim(),
-          email: form.email.trim(),
-          password: form.password,
-          password_confirmation: form.passwordConfirmation,
-        }),
+      const response = await apiPost<AuthRegisterResponse>("/api/auth/register", {
+        display_name: form.displayName.trim(),
+        username: form.username.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        password_confirmation: form.passwordConfirmation,
       });
       navigate("/login", {
         replace: true,

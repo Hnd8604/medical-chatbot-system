@@ -1,7 +1,7 @@
 import { CSSProperties, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
-import { apiDownload, apiJson, ApiError, toQuery, todayIso } from "../services/api";
+import { apiDownload, apiGet, apiPost, ApiError, toQuery, todayIso } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import { isDateLike, isPhoneLike, normalizePatientId, resourceList } from "../lib/formatters";
 import type {
@@ -125,7 +125,7 @@ export function ChatPage() {
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
     try {
-      const data = await apiJson<ChatSessionListResponse>(
+      const data = await apiGet<ChatSessionListResponse>(
         `/api/chat/sessions${toQuery({ query: sessionQuery.trim() || null, limit: 30 })}`,
       );
       setSessions(data.sessions);
@@ -138,7 +138,7 @@ export function ChatPage() {
 
   const loadNotifications = useCallback(async () => {
     try {
-      setNotifications(await apiJson<NotificationListResponse>("/api/notifications"));
+      setNotifications(await apiGet<NotificationListResponse>("/api/notifications"));
     } catch (error) {
       await handleError(error, "Không thể tải thông báo.");
     }
@@ -148,8 +148,8 @@ export function ChatPage() {
     try {
       const today = todayIso();
       const [quotaData, costData] = await Promise.all([
-        apiJson<QuotaStatusResponse>("/api/quota/status"),
-        apiJson<CostSummaryResponse>(`/api/usage/cost-summary?from=${today}&to=${today}`),
+        apiGet<QuotaStatusResponse>("/api/quota/status"),
+        apiGet<CostSummaryResponse>(`/api/usage/cost-summary?from=${today}&to=${today}`),
       ]);
       setQuota(quotaData);
       setCost(costData);
@@ -190,11 +190,11 @@ export function ChatPage() {
     setPatientLoading(true);
     try {
       const [patient, encounters, observations, conditions, medications] = await Promise.all([
-        apiJson<FhirResource>(`/api/patients/${encodeURIComponent(id)}`),
-        apiJson(`/api/patients/${encodeURIComponent(id)}/encounters?limit=5`),
-        apiJson(`/api/patients/${encodeURIComponent(id)}/observations?limit=5`),
-        apiJson(`/api/patients/${encodeURIComponent(id)}/conditions?limit=20`),
-        apiJson(`/api/patients/${encodeURIComponent(id)}/medications?limit=20`),
+        apiGet<FhirResource>(`/api/patients/${encodeURIComponent(id)}`),
+        apiGet(`/api/patients/${encodeURIComponent(id)}/encounters?limit=5`),
+        apiGet(`/api/patients/${encodeURIComponent(id)}/observations?limit=5`),
+        apiGet(`/api/patients/${encodeURIComponent(id)}/conditions?limit=20`),
+        apiGet(`/api/patients/${encodeURIComponent(id)}/medications?limit=20`),
       ]);
       setSelectedPatient(patient);
       setPatientProfile({
@@ -222,7 +222,7 @@ export function ChatPage() {
     }
     setPatientSearching(true);
     try {
-      const data = await apiJson<unknown>(path);
+      const data = await apiGet<unknown>(path);
       setPatientResults(extractPatients(data));
     } catch (error) {
       await handleError(error, "Không thể tìm bệnh nhân.");
@@ -235,7 +235,7 @@ export function ChatPage() {
     setCurrentSessionId(session.id);
     setLastResponse(null);
     try {
-      const data = await apiJson<ChatMessagesResponse>(`/api/chat/sessions/${encodeURIComponent(session.id)}/messages`);
+      const data = await apiGet<ChatMessagesResponse>(`/api/chat/sessions/${encodeURIComponent(session.id)}/messages`);
       setMessages(data.messages.map(mapHistoryMessage));
       if (isStaff && session.active_patient_id) {
         await loadPatientProfile(session.active_patient_id);
@@ -276,10 +276,7 @@ export function ChatPage() {
         patient_id: isStaff ? options.patientIdOverride ?? selectedPatient?.id ?? null : null,
         message,
       };
-      const response = await apiJson<ChatResponse>("/api/chat", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const response = await apiPost<ChatResponse>("/api/chat", payload);
       setCurrentSessionId(response.session_id);
       setLastResponse(response);
       setMessages((current) =>
@@ -341,9 +338,9 @@ export function ChatPage() {
 
   async function submitFeedback(messageId: string, rating: number, comment: string) {
     const trimmed = comment.trim();
-    await apiJson<MessageFeedback>(`/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, {
-      method: "POST",
-      body: JSON.stringify({ rating, comment: trimmed || null }),
+    await apiPost<MessageFeedback>(`/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, {
+      rating,
+      comment: trimmed || null,
     });
     setMessages((current) =>
       current.map((item) =>
@@ -368,7 +365,7 @@ export function ChatPage() {
 
   async function markNotificationRead(id: string) {
     try {
-      await apiJson<void>(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "POST" });
+      await apiPost<void>(`/api/notifications/${encodeURIComponent(id)}/read`);
       await loadNotifications();
     } catch (error) {
       await handleError(error, "Không thể cập nhật thông báo.");
@@ -377,7 +374,7 @@ export function ChatPage() {
 
   async function markAllNotificationsRead() {
     try {
-      await apiJson<void>("/api/notifications/read-all", { method: "POST" });
+      await apiPost<void>("/api/notifications/read-all");
       await loadNotifications();
     } catch (error) {
       await handleError(error, "Không thể cập nhật thông báo.");

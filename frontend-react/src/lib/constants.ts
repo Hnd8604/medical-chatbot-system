@@ -2,6 +2,10 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
 
 export const ACCESS_TOKEN_KEY = "medical_chatbot_access_token";
+export const REFRESH_TOKEN_KEY = "medical_chatbot_refresh_token";
+
+// Sự kiện phát ra khi refresh token thất bại (phiên hết hiệu lực) để AuthProvider dọn state.
+export const SESSION_EXPIRED_EVENT = "auth:session-expired";
 
 export const TEXT = {
   loginTitle: "Medical Chatbot",

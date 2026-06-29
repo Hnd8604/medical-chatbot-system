@@ -21,7 +21,18 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (!loading && user) {
-    return <Navigate to={user.role === "USER" && user.onboarding_required ? "/onboarding" : "/chat"} replace />;
+    return (
+      <Navigate
+        to={
+          user.role === "ADMIN"
+            ? "/admin"
+            : user.onboarding_required
+              ? "/onboarding"
+              : "/chat"
+        }
+        replace
+      />
+    );
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -30,9 +41,14 @@ export function LoginPage() {
     setError(null);
     try {
       const loggedInUser = await login(usernameOrEmail.trim(), password);
-      navigate(loggedInUser.role === "USER" && loggedInUser.onboarding_required ? "/onboarding" : "/chat", {
-        replace: true,
-      });
+      navigate(
+        loggedInUser.role === "ADMIN"
+          ? "/admin"
+          : loggedInUser.onboarding_required
+            ? "/onboarding"
+            : "/chat",
+        { replace: true },
+      );
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.detail || "Không thể đăng nhập. Vui lòng kiểm tra lại thông tin.");

@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { apiJson, ApiError } from "../services/api";
-import { ACCESS_TOKEN_KEY } from "../lib/constants";
+import {
+  apiGet,
+  apiPost,
+  ApiError,
+  clearTokens,
+  getAccessToken,
+  setTokens,
+} from "../services/api";
+import { SESSION_EXPIRED_EVENT } from "../lib/constants";
 import type { AuthLoginResponse, AuthUser } from "../lib/types";
 
 interface AuthContextValue {
@@ -16,25 +23,26 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(ACCESS_TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => getAccessToken());
   const [loading, setLoading] = useState(true);
 
   const clearSession = useCallback(() => {
-    sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+    clearTokens();
     setToken(null);
     setUser(null);
   }, []);
 
   const restore = useCallback(async () => {
-    const storedToken = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    const storedToken = getAccessToken();
     if (!storedToken) {
       setLoading(false);
       return;
     }
     try {
-      const me = await apiJson<AuthUser>("/api/auth/me");
+      const me = await apiGet<AuthUser>("/api/auth/me");
       setUser(me);
-      setToken(storedToken);
+      // Access token có thể đã được api.ts xoay ngầm khi /me gặp 401, nên đọc lại từ store.
+      setToken(getAccessToken());
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         clearSession();
@@ -48,15 +56,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void restore();
   }, [restore]);
 
+  // api.ts phát sự kiện này khi refresh token thất bại => dọn state + buộc về trang đăng nhập.
+  useEffect(() => {
+    function handleSessionExpired() {
+      setToken(null);
+      setUser(null);
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
+
   const login = useCallback(async (usernameOrEmail: string, password: string) => {
-    const response = await apiJson<AuthLoginResponse>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        username_or_email: usernameOrEmail,
-        password,
-      }),
+    const response = await apiPost<AuthLoginResponse>("/api/auth/login", {
+      username_or_email: usernameOrEmail,
+      password,
     });
-    sessionStorage.setItem(ACCESS_TOKEN_KEY, response.access_token);
+    setTokens(response.access_token, response.refresh_token);
     setToken(response.access_token);
     setUser(response.user);
     return response.user;
@@ -64,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await apiJson<void>("/api/auth/logout", { method: "POST" });
+      await apiPost<void>("/api/auth/logout");
     } catch {
       // Token may already be expired; local cleanup is still correct.
     } finally {

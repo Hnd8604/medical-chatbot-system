@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Filter, RefreshCw, Search } from "lucide-react";
-import { apiJson, toQuery } from "../services/api";
+import { apiGet, toQuery } from "../services/api";
 import type { AdminUserItem, AdminUserListResponse, AuditLogItem, PageResponse } from "../lib/types";
 import { formatDateTime, formatNumber, safeJson } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";
@@ -118,7 +118,7 @@ export function AdminAuditLogsPage() {
   );
 
   async function loadUsers() {
-    const data = await apiJson<AdminUserListResponse>("/api/admin/users?page=0&size=100");
+    const data = await apiGet<AdminUserListResponse>("/api/admin/users?page=0&size=100");
     setUsers(data.users || []);
   }
 
@@ -136,7 +136,7 @@ export function AdminAuditLogsPage() {
         page: nextPage,
         size: PAGE_SIZE,
       });
-      const data = await apiJson<PageResponse<AuditLogItem>>(`/api/audit-logs${query}`);
+      const data = await apiGet<PageResponse<AuditLogItem>>(`/api/audit-logs${query}`);
       setPage(data);
       setPageIndex(data.number ?? nextPage);
     } catch (loadError) {

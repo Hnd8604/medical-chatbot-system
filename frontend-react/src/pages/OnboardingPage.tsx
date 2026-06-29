@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Link2, LogOut, ShieldCheck } from "lucide-react";
-import { apiJson, ApiError } from "../services/api";
+import { apiPost, ApiError } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import type { AuthLinkPatientResponse } from "../lib/types";
 import { Button } from "../components/ui/Button";
@@ -50,13 +50,10 @@ export function OnboardingPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await apiJson<AuthLinkPatientResponse>("/api/auth/link-patient", {
-        method: "POST",
-        body: JSON.stringify({
-          patient_id: patientId.trim(),
-          birth_date: birthDate.trim(),
-          phone: phone.trim(),
-        }),
+      await apiPost<AuthLinkPatientResponse>("/api/auth/link-patient", {
+        patient_id: patientId.trim(),
+        birth_date: birthDate.trim(),
+        phone: phone.trim(),
       });
       await restore();
       navigate("/chat", { replace: true });

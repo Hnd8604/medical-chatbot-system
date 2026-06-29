@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Gauge, Pencil, Plus, RefreshCw, Tag, Trash2 } from "lucide-react";
-import { apiJson } from "../services/api";
+import { apiDelete, apiGet, apiPost, apiPut } from "../services/api";
 import type {
   ModelPricingItem,
   ModelPricingUpsert,
@@ -83,12 +83,9 @@ function QuotaPolicyModal({ open, editing, onClose, onSaved }: QuotaPolicyModalP
     setError(null);
     try {
       if (editing) {
-        await apiJson(`${QUOTA_PATH}/${encodeURIComponent(editing.id)}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
+        await apiPut(`${QUOTA_PATH}/${encodeURIComponent(editing.id)}`, payload);
       } else {
-        await apiJson(QUOTA_PATH, { method: "POST", body: JSON.stringify(payload) });
+        await apiPost(QUOTA_PATH, payload);
       }
       onSaved();
       onClose();
@@ -202,12 +199,9 @@ function ModelPricingModal({ open, editing, onClose, onSaved }: ModelPricingModa
     setError(null);
     try {
       if (editing) {
-        await apiJson(`${PRICING_PATH}/${encodeURIComponent(editing.id)}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
+        await apiPut(`${PRICING_PATH}/${encodeURIComponent(editing.id)}`, payload);
       } else {
-        await apiJson(PRICING_PATH, { method: "POST", body: JSON.stringify(payload) });
+        await apiPost(PRICING_PATH, payload);
       }
       onSaved();
       onClose();
@@ -281,8 +275,8 @@ export function AdminConfigPage() {
     setError(null);
     try {
       const [policyData, pricingData] = await Promise.all([
-        apiJson<QuotaPolicyItem[]>(QUOTA_PATH),
-        apiJson<ModelPricingItem[]>(PRICING_PATH),
+        apiGet<QuotaPolicyItem[]>(QUOTA_PATH),
+        apiGet<ModelPricingItem[]>(PRICING_PATH),
       ]);
       setPolicies(policyData || []);
       setPricing(pricingData || []);
@@ -304,7 +298,7 @@ export function AdminConfigPage() {
     setDeletingId(item.id);
     setError(null);
     try {
-      await apiJson(`${QUOTA_PATH}/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+      await apiDelete(`${QUOTA_PATH}/${encodeURIComponent(item.id)}`);
       await loadAll();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Không thể xóa chính sách quota.");
@@ -320,7 +314,7 @@ export function AdminConfigPage() {
     setDeletingId(item.id);
     setError(null);
     try {
-      await apiJson(`${PRICING_PATH}/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+      await apiDelete(`${PRICING_PATH}/${encodeURIComponent(item.id)}`);
       await loadAll();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Không thể xóa bảng giá model.");

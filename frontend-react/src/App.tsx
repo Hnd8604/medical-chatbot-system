@@ -49,6 +49,23 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return children;
 }
 
+// Chat dùng cho user, không dùng cho admin
+function UserOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+
+  if (user?.role === "ADMIN") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return children;
+}
+
+function DefaultRedirect() {
+  const { user } = useAuth();
+
+  return <Navigate to={user?.role === "ADMIN" ? "/admin" : "/chat"} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -66,7 +83,9 @@ export default function App() {
         path="/chat"
         element={
           <ProtectedRoute>
-            <ChatPage />
+            <UserOnlyRoute>
+              <ChatPage />
+            </UserOnlyRoute>
           </ProtectedRoute>
         }
       />
@@ -128,7 +147,14 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route path="*" element={<Navigate to="/chat" replace />} />
+      <Route
+        path="*"
+        element={
+          <ProtectedRoute>
+            <DefaultRedirect />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

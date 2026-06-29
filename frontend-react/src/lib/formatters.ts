@@ -24,7 +24,7 @@ export function formatNumber(value: number | string | null | undefined): string 
 }
 
 export function formatUsd(value: number | string | null | undefined): string {
-  return new Intl.NumberFormat("vi-VN", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,

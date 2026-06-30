@@ -35,6 +35,7 @@ interface HistorySidebarProps {
   onNewChat: () => void;
   onSelectSession: (session: ChatSessionSummary) => void;
   onExportHistory: (format: "pdf" | "csv") => void;
+  onOpenUsage: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
   className?: string;
@@ -62,6 +63,7 @@ export function HistorySidebar({
   onNewChat,
   onSelectSession,
   onExportHistory,
+  onOpenUsage,
   onOpenAdmin,
   onLogout,
   className,
@@ -124,14 +126,16 @@ export function HistorySidebar({
           >
             <Table2 className="h-5 w-5" />
           </Button>
-          <Link
-            to="/usage"
-            className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl bg-transparent text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onOpenUsage}
             aria-label="Usage / quota"
             title="Usage / quota"
           >
             <BarChart3 className="h-5 w-5" />
-          </Link>
+          </Button>
           {user.role === "ADMIN" ? (
             <Link
               to="/admin"
@@ -255,13 +259,14 @@ export function HistorySidebar({
             {TEXT.exportCsv}
           </Button>
         </div>
-        <Link
-          to="/usage"
+        <button
+          type="button"
+          onClick={onOpenUsage}
           className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
         >
           <BarChart3 className="h-4 w-4" />
           Usage / quota
-        </Link>
+        </button>
         {user.role === "ADMIN" ? (
           <Link
             to="/admin"

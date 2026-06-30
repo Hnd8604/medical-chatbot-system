@@ -22,6 +22,7 @@ import type {
 import { HistorySidebar } from "../components/chat/HistorySidebar";
 import { ChatWindow } from "../components/chat/ChatWindow";
 import { PatientInsightPanel } from "../components/chat/PatientInsightPanel";
+import { UsagePanel } from "../components/chat/UsagePanel";
 import { ExportModal } from "../components/chat/ExportModal";
 import { AdminUsersModal } from "../components/chat/AdminUsersModal";
 import { Badge } from "../components/ui/Badge";
@@ -107,6 +108,7 @@ export function ChatPage() {
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [activeView, setActiveView] = useState<"chat" | "usage">("chat");
   const [globalError, setGlobalError] = useState<string | null>(null);
 
   const isStaff = user?.role === "DOCTOR" || user?.role === "ADMIN";
@@ -232,6 +234,7 @@ export function ChatPage() {
   }
 
   async function selectSession(session: ChatSessionSummary) {
+    setActiveView("chat");
     setCurrentSessionId(session.id);
     setLastResponse(null);
     try {
@@ -246,6 +249,7 @@ export function ChatPage() {
   }
 
   function newChat() {
+    setActiveView("chat");
     setCurrentSessionId(null);
     setLastResponse(null);
     setMessages([]);
@@ -399,34 +403,72 @@ export function ChatPage() {
 
   return (
     <main className="chat-shell relative h-screen overflow-hidden bg-background text-foreground" style={shellStyle}>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 h-full min-h-0 overflow-hidden">
-        {globalError ? (
-          <div className="absolute left-1/2 top-4 z-40 -translate-x-1/2 rounded-full border border-danger/20 bg-white px-4 py-2 text-sm font-semibold text-danger shadow-card">
-            {globalError}
+      {globalError ? (
+        <div className="absolute left-1/2 top-4 z-40 -translate-x-1/2 rounded-full border border-danger/20 bg-white px-4 py-2 text-sm font-semibold text-danger shadow-card">
+          {globalError}
+        </div>
+      ) : null}
+
+      {activeView === "usage" ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute inset-0 z-20 h-full min-h-0 overflow-hidden lg:pl-[var(--sidebar-width)]"
+        >
+          <UsagePanel onClose={() => setActiveView("chat")} className="h-full" />
+        </motion.div>
+      ) : (
+        <>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 h-full min-h-0 overflow-hidden">
+            <ChatWindow
+              role={currentUser.role}
+              messages={messages}
+              currentSessionId={currentSessionId}
+              displayName={currentUser.display_name || currentUser.username}
+              sending={sending}
+              selectedPatientId={selectedPatient?.id || null}
+              notifications={notifications.notifications}
+              unreadCount={notifications.unread_count}
+              notificationOpen={notificationOpen}
+              rightPanelCollapsed={rightPanelCollapsed}
+              onToggleNotifications={() => setNotificationOpen((value) => !value)}
+              onToggleRightPanel={() => setRightPanelCollapsed((value) => !value)}
+              onMarkNotificationRead={(id) => void markNotificationRead(id)}
+              onMarkAllNotificationsRead={() => void markAllNotificationsRead()}
+              onSelectPatientCandidate={(candidate, pendingQuestion) => void selectPatientCandidate(candidate, pendingQuestion)}
+              onSubmitMessage={(value) => void submitMessage(value)}
+              onSubmitFeedback={submitFeedback}
+              onDeleteFeedback={deleteFeedback}
+              onExportSession={(format) => void exportSession(format)}
+            />
+          </motion.div>
+
+          {!rightPanelCollapsed ? (
+            <PatientInsightPanel
+              role={currentUser.role}
+              searchTerm={patientSearchTerm}
+              patientResults={patientResults}
+              selectedPatient={selectedPatient}
+              profile={patientProfile}
+              lastResponse={lastResponse}
+              loadingProfile={patientLoading}
+              searchingPatients={patientSearching}
+              quota={quota}
+              cost={cost}
+              onSearchTermChange={setPatientSearchTerm}
+              onSearchPatients={() => void searchPatients()}
+              onSelectPatient={(patient) => void loadPatientProfile(patient.id || "")}
+              className="fixed inset-y-0 right-0 z-30 h-full w-[var(--right-panel-fixed-width)]"
+            />
+          ) : null}
+
+          <div className="fixed bottom-4 right-4 z-40 xl:hidden">
+            <Button type="button" variant="primary" onClick={() => setMobilePanelOpen(true)}>
+              Mở panel bệnh nhân
+            </Button>
           </div>
-        ) : null}
-        <ChatWindow
-          role={currentUser.role}
-          messages={messages}
-          currentSessionId={currentSessionId}
-          displayName={currentUser.display_name || currentUser.username}
-          sending={sending}
-          selectedPatientId={selectedPatient?.id || null}
-          notifications={notifications.notifications}
-          unreadCount={notifications.unread_count}
-          notificationOpen={notificationOpen}
-          rightPanelCollapsed={rightPanelCollapsed}
-          onToggleNotifications={() => setNotificationOpen((value) => !value)}
-          onToggleRightPanel={() => setRightPanelCollapsed((value) => !value)}
-          onMarkNotificationRead={(id) => void markNotificationRead(id)}
-          onMarkAllNotificationsRead={() => void markAllNotificationsRead()}
-          onSelectPatientCandidate={(candidate, pendingQuestion) => void selectPatientCandidate(candidate, pendingQuestion)}
-          onSubmitMessage={(value) => void submitMessage(value)}
-          onSubmitFeedback={submitFeedback}
-          onDeleteFeedback={deleteFeedback}
-          onExportSession={(format) => void exportSession(format)}
-        />
-      </motion.div>
+        </>
+      )}
 
       <div className="pointer-events-none fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] lg:block">
         <HistorySidebar
@@ -442,40 +484,16 @@ export function ChatPage() {
           onNewChat={newChat}
           onSelectSession={(session) => void selectSession(session)}
           onExportHistory={(format) => setExportModal({ open: true, format })}
+          onOpenUsage={() => setActiveView("usage")}
           onOpenAdmin={() => setAdminOpen(true)}
           onLogout={() => void logout()}
           className="pointer-events-auto h-full w-full"
         />
       </div>
 
-      {!rightPanelCollapsed ? (
-        <PatientInsightPanel
-          role={currentUser.role}
-          searchTerm={patientSearchTerm}
-          patientResults={patientResults}
-          selectedPatient={selectedPatient}
-          profile={patientProfile}
-          lastResponse={lastResponse}
-          loadingProfile={patientLoading}
-          searchingPatients={patientSearching}
-          quota={quota}
-          cost={cost}
-          onSearchTermChange={setPatientSearchTerm}
-          onSearchPatients={() => void searchPatients()}
-          onSelectPatient={(patient) => void loadPatientProfile(patient.id || "")}
-          className="fixed inset-y-0 right-0 z-30 h-full w-[var(--right-panel-fixed-width)]"
-        />
-      ) : null}
-
       <div className="fixed bottom-4 left-4 z-40 lg:hidden">
         <Button type="button" variant="secondary" onClick={() => setMobileHistoryOpen(true)}>
           Lịch sử
-        </Button>
-      </div>
-
-      <div className="fixed bottom-4 right-4 z-40 xl:hidden">
-        <Button type="button" variant="primary" onClick={() => setMobilePanelOpen(true)}>
-          Mở panel bệnh nhân
         </Button>
       </div>
 
@@ -507,6 +525,10 @@ export function ChatPage() {
                 setMobileHistoryOpen(false);
               }}
               onExportHistory={(format) => setExportModal({ open: true, format })}
+              onOpenUsage={() => {
+                setActiveView("usage");
+                setMobileHistoryOpen(false);
+              }}
               onOpenAdmin={() => setAdminOpen(true)}
               onLogout={() => void logout()}
               className="h-[calc(100%-65px)] border-r-0"

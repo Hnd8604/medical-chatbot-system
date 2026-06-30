@@ -2,17 +2,16 @@ import unittest
 from fastapi import HTTPException
 
 from api.chat_routes import (
-    _detect_intent,
     _apply_selected_patient_context,
     _apply_context_reference_context,
     _answer_context_resource_if_applicable,
     _finalize_chat_response,
-    _observation_matches_type,
     _resolve_patient_id_for_tool,
-    _resolve_patient_id,
     chat,
     ChatRequest,
 )
+from chat.context_memory import _detect_intent, _resolve_patient_id
+from chat.resource_answerers import _observation_matches_type
 from agents.answer_generator import AnswerResult
 from agents.intent_extractor import (
     IntentPlan,

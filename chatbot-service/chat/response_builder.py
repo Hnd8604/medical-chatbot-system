@@ -1,4 +1,5 @@
 import contextvars
+import logging
 from typing import Any
 
 from agents.answer_generator import AnswerGenerator, combine_usage
@@ -6,6 +7,8 @@ from agents.intent_extractor import IntentPlan, has_patient_search_criteria
 from app.config import get_settings
 from services.semantic_cache import get_semantic_cache
 
+
+log = logging.getLogger(__name__)
 
 current_user_context = contextvars.ContextVar(
     "current_user_context",
@@ -102,8 +105,8 @@ async def _finalize_chat_response(
                 answer=answer_result.answer,
                 usage=total_usage
             )
-        except Exception as e:
-            print(f"Cache save error: {e}")
+        except Exception:
+            log.exception("Cache save error")
 
     if answer_result.reason:
         payload["answer_reason"] = answer_result.reason

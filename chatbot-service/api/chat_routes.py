@@ -18,31 +18,13 @@ from agents.intent_extractor import (
     is_self_patient_reference,
     normalize_patient_id,
 )
-from api.chat_schemas import ChatRequest, ConversationContext, RecentMessage
+from api.chat_schemas import ChatRequest
 from chat.cache_flow import get_cached_chat_payload
 from chat.context_memory import (
     _answer_context_resource_if_applicable,
     _apply_context_reference_context,
     _apply_selected_patient_context,
-    _canonical_resource_type,
-    _detect_intent,
-    _is_context_reference_question,
-    _normalize_single_resource,
-    _patient_id_from_resource,
     _patient_id_hint,
-    _resolve_patient_id,
-    _tool_for_resource_type,
-)
-from chat.formatters import (
-    _encounter_location_text,
-    _first_text,
-    _format_all_patient_answer,
-    _format_encounter,
-    _format_observation,
-    _format_patient_identity,
-    _format_patient_search_criteria,
-    _format_patient_summary,
-    _format_resource_summary,
 )
 from chat.resource_answerers import (
     _answer_all_patient_conditions,
@@ -55,28 +37,14 @@ from chat.resource_answerers import (
     _answer_observations,
     _answer_patient,
     _answer_patients,
-    _evidence,
-    _get_patients,
-    _observation_matches_type,
-    _patient_candidate,
-    _patient_selection_payload,
     _resolve_patient_id_for_tool,
-    _search_patients_for_plan,
-    _with_patient_context,
 )
-from chat.response_builder import (
-    _build_memory_update,
-    _evidence_refs,
-    _finalize_chat_response,
-    _memory_summary,
-    _with_plan_metadata,
-    _zero_usage,
-    current_user_context,
-)
-from chat.text_helpers import _contains_any, _display_vi, _gender_vi, _value_or_unknown
+from chat.response_builder import _finalize_chat_response, current_user_context
 from fhir.client import FhirClient, FhirClientError, get_fhir_client
 from services.semantic_cache import SemanticCacheService, get_semantic_cache
 
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
 
@@ -176,8 +144,8 @@ async def chat(
         cached_payload = await get_cached_chat_payload(request, cache_service)
         if cached_payload:
             return cached_payload
-    except Exception as exc:
-        print(f"Strict Cache read error: {exc}")
+    except Exception:
+        log.exception("Strict Cache read error")
 
     patient_hint = _patient_id_hint(request)
     plan = await intent_extractor.extract(

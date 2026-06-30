@@ -159,7 +159,7 @@ async def chat(
     _ensure_role_can_access_plan(request, plan)
     if not hasattr(model_router, "route"):
         model_router = get_model_router()
-    routed_model, complexity = model_router.route(request.message, plan)
+    routed_model, complexity = model_router.route(request.message, plan, request.quota_used_ratio)
 
     routing_kwargs = dict(model=routed_model, query_complexity=complexity.value)
 

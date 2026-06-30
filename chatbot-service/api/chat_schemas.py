@@ -27,3 +27,5 @@ class ChatRequest(BaseModel):
     allowed_patient_ids: list[str] = Field(default_factory=list)
     patient_scope: str | None = None
     conversation_context: ConversationContext | None = None
+
+    quota_used_ratio: float = Field(default=0.0, ge=0.0)

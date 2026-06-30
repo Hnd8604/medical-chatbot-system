@@ -51,8 +51,7 @@ public class QuotaService {
             ObjectMapper objectMapper,
             AlertService alertService,
             NotificationService notificationService,
-            CurrentUserService currentUserService
-    ) {
+            CurrentUserService currentUserService) {
         this(
                 userRepository,
                 quotaPolicyRepository,
@@ -62,8 +61,7 @@ public class QuotaService {
                 alertService,
                 notificationService,
                 ZoneId.systemDefault(),
-                currentUserService
-        );
+                currentUserService);
     }
 
     QuotaService(
@@ -75,8 +73,7 @@ public class QuotaService {
             AlertService alertService,
             NotificationService notificationService,
             ZoneId quotaZone,
-            CurrentUserService currentUserService
-    ) {
+            CurrentUserService currentUserService) {
         this.userRepository = userRepository;
         this.quotaPolicyRepository = quotaPolicyRepository;
         this.usageLogRepository = usageLogRepository;
@@ -97,8 +94,7 @@ public class QuotaService {
             AlertService alertService,
             NotificationService notificationService,
             CurrentUserService currentUserService,
-            ZoneId quotaZone
-    ) {
+            ZoneId quotaZone) {
         this(
                 userRepository,
                 quotaPolicyRepository,
@@ -108,8 +104,7 @@ public class QuotaService {
                 alertService,
                 notificationService,
                 quotaZone,
-                currentUserService
-        );
+                currentUserService);
     }
 
     public QuotaStatusResponse currentUserStatus() {
@@ -141,10 +136,20 @@ public class QuotaService {
                 "QUOTA_EXCEEDED",
                 AlertSeverity.WARNING,
                 "User " + userId + " bị chặn do: " + status.blockedReason(),
-                objectMapper.valueToTree(status)
-        );
+                objectMapper.valueToTree(status));
         logQuotaBlocked(userId, status);
         throw new QuotaExceededException(status.blockedReason(), status);
+    }
+
+    /**
+     * Tỷ lệ quota đã dùng trong ngày
+     */
+    public double currentUsedRatio(UUID userId) {
+        QuotaStatusResponse status = statusForUser(userId, null);
+        double requestRatio = ratio(status.usedRequests(), status.dailyRequestLimit());
+        double tokenRatio = ratio(status.usedTokens(), status.dailyTokenLimit());
+        double costRatio = ratio(status.usedCostUsd(), status.dailyCostLimitUsd());
+        return Math.max(requestRatio, Math.max(tokenRatio, costRatio));
     }
 
     @Cacheable(value = "rateLimitConfig", key = "#username")
@@ -160,16 +165,14 @@ public class QuotaService {
         QuotaPolicyInfo policy = quotaPolicyRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Không tìm thấy quota policy cho người dùng."
-                ));
+                        "Không tìm thấy quota policy cho người dùng."));
         ZonedDateTime now = ZonedDateTime.now(quotaZone);
         OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay(quotaZone).toOffsetDateTime();
         OffsetDateTime startOfNextDay = startOfDay.plusDays(1);
         QuotaUsageSummary usage = usageLogRepository.summarizeSuccessfulUsage(
                 userId,
                 startOfDay,
-                startOfNextDay
-        );
+                startOfNextDay);
 
         int usedTokens = usage.usedTokens();
         checkAndTriggerQuotaWarning(userId, policy, usage, usedTokens);
@@ -194,16 +197,14 @@ public class QuotaService {
                 remainingTokens,
                 remainingCost,
                 blockedReason == null,
-                blockedReason
-        );
+                blockedReason);
     }
 
     private UUID getUserIdByUsername(String username) {
         return userRepository.findIdByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
-                        "Không tìm thấy người dùng: " + username
-                ));
+                        "Không tìm thấy người dùng: " + username));
     }
 
     private String blockedReason(QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {
@@ -242,11 +243,11 @@ public class QuotaService {
                 "QUOTA_BLOCKED",
                 "app_user",
                 userId.toString(),
-                metadata
-        );
+                metadata);
     }
 
-    private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {
+    private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyInfo policy, QuotaUsageSummary usage,
+            int usedTokens) {
         double requestUsagePct = ratio(usage.usedRequests(), policy.dailyRequestLimit());
         double tokenUsagePct = ratio(usedTokens, policy.dailyTokenLimit());
 
@@ -258,14 +259,12 @@ public class QuotaService {
                 double maxPct = Math.max(requestUsagePct, tokenUsagePct);
                 String content = String.format(
                         "Hạn mức sử dụng hằng ngày của bạn đã đạt %.1f%%. Vui lòng sử dụng tiết kiệm.",
-                        maxPct * 100
-                );
+                        maxPct * 100);
                 notificationService.createNotification(
                         userId,
                         NotificationType.QUOTA_WARNING,
                         "Cảnh báo hạn mức sử dụng (Quota Warning)",
-                        content
-                );
+                        content);
             }
         } catch (Exception ex) {
             log.error("Failed to create quota warning notification for user {}", userId, ex);
@@ -277,5 +276,12 @@ public class QuotaService {
             return 0;
         }
         return (double) used / limit;
+    }
+
+    private double ratio(BigDecimal used, BigDecimal limit) {
+        if (used == null || limit == null || limit.signum() <= 0) {
+            return 0;
+        }
+        return used.doubleValue() / limit.doubleValue();
     }
 }

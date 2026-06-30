@@ -56,6 +56,7 @@ public class ChatApplicationService {
         User user = currentUserService.requireCurrentUser();
         UUID userId = user.getId();
         quotaService.assertQuotaAvailable(userId);
+        double quotaUsedRatio = quotaService.currentUsedRatio(userId);
         ChatSession session = null;
         ChatSessionMemory sessionMemory = null;
         if (request.sessionId() != null) {
@@ -95,7 +96,8 @@ public class ChatApplicationService {
                 effectivePatientId,
                 patientScope.allowedPatientIds(),
                 patientScope.patientScope(),
-                conversationContext
+                conversationContext,
+                quotaUsedRatio
         ));
         long latencyMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
 

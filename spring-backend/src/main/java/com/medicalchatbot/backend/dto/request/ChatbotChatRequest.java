@@ -26,6 +26,9 @@ public record ChatbotChatRequest(
         String patientScope,
 
         @JsonProperty("conversation_context")
-        ConversationContext conversationContext
+        ConversationContext conversationContext,
+
+        @JsonProperty("quota_used_ratio")
+        Double quotaUsedRatio
 ) {
 }

@@ -12,9 +12,29 @@ class QueryComplexity(str, Enum):
 
 
 _ANALYSIS_KEYWORDS = [
-    "phan tich", "giai thich", "so sanh", "xu huong", "dien bien",
-    "binh thuong khong", "nguy hiem", "danh gia", "canh bao", "nhan xet",
-    "co on khong", "y nghia", "tai sao",
+    # Phân tích / giải thích
+    "phan tich", "giai thich", "lam ro", "lam sao", "the nao", "nhu the nao",
+    "vi sao", "tai sao", "do la gi", "la gi", "y nghia", "co nghia la",
+    "hieu the nao", "noi ro", "chi tiet hon", "ro hon",
+    # So sánh / xu hướng / diễn biến
+    "so sanh", "doi chieu", "khac nhau", "khac biet", "chenh lech", "thay doi",
+    "xu huong", "dien bien", "tien trien", "tang giam", "tang hay giam",
+    "co tang khong", "co giam khong", "bien dong", "qua thoi gian", "theo thoi gian",
+    "lich su", "tien su",
+    # Đánh giá / nhận xét
+    "danh gia", "nhan xet", "nhan dinh", "ket luan", "tong hop", "tong ket",
+    "tom tat", "tom luoc", "tinh trang", "tinh hinh", "the trang", "suc khoe",
+    # Bình thường / nguy hiểm / cảnh báo
+    "binh thuong khong", "co binh thuong", "binh thuong hay khong",
+    "co on khong", "on khong", "co sao khong", "co nguy hiem khong",
+    "nguy hiem", "nguy co", "rui ro", "bat thuong", "co bat thuong",
+    "canh bao", "luu y", "dang lo", "co dang lo", "nghiem trong", "co nghiem trong",
+    "anh huong", "tac dong", "hau qua", "bien chung",
+    # Lời khuyên / khuyến nghị
+    "loi khuyen", "khuyen nghi", "khuyen", "nen lam gi", "can lam gi",
+    "phai lam gi", "co nen", "co can", "de nghi", "goi y", "huong dan",
+    "lam gi tiep", "buoc tiep theo", "xu ly the nao", "dieu tri the nao",
+    "phong ngua", "phong tranh", "cai thien", "khac phuc",
 ]
 
 _CONFIDENCE_THRESHOLD = 0.65

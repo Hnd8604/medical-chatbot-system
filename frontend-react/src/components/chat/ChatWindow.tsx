@@ -33,11 +33,9 @@ interface ChatWindowProps {
 function StarRating({
   value,
   onChange,
-  readOnly = false,
 }: {
   value: number;
   onChange?: (value: number) => void;
-  readOnly?: boolean;
 }) {
   const [hover, setHover] = useState(0);
   const active = hover || value;
@@ -48,11 +46,10 @@ function StarRating({
         <button
           key={star}
           type="button"
-          disabled={readOnly}
           aria-label={`${star} sao`}
-          className={cn("focus-ring rounded p-0.5", readOnly ? "cursor-default" : "cursor-pointer")}
-          onMouseEnter={() => !readOnly && setHover(star)}
-          onMouseLeave={() => !readOnly && setHover(0)}
+          className="focus-ring cursor-pointer rounded p-0.5"
+          onMouseEnter={() => setHover(star)}
+          onMouseLeave={() => setHover(0)}
           onClick={() => onChange?.(star)}
         >
           <Star className={cn("h-4 w-4 transition", star <= active ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
@@ -110,8 +107,10 @@ function MessageFeedbackControl({
     setError(null);
     try {
       await onDelete(message.id);
+      setOpen(false);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Không thể xóa đánh giá.");
+    } finally {
       setDeleting(false);
     }
   }
@@ -130,20 +129,16 @@ function MessageFeedbackControl({
               <Check className="h-3.5 w-3.5 shrink-0" />
               <span>Đã đánh giá</span>
             </span>
-            <StarRating value={existing.rating} readOnly />
+            <span className="flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  className={cn("h-4 w-4", star <= existing.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")}
+                />
+              ))}
+            </span>
             {existing.comment ? <span className="italic">“{existing.comment}”</span> : null}
           </button>
-          <button
-            type="button"
-            title="Xóa đánh giá"
-            disabled={deleting}
-            className="focus-ring inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium leading-none text-muted-foreground transition hover:text-danger disabled:opacity-50"
-            onClick={() => void handleDelete()}
-          >
-            <Trash2 className="h-3.5 w-3.5 shrink-0" />
-            <span>{deleting ? "Đang xóa..." : "Xóa"}</span>
-          </button>
-          {error ? <span className="text-danger">{error}</span> : null}
         </div>
       );
     }
@@ -192,6 +187,18 @@ function MessageFeedbackControl({
         >
           Hủy
         </Button>
+        {existing ? (
+          <button
+            type="button"
+            title="Xóa đánh giá"
+            disabled={deleting || submitting}
+            className="focus-ring ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium leading-none text-muted-foreground transition hover:text-danger disabled:opacity-50"
+            onClick={() => void handleDelete()}
+          >
+            <Trash2 className="h-3.5 w-3.5 shrink-0" />
+            <span>{deleting ? "Đang xóa..." : "Xóa"}</span>
+          </button>
+        ) : null}
       </div>
     </div>
   );

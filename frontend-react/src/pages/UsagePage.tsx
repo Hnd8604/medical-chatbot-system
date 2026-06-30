@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { todayIso } from "../services/api";
-import { useCostSummary, useQuotaStatus } from "../hooks/useUsage";
+import { apiGet, toQuery, todayIso } from "../services/api";
+import type { CostSummaryResponse, QuotaStatusResponse } from "../lib/types";
 import { formatDate, formatNumber, formatUsd, numericValue } from "../lib/formatters";
 import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/Spinner";
@@ -43,24 +43,33 @@ function remainingPercentage(remaining: number | string | null | undefined, limi
 }
 
 export function UsagePage() {
+  const [quota, setQuota] = useState<QuotaStatusResponse | null>(null);
+  const [cost, setCost] = useState<CostSummaryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const range = useMemo(() => ({ from: sevenDaysAgoIso(), to: todayIso() }), []);
 
-  const quotaQuery = useQuotaStatus();
-  const costQuery = useCostSummary(range);
-
-  const quota = quotaQuery.data;
-  const cost = costQuery.data;
-  // Đang tải lần đầu (chưa có dữ liệu cache nào).
-  const loading = quotaQuery.isPending || costQuery.isPending;
-  // Đang refetch khi bấm "Làm mới" (đã có dữ liệu, đang nạp lại nền).
-  const refreshing = quotaQuery.isFetching || costQuery.isFetching;
-  const queryError = quotaQuery.error ?? costQuery.error;
-  const error = queryError instanceof Error ? queryError.message : null;
-
-  function loadUsage() {
-    void quotaQuery.refetch();
-    void costQuery.refetch();
+  async function loadUsage() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [quotaData, costData] = await Promise.all([
+        apiGet<QuotaStatusResponse>("/api/quota/status"),
+        apiGet<CostSummaryResponse>(`/api/usage/cost-summary${toQuery(range)}`),
+      ]);
+      setQuota(quotaData);
+      setCost(costData);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Không thể tải dữ liệu usage.");
+    } finally {
+      setLoading(false);
+    }
   }
+
+  useEffect(() => {
+    void loadUsage();
+  }, []);
 
   const requestProgress = percentage(quota?.used_requests, quota?.daily_request_limit);
   const tokenProgress = percentage(quota?.used_tokens, quota?.daily_token_limit);
@@ -86,8 +95,8 @@ export function UsagePage() {
       title="Theo dõi mức sử dụng"
       description="Tổng hợp số request, token, chi phí ước tính và giới hạn trong ngày của tài khoản hiện tại."
       actions={
-        <Button type="button" variant="secondary" onClick={loadUsage} disabled={refreshing}>
-          {refreshing ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
+        <Button type="button" variant="secondary" onClick={() => void loadUsage()} disabled={loading}>
+          {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
           Làm mới
         </Button>
       }

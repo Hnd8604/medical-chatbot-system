@@ -1,0 +1,28 @@
+{
+  "env": {
+    "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.10"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(./mvnw.cmd test:*)",
+      "Bash(mvnw.cmd test:*)",
+      "Bash(python -m unittest:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm install:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker compose ls:*)",
+      "Bash(docker compose:*ps)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

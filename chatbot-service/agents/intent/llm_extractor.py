@@ -39,7 +39,7 @@ class LLMIntentExtractor:
 
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
         self.model = model
-        self.fallback = RuleBasedIntentExtractor()
+        self.fallback = RuleBasedIntentExtractor() # fallback về rulebase
 
     async def extract(self, message: str, provided_patient_id: str | None = None) -> IntentPlan:
         patient_id_hint = normalize_patient_id(provided_patient_id)

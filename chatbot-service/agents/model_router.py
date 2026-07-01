@@ -1,7 +1,6 @@
 from enum import Enum
 from functools import lru_cache
 
-from agents.intent.models import IntentPlan
 from agents.intent.text_utils import normalize_text
 
 
@@ -37,8 +36,6 @@ _ANALYSIS_KEYWORDS = [
     "phong ngua", "phong tranh", "cai thien", "khac phuc",
 ]
 
-_CONFIDENCE_THRESHOLD = 0.65
-
 _QUOTA_DOWNGRADE_RATIO = 0.8
 
 
@@ -50,21 +47,18 @@ class ModelRouter:
     def route(
         self,
         message: str,
-        plan: IntentPlan,
         quota_used_ratio: float = 0.0,
     ) -> tuple[str, QueryComplexity]:
-        complexity = self._classify(message, plan)
-   
+        complexity = self._classify(message)
+
         if complexity == QueryComplexity.COMPLEX and quota_used_ratio >= _QUOTA_DOWNGRADE_RATIO:
             return self.model_simple, complexity
         model = self.model_complex if complexity == QueryComplexity.COMPLEX else self.model_simple
         return model, complexity
 
-    def _classify(self, message: str, plan: IntentPlan) -> QueryComplexity:
+    def _classify(self, message: str) -> QueryComplexity:
         normalized = normalize_text(message)
         if any(kw in normalized for kw in _ANALYSIS_KEYWORDS):
-            return QueryComplexity.COMPLEX
-        if plan.confidence_score < _CONFIDENCE_THRESHOLD:
             return QueryComplexity.COMPLEX
         return QueryComplexity.SIMPLE
 

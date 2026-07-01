@@ -192,7 +192,6 @@ def _with_plan_metadata(payload: dict[str, Any], plan: IntentPlan) -> dict[str, 
     payload["usage"] = plan.usage
     payload["tool_name"] = plan.tool_name
     payload["intent_source"] = plan.source
-    payload["confidence_score"] = getattr(plan, "confidence_score", 1.0)
     payload["llm_provider"] = settings.llm_provider
     payload["llm_model"] = settings.model_simple
     if plan.all_patients:

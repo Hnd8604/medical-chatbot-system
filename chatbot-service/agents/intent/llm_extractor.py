@@ -30,7 +30,6 @@ from agents.intent.text_utils import normalize_birth_date
 import logging
 
 log = logging.getLogger(__name__)
-_LLM_CONFIDENCE = 0.92
 
 
 class LLMIntentExtractor:
@@ -117,7 +116,6 @@ class LLMIntentExtractor:
             provided_patient_id=provided_patient_id,
             usage=usage,
             source="llm",
-            confidence_score=_LLM_CONFIDENCE,
         )
         plan = enforce_patient_list_routing(message, plan)
         plan = apply_all_patient_scope(message, plan)
@@ -144,7 +142,6 @@ def _plan_from_tool_call(
     provided_patient_id: str | None,
     usage: dict[str, int | float],
     source: str,
-    confidence_score: float = _LLM_CONFIDENCE,
 ) -> IntentPlan:
     patient_id = normalize_patient_id(provided_patient_id) or normalize_patient_id(arguments.get("patient_id"))
 
@@ -179,5 +176,4 @@ def _plan_from_tool_call(
         reason=string_or_none(arguments.get("reason")),
         source=source,
         usage=usage,
-        confidence_score=confidence_score,
     )

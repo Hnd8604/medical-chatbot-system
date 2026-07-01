@@ -28,8 +28,6 @@ from agents.intent.vocabulary import (
     CONDITION_KEYWORDS,
 )
 
-_GUARDRAIL_CONFIDENCE_DISCOUNT = 0.85
-
 
 def enforce_contact_detail_routing(message: str, plan: IntentPlan) -> IntentPlan:
     if plan.tool_name == TOOL_GET_PATIENT:
@@ -43,7 +41,6 @@ def enforce_contact_detail_routing(message: str, plan: IntentPlan) -> IntentPlan
         tool_name=TOOL_GET_PATIENT,
         reason="Contact detail requests are routed to the Patient resource.",
         source=f"{plan.source}_guardrail",
-        confidence_score=round(plan.confidence_score * _GUARDRAIL_CONFIDENCE_DISCOUNT, 4),
     )
 
 
@@ -57,7 +54,6 @@ def enforce_patient_list_routing(message: str, plan: IntentPlan) -> IntentPlan:
         tool_name=TOOL_SEARCH_PATIENTS,
         reason="Patient list requests are routed to Patient search.",
         source=f"{plan.source}_guardrail",
-        confidence_score=round(plan.confidence_score * _GUARDRAIL_CONFIDENCE_DISCOUNT, 4),
     )
 
 
@@ -79,12 +75,10 @@ def apply_all_patient_scope(message: str, plan: IntentPlan) -> IntentPlan:
     if tool_name == TOOL_SEARCH_PATIENTS:
         return plan
 
-    tool_changed = tool_name != plan.tool_name
     return dataclasses.replace(
         plan,
         tool_name=tool_name,
         all_patients=True,
-        confidence_score=round(plan.confidence_score * _GUARDRAIL_CONFIDENCE_DISCOUNT, 4) if tool_changed else plan.confidence_score,
     )
 
 
@@ -104,7 +98,6 @@ def apply_patient_search_criteria_hint(message: str, plan: IntentPlan) -> Intent
         return plan
 
     tool_name = TOOL_SEARCH_PATIENTS if plan.tool_name == TOOL_GET_PATIENT else plan.tool_name
-    tool_changed = tool_name != plan.tool_name
     return dataclasses.replace(
         plan,
         tool_name=tool_name,
@@ -113,7 +106,6 @@ def apply_patient_search_criteria_hint(message: str, plan: IntentPlan) -> Intent
         search_birth_date=criteria.get("search_birth_date"),
         search_identifier=criteria.get("search_identifier"),
         source=f"{plan.source}_guardrail",
-        confidence_score=round(plan.confidence_score * _GUARDRAIL_CONFIDENCE_DISCOUNT, 4) if tool_changed else plan.confidence_score,
     )
 
 

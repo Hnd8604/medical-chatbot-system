@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.medicalchatbot.backend.entity.Notification;
 
 public record NotificationItem(
         UUID id,
@@ -15,4 +16,15 @@ public record NotificationItem(
         @JsonProperty("created_at")
         OffsetDateTime createdAt
 ) {
+
+    public static NotificationItem from(Notification notification) {
+        return new NotificationItem(
+                notification.getId(),
+                notification.getType().name(),
+                notification.getTitle(),
+                notification.getContent(),
+                notification.isRead(),
+                notification.getCreatedAt()
+        );
+    }
 }

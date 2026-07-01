@@ -24,7 +24,6 @@ class IntentPlan:
         "output_tokens": 0,
         "estimated_cost_usd": 0,
     })
-    confidence_score: float = 1.0
 
     @property
     def intent(self) -> str:

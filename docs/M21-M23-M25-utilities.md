@@ -102,7 +102,9 @@ Ba module tiện ích bổ trợ cho luồng hội thoại chính ([M2](M2-conve
 - `QuotaService` chỉ tạo quota warning nếu `!hasQuotaWarningBeenSentToday(userId)` → **chống gửi trùng trong ngày**.
 - Trạng thái đọc/chưa đọc: `is_read` + API `POST /api/notifications/{id}/read` và `POST /api/notifications/read-all`.
 - `markAsRead()` kiểm tra notification thuộc đúng user trước khi cập nhật (chống truy cập chéo).
-- Frontend `ChatPage` poll `GET /api/notifications` mỗi 60s và hiển thị badge số chưa đọc.
+- **Realtime qua SSE**: `NotificationService.createNotification()` push thông báo mới tới các tab
+  đang mở qua `GET /api/notifications/stream`; frontend `ChatPage` nhận và hiển thị badge tức thì
+  (thay cho polling 60s cũ). Chi tiết: [notification-sse-stream.md](notification-sse-stream.md).
 
 **Tiêu chí hoàn thành:** Người nhận thấy thông báo và đánh dấu đã đọc được.
 
@@ -143,12 +145,14 @@ Nguồn phát:
    QuotaService (khi usage chạm ngưỡng)
       if !hasQuotaWarningBeenSentToday(userId):
          createNotification(userId, QUOTA_WARNING, title, content)
-            → lưu notifications + (nếu có email) sendMockEmail() log
+            → lưu notifications
+            → notificationStreamService.publish(userId, item)   ← push SSE
+            → (nếu có email) sendMockEmail() log
 
-Tiêu thụ:
-   ChatPage poll mỗi 60s: GET /api/notifications
-      → NotificationController.getNotifications()
-         unreadCount + danh sách (mới nhất trước)
+Tiêu thụ (realtime, xem notification-sse-stream.md):
+   ChatPage mở EventSource: GET /api/notifications/stream?token=<jwt>
+      event "connected"    → loadNotifications() (baseline + resync sau reconnect)
+      event "notification" → prepend item + unread_count++ (dedupe theo id)
    User đọc: POST /api/notifications/{id}/read  (kiểm tra ownership)
              POST /api/notifications/read-all
 ```
@@ -163,8 +167,9 @@ Tiêu thụ:
 | M23 | API export | [ExportController](spring-backend/src/main/java/com/medicalchatbot/backend/controller/ExportController.java) |
 | M23 | PDF/CSV + audit | [ExportService](spring-backend/src/main/java/com/medicalchatbot/backend/service/ExportService.java) |
 | M23 | UI | [ChatPage.exportSession()](frontend-react/src/routes/ChatPage.tsx#L355-L367), `components/chat/ExportModal.tsx` |
-| M25 | API notification | [NotificationController](spring-backend/src/main/java/com/medicalchatbot/backend/controller/NotificationController.java) |
-| M25 | Tạo/đọc + mock email | [NotificationService](spring-backend/src/main/java/com/medicalchatbot/backend/service/NotificationService.java) |
+| M25 | API notification + SSE stream | [NotificationController](spring-backend/src/main/java/com/medicalchatbot/backend/controller/NotificationController.java) |
+| M25 | Tạo/đọc + mock email + push SSE | [NotificationService](spring-backend/src/main/java/com/medicalchatbot/backend/service/NotificationService.java) |
+| M25 | Registry emitter realtime | [NotificationStreamService](spring-backend/src/main/java/com/medicalchatbot/backend/service/NotificationStreamService.java) — xem [notification-sse-stream.md](notification-sse-stream.md) |
 | M25 | Phát quota warning | [QuotaService](spring-backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L254-L268) |
 
 ## Thành phần liên quan trong mã nguồn
@@ -174,5 +179,6 @@ Tiêu thụ:
 | Search/list session | `spring-backend/.../service/ChatApplicationService.java`, `.../repository/ChatSessionRepository.java` |
 | Export controller/service | `spring-backend/.../controller/ExportController.java`, `.../service/ExportService.java` |
 | Notification controller/service/entity | `spring-backend/.../controller/NotificationController.java`, `.../service/NotificationService.java`, `.../entity/Notification.java`, `.../enums/NotificationType.java` |
+| Realtime SSE (stream + client) | `spring-backend/.../service/NotificationStreamService.java`, `frontend-react/src/services/api.ts` (`openNotificationStream`) — xem `docs/notification-sse-stream.md` |
 | Phát notification (quota) | `spring-backend/.../service/QuotaService.java` |
 | UI search / export / notification | `frontend-react/src/routes/ChatPage.tsx`, `.../components/chat/{HistorySidebar,ExportModal}.tsx` |

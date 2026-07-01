@@ -8,13 +8,16 @@ import com.medicalchatbot.backend.dto.response.NotificationListResponse;
 import com.medicalchatbot.backend.entity.Notification;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.NotificationService;
+import com.medicalchatbot.backend.service.NotificationStreamService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequiredArgsConstructor
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final NotificationStreamService notificationStreamService;
     private final CurrentUserService currentUserService;
 
     private UUID getCurrentUserId() {
@@ -35,17 +39,16 @@ public class NotificationController {
         List<Notification> notifications = notificationService.getNotificationsForUser(userId);
 
         List<NotificationItem> items = notifications.stream()
-                .map(n -> new NotificationItem(
-                        n.getId(),
-                        n.getType().name(),
-                        n.getTitle(),
-                        n.getContent(),
-                        n.isRead(),
-                        n.getCreatedAt()
-                ))
+                .map(NotificationItem::from)
                 .toList();
 
         return new NotificationListResponse(unreadCount, items);
+    }
+
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream() {
+        UUID userId = getCurrentUserId();
+        return notificationStreamService.subscribe(userId);
     }
 
     @PostMapping("/{id}/read")

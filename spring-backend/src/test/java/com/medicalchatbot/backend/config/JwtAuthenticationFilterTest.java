@@ -125,14 +125,63 @@ class JwtAuthenticationFilterTest {
         verify(filterChain, never()).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void queryParamTokenAuthenticatesSseStream() throws Exception {
+        User user = user(
+                UUID.fromString("00000000-0000-0000-0000-000000000505"),
+                "doctor_demo",
+                UserRole.DOCTOR,
+                UserStatus.ACTIVE,
+                3
+        );
+        String token = tokenService(480).generateToken(user);
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/notifications/stream");
+        request.addParameter("token", token);
+        MockHttpServletResponse response = runFilter(request, tokenService(480));
+
+        assertEquals(200, response.getStatus());
+        assertInstanceOf(
+                AuthenticatedUser.class,
+                SecurityContextHolder.getContext().getAuthentication().getPrincipal()
+        );
+        verify(filterChain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void queryParamTokenIgnoredOnNonStreamPath() throws Exception {
+        String token = tokenService(480).generateToken(user(
+                UUID.fromString("00000000-0000-0000-0000-000000000506"),
+                "doctor_demo",
+                UserRole.DOCTOR,
+                UserStatus.ACTIVE,
+                0
+        ));
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/notifications");
+        request.addParameter("token", token);
+        MockHttpServletResponse response = runFilter(request, tokenService(480));
+
+        // Không có header Authorization và không phải path stream -> đi tiếp như request ẩn danh.
+        assertEquals(200, response.getStatus());
+        org.junit.jupiter.api.Assertions.assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(filterChain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
     private MockHttpServletResponse runFilter(String token, JwtTokenService jwtTokenService) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        return runFilter(request, jwtTokenService);
+    }
+
+    private MockHttpServletResponse runFilter(MockHttpServletRequest request, JwtTokenService jwtTokenService)
+            throws Exception {
         JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
                 jwtTokenService,
                 userRepository,
                 new SecurityErrorWriter(new ObjectMapper())
         );
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(request, response, filterChain);
         return response;

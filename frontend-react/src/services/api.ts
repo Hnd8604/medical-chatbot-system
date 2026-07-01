@@ -244,6 +244,38 @@ export async function apiDownload(path: string, filename: string): Promise<void>
   URL.revokeObjectURL(url);
 }
 
+// ----- SSE: stream thông báo realtime -----
+
+export interface NotificationStreamHandlers {
+  /** Kết nối (hoặc tự kết nối lại) thành công — nên resync bằng một lần load đầy đủ. */
+  onConnected?: () => void;
+  /** Có thông báo mới; data là JSON của NotificationItem. */
+  onNotification: (raw: string) => void;
+}
+
+/**
+ * Mở EventSource tới /api/notifications/stream. Vì EventSource không gửi được
+ * header Authorization, access token được đính kèm qua query param ?token=.
+ * Trả về hàm đóng kết nối (gọi khi unmount).
+ */
+export function openNotificationStream(handlers: NotificationStreamHandlers): () => void {
+  const token = getAccessToken();
+  if (!token) {
+    return () => {};
+  }
+  const url = `${API_BASE_URL}/api/notifications/stream?token=${encodeURIComponent(token)}`;
+  const source = new EventSource(url);
+
+  if (handlers.onConnected) {
+    source.addEventListener("connected", () => handlers.onConnected?.());
+  }
+  source.addEventListener("notification", (event) => {
+    handlers.onNotification((event as MessageEvent).data);
+  });
+
+  return () => source.close();
+}
+
 export function toQuery(params: Record<string, string | number | null | undefined>): string {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {

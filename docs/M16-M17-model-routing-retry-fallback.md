@@ -15,7 +15,7 @@ Cả hai bổ trợ cho [M6 (AI Integration)](M6-ai-integration.md).
 
 **Hành vi:**
 - `ModelRouter._classify()` trả `QueryComplexity.SIMPLE | COMPLEX`.
-- Coi là **COMPLEX** khi: tool thuộc `_COMPLEX_TOOLS` (`get_observations`, `get_conditions`), hoặc câu hỏi chứa từ khóa phân tích (`phân tích`, `giải thích`, `so sánh`, `xu hướng`, `nguy hiểm`, `interpret`, `analyze`...), hoặc `confidence_score < 0.65`.
+- Coi là **COMPLEX** khi câu hỏi chứa từ khóa phân tích (`phân tích`, `giải thích`, `so sánh`, `xu hướng`, `nguy hiểm`, `interpret`, `analyze`...).
 - Ngược lại là **SIMPLE** (vd patient lookup).
 
 **Tiêu chí hoàn thành:** Mỗi request có category rõ ràng (trả về kèm `query_complexity` trong metadata routing).
@@ -25,7 +25,8 @@ Cả hai bổ trợ cho [M6 (AI Integration)](M6-ai-integration.md).
 **Mục tiêu:** Chọn model phù hợp.
 
 **Hành vi:**
-- `ModelRouter.route()`: COMPLEX → `model_complex`, SIMPLE → `model_simple`.
+- `ModelRouter.route(message, quota_used_ratio)`: COMPLEX → `model_complex`, SIMPLE → `model_simple`.
+- **Hạ cấp theo quota:** khi COMPLEX nhưng `quota_used_ratio >= 0.8` (`_QUOTA_DOWNGRADE_RATIO`) thì vẫn dùng `model_simple` để tiết kiệm. `quota_used_ratio` do caller (`/chat`) truyền vào, mặc định `0.0`.
 - Model lấy từ settings: `model_simple` (mặc định `gpt-4o-mini`), `model_complex` (mặc định `gpt-4.1-mini`).
 - Model được chọn truyền xuống `AnswerGenerator.generate(model=...)` và phản ánh trong `usage_logs.llm_model` ([M7.3](M7-usage-tracking.md)).
 
@@ -81,10 +82,9 @@ Cả hai bổ trợ cho [M6 (AI Integration)](M6-ai-integration.md).
 
 ```
 M16 routing (mỗi request):
-   model_router.route(message, plan)
-      _classify → COMPLEX nếu (tool ∈ {observations, conditions})
-                            hoặc keyword phân tích
-                            hoặc confidence < 0.65
+   model_router.route(message, quota_used_ratio)
+      _classify → COMPLEX nếu keyword phân tích, ngược lại SIMPLE
+      COMPLEX + quota_used_ratio ≥ 0.8 → model_simple (hạ cấp)
       COMPLEX → model_complex   |   SIMPLE → model_simple
    → truyền model xuống AnswerGenerator → ghi vào usage_logs.llm_model
 

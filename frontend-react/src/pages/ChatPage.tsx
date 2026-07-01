@@ -1,7 +1,17 @@
 import { CSSProperties, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Navigate } from "react-router-dom";
-import { apiDelete, apiDownload, apiGet, apiPost, apiPut, ApiError, toQuery, todayIso } from "../services/api";
+import {
+  apiDelete,
+  apiDownload,
+  apiGet,
+  apiPost,
+  apiPut,
+  ApiError,
+  openNotificationStream,
+  toQuery,
+  todayIso,
+} from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import { isDateLike, isPhoneLike, normalizePatientId, resourceList } from "../lib/formatters";
 import type {
@@ -15,6 +25,7 @@ import type {
   FhirResource,
   MessageFeedback,
   MessageView,
+  NotificationItem,
   NotificationListResponse,
   PatientCandidate,
   QuotaStatusResponse,
@@ -168,13 +179,36 @@ export function ChatPage() {
   }, [loadSessions]);
 
   useEffect(() => {
-    void loadNotifications();
     void loadUsage();
-    const timer = window.setInterval(() => {
-      void loadNotifications();
-    }, 60000);
-    return () => window.clearInterval(timer);
-  }, [loadNotifications, loadUsage]);
+  }, [loadUsage]);
+
+  // Thông báo realtime qua SSE thay cho polling định kỳ.
+  // - "connected": kết nối/kết nối lại → load đầy đủ để resync (bắt kịp phần lỡ).
+  // - "notification": thêm item mới vào đầu danh sách và tăng số chưa đọc.
+  useEffect(() => {
+    void loadNotifications();
+    const close = openNotificationStream({
+      onConnected: () => {
+        void loadNotifications();
+      },
+      onNotification: (raw) => {
+        try {
+          const item = JSON.parse(raw) as NotificationItem;
+          setNotifications((prev) =>
+            prev.notifications.some((n) => n.id === item.id)
+              ? prev
+              : {
+                  unread_count: prev.unread_count + 1,
+                  notifications: [item, ...prev.notifications],
+                },
+          );
+        } catch {
+          // Payload lỗi định dạng: bỏ qua, lần "connected" kế tiếp sẽ resync.
+        }
+      },
+    });
+    return close;
+  }, [loadNotifications]);
 
   if (!user) {
     return <Navigate to="/login" replace />;

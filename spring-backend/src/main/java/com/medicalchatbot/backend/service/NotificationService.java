@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
+import com.medicalchatbot.backend.dto.response.NotificationItem;
 import com.medicalchatbot.backend.entity.Notification;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.NotificationType;
@@ -23,6 +24,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final NotificationStreamService notificationStreamService;
 
     @Transactional
     public Notification createNotification(UUID userId, NotificationType type, String title, String content) {
@@ -32,6 +34,9 @@ public class NotificationService {
         Notification notification = new Notification(user, type, title, content);
         Notification saved = notificationRepository.save(notification);
         log.info("Created notification for user {}: {} - {}", user.getUsername(), title, content);
+
+        // Đẩy realtime tới các tab đang mở của user qua SSE.
+        notificationStreamService.publish(userId, NotificationItem.from(saved));
 
         // M25.4 Mock Email support
         if (user.getEmail() != null && !user.getEmail().isBlank()) {

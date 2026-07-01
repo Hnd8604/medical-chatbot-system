@@ -66,7 +66,7 @@ Phân loại ý định (intent) câu hỏi y tế và tra cứu dữ liệu b�
 Câu hỏi tự nhiên (từ /chat của chatbot-service)
         ▼
 IntentExtractor.extract() → IntentPlan { tool_name, patient_id, observation_type,
-                                         all_patients, limit, confidence_score }
+                                         all_patients, limit }
         ▼
 Áp policy quyền: _apply_user_patient_scope / _ensure_role_can_access_plan
         ▼

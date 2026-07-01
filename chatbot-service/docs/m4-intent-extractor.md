@@ -80,21 +80,7 @@ class IntentPlan:
     reason: str | None       # lý do (dùng khi unsupported)
     source: str              # "rules" | "llm" | "*_guardrail"
     usage: dict              # token usage (input/output/cost)
-    confidence_score: float  # độ tin cậy (0.0 → 1.0)
 ```
-
-### confidence_score
-
-| Nguồn | Score | Ý nghĩa |
-|-------|-------|---------|
-| LLM (OpenAI) | 0.92 | LLM chọn tool thành công |
-| Rule: keyword + search criteria | 0.90 | Khớp keyword + có tên/SĐT/ngày sinh |
-| Rule: keyword đơn thuần | 0.85 | Chỉ khớp keyword |
-| Rule: all_patient_scope | 0.75 | Câu hỏi danh sách, không có keyword loại |
-| Rule: chỉ có search criteria | 0.70 | Không có keyword nhưng có tên/SĐT |
-| Rule: patient_info fallback | 0.65 | Chỉ khớp "benh nhan/patient" |
-| Guardrail override | score × 0.85 | Guardrail đã thay đổi tool_name |
-| Unsupported | 0.30 | Không phân loại được |
 
 ---
 
@@ -132,8 +118,6 @@ Các hàm hậu xử lý chạy sau khi extractor (cả LLM lẫn rule) trả v�
 | `apply_patient_search_criteria_hint` | Trích name/phone/birth_date còn thiếu |
 | `add_observation_type_hint` | Suy luận loại chỉ số cụ thể (glucose, spo2...) |
 
-Mỗi guardrail thay đổi `tool_name` sẽ discount `confidence_score × 0.85`.
-
 ---
 
 ## Từ vựng y tế (vocabulary.py)
@@ -168,7 +152,7 @@ File này có thể chỉnh sửa mà không cần hiểu code logic. Chỉ cầ
 
 ## API Response
 
-`POST /chat` trả thêm field `confidence_score`:
+`POST /chat` trả về intent metadata:
 
 ```json
 {
@@ -176,7 +160,6 @@ File này có thể chỉnh sửa mà không cần hiểu code logic. Chỉ cầ
   "intent": "medications",
   "tool_name": "get_medication_requests",
   "intent_source": "rules",
-  "confidence_score": 0.85,
   "patient_id": "demo-patient-001",
   "evidence": [...],
   "usage": {...}

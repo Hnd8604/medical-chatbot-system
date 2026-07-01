@@ -276,19 +276,17 @@ class ObservationUtilsTests(unittest.TestCase):
 
 class GuardrailTests(unittest.TestCase):
     def _base_plan(self, tool_name: str = TOOL_GET_MEDICATIONS, **kwargs) -> IntentPlan:
-        return IntentPlan(tool_name=tool_name, confidence_score=0.85, **kwargs)
+        return IntentPlan(tool_name=tool_name, **kwargs)
 
     def test_enforce_contact_detail_no_op_when_already_patient_tool(self):
         plan = self._base_plan(tool_name=TOOL_GET_PATIENT)
         result = enforce_contact_detail_routing("so dien thoai", plan)
         self.assertEqual(result.tool_name, TOOL_GET_PATIENT)
-        self.assertEqual(result.confidence_score, 0.85)
 
     def test_enforce_contact_detail_routes_to_patient_when_keyword_present(self):
         plan = self._base_plan(tool_name=TOOL_GET_MEDICATIONS)
         result = enforce_contact_detail_routing("so dien thoai cua benh nhan", plan)
         self.assertEqual(result.tool_name, TOOL_GET_PATIENT)
-        self.assertLess(result.confidence_score, 0.85)
 
     def test_enforce_contact_detail_no_op_when_has_search_criteria(self):
         plan = self._base_plan(tool_name=TOOL_GET_MEDICATIONS, search_name="Nguyen Van A")
@@ -299,13 +297,11 @@ class GuardrailTests(unittest.TestCase):
         plan = self._base_plan(tool_name=TOOL_GET_PATIENT)
         result = enforce_patient_list_routing("danh sach benh nhan", plan)
         self.assertEqual(result.tool_name, TOOL_SEARCH_PATIENTS)
-        self.assertLess(result.confidence_score, 0.85)
 
     def test_enforce_patient_list_no_op_when_already_search(self):
         plan = self._base_plan(tool_name=TOOL_SEARCH_PATIENTS)
         result = enforce_patient_list_routing("danh sach benh nhan", plan)
         self.assertEqual(result.tool_name, TOOL_SEARCH_PATIENTS)
-        self.assertEqual(result.confidence_score, 0.85)
 
     def test_apply_all_patient_scope_sets_flag(self):
         plan = self._base_plan(tool_name=TOOL_GET_MEDICATIONS)
@@ -332,12 +328,6 @@ class GuardrailTests(unittest.TestCase):
         result = add_observation_type_hint("huyet ap", plan)
         self.assertEqual(result.observation_type, "glucose")
 
-    def test_guardrail_discounts_confidence_when_tool_changes(self):
-        original_score = 0.92
-        plan = IntentPlan(tool_name=TOOL_GET_MEDICATIONS, confidence_score=original_score)
-        result = enforce_patient_list_routing("danh sach benh nhan", plan)
-        self.assertLess(result.confidence_score, original_score)
-
 
 # ---------------------------------------------------------------------------
 # RuleBasedExtractor
@@ -350,7 +340,6 @@ class RuleBasedExtractorTests(unittest.IsolatedAsyncioTestCase):
     async def test_medication_intent(self):
         plan = await self.extractor.extract("benh nhan dang dung thuoc gi")
         self.assertEqual(plan.tool_name, TOOL_GET_MEDICATIONS)
-        self.assertGreater(plan.confidence_score, 0.0)
 
     async def test_observation_intent_with_spo2(self):
         plan = await self.extractor.extract("spo2 cua benh nhan 1 la bao nhieu")
@@ -374,12 +363,11 @@ class RuleBasedExtractorTests(unittest.IsolatedAsyncioTestCase):
         plan = await self.extractor.extract("benh nhan co lich su cap cuu khong")
         self.assertEqual(plan.tool_name, TOOL_GET_ENCOUNTERS)
 
-    async def test_unsupported_returns_low_confidence(self):
+    async def test_unsupported_returns_unsupported_tool(self):
         plan = await self.extractor.extract("thoi tiet hom nay the nao")
         self.assertEqual(plan.tool_name, TOOL_UNSUPPORTED)
-        self.assertEqual(plan.confidence_score, 0.30)
 
-    async def test_all_intents_have_positive_confidence(self):
+    async def test_all_intents_resolve_supported_tool(self):
         messages = [
             "thuoc cua benh nhan 1",
             "huyet ap benh nhan 2",
@@ -389,17 +377,7 @@ class RuleBasedExtractorTests(unittest.IsolatedAsyncioTestCase):
         ]
         for msg in messages:
             plan = await self.extractor.extract(msg)
-            self.assertGreater(plan.confidence_score, 0.0, f"Failed for: {msg}")
-
-    async def test_medication_confidence_greater_than_unsupported(self):
-        med_plan = await self.extractor.extract("dang dung thuoc gi")
-        unsup_plan = await self.extractor.extract("xin chao")
-        self.assertGreater(med_plan.confidence_score, unsup_plan.confidence_score)
-
-    async def test_confidence_with_search_criteria_is_higher(self):
-        with_criteria = await self.extractor.extract("thuoc cua benh nhan Nguyen Van A")
-        without_criteria = await self.extractor.extract("benh nhan dung thuoc gi")
-        self.assertGreaterEqual(with_criteria.confidence_score, without_criteria.confidence_score)
+            self.assertNotEqual(plan.tool_name, TOOL_UNSUPPORTED, f"Failed for: {msg}")
 
 
 if __name__ == "__main__":

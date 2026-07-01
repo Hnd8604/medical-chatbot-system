@@ -44,13 +44,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
+        String token = resolveToken(request);
+        if (token == null) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        String token = authorization.substring(7).trim();
         if (token.isEmpty()) {
             securityErrorWriter.write(response, HttpStatus.UNAUTHORIZED.value(), "UNAUTHORIZED", "Token khong hop le.");
             return;
@@ -94,5 +92,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (JwtException | IllegalArgumentException ex) {
             securityErrorWriter.write(response, HttpStatus.UNAUTHORIZED.value(), "UNAUTHORIZED", "Token khong hop le.");
         }
+    }
+
+    /**
+     * Ưu tiên token từ header {@code Authorization: Bearer ...}. Trình duyệt không
+     * gửi được header cho {@code EventSource}, nên chỉ với endpoint SSE stream mới
+     * chấp nhận token qua query param {@code ?token=} (hạn chế lộ token trong log).
+     * Trả về {@code null} nếu không có token nào (request ẩn danh).
+     */
+    private String resolveToken(HttpServletRequest request) {
+        String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            return authorization.substring(7).trim();
+        }
+        if (isSseStreamRequest(request)) {
+            String tokenParam = request.getParameter("token");
+            if (tokenParam != null) {
+                return tokenParam.trim();
+            }
+        }
+        return null;
+    }
+
+    private boolean isSseStreamRequest(HttpServletRequest request) {
+        return "GET".equals(request.getMethod())
+                && request.getRequestURI().endsWith("/api/notifications/stream");
     }
 }

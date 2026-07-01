@@ -21,6 +21,7 @@ import com.medicalchatbot.backend.enums.NotificationType;
 import com.medicalchatbot.backend.config.JwtAuthenticationFilter;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.NotificationService;
+import com.medicalchatbot.backend.service.NotificationStreamService;
 import com.medicalchatbot.backend.service.QuotaService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class NotificationControllerTest {
 
     @MockitoBean
     private NotificationService notificationService;
+
+    @MockitoBean
+    private NotificationStreamService notificationStreamService;
 
     @MockitoBean
     private CurrentUserService currentUserService;

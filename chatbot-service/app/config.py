@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="openai")
     model_simple: str = Field(default="gpt-4o-mini")
     model_complex: str = Field(default="gpt-4.1-mini")
+    # LLM Router: model rẻ chuyên phân loại SIMPLE/COMPLEX; chỉ chạy khi enable_llm_router.
+    model_router: str = Field(default="gpt-4o-mini")
+    enable_llm_router: bool = Field(default=False)
     llm_request_timeout_seconds: float = Field(default=20)
     enable_llm_answer: bool = Field(default=True)
 

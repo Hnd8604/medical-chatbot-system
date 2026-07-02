@@ -17,6 +17,7 @@ Implemented:
 - Rule-based fallback intent extraction for local demos without an LLM gateway key.
 - LLM final answer generation from normalized FHIR evidence when `ENABLE_LLM_ANSWER=true`.
 - Template fallback answer generation when LLM answer generation is disabled or fails.
+- Model routing (M16): keyword classifier + cost-aware quota downgrade, plus optional hybrid LLM Router (`ENABLE_LLM_ROUTER=true`, `MODEL_ROUTER`) that confirms SIMPLE cases with a cheap model via the LiteLLM gateway, runs in parallel with intent extraction, caches classifications, and falls back to the keyword result on errors. Response exposes `query_complexity` and `routing_source`; router token usage is added to the combined `usage`. See `docs/M16-M17-model-routing-retry-fallback.md`.
 - Central FHIR HTTP client using HAPI FHIR REST APIs.
 - Normalizers that convert raw FHIR resources/Bundles into compact JSON for app and future LLM usage.
 - Unit tests for normalizers, FHIR client behavior with mocked HTTP transport, and intent extraction behavior.
@@ -59,11 +60,11 @@ Use these after the server starts:
 GET http://localhost:8000/health
 GET http://localhost:8000/fhir/status
 GET http://localhost:8000/patients?name=Nguyen&limit=5
-GET http://localhost:8000/patients/demo-patient-001
-GET http://localhost:8000/patients/demo-patient-005/encounters?limit=5
-GET http://localhost:8000/patients/demo-patient-001/observations?limit=5
-GET http://localhost:8000/patients/demo-patient-001/conditions
-GET http://localhost:8000/patients/demo-patient-001/medications
+GET http://localhost:8000/patients/BN2026-00001
+GET http://localhost:8000/patients/BN2026-00005/encounters?limit=5
+GET http://localhost:8000/patients/BN2026-00001/observations?limit=5
+GET http://localhost:8000/patients/BN2026-00001/conditions
+GET http://localhost:8000/patients/BN2026-00001/medications
 POST http://localhost:8000/chat
 ```
 
@@ -119,12 +120,12 @@ Chat responses now keep both a compact summary and detailed normalized FHIR data
 ```json
 {
   "resource_type": "Observation",
-  "id": "demo-hba1c-detailed-003",
+  "id": "OBS-2026-00002",
   "summary": "HbA1c",
   "data": {
     "status": "final",
     "effective_time": "2026-05-24T14:18:00+07:00",
-    "encounter": "Encounter/demo-encounter-004",
+    "encounter": "Encounter/ENC-2026-00004",
     "value": {"value": 7.2, "unit": "%"},
     "interpretation": [{"text": "High"}],
     "reference_range": [{"text": "Non-diabetes reference threshold."}],
@@ -146,10 +147,10 @@ app import: passed
 GET /health: passed
 GET /fhir/status: passed
 GET /patients?name=Nguyen&limit=5: passed
-GET /patients/demo-patient-001: passed
-GET /patients/demo-patient-001/observations?limit=5: passed
-GET /patients/demo-patient-001/conditions: passed
-GET /patients/demo-patient-001/medications: passed
+GET /patients/BN2026-00001: passed
+GET /patients/BN2026-00001/observations?limit=5: passed
+GET /patients/BN2026-00001/conditions: passed
+GET /patients/BN2026-00001/medications: passed
 POST /chat medication demo: passed
 LLM/tool-call intent extraction fallback: passed
 Chatbot service dev server: http://localhost:8000

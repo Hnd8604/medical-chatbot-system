@@ -59,7 +59,7 @@ class FakePatientSearchClient:
                 {
                     "resource": {
                         "resourceType": "Patient",
-                        "id": "demo-patient-001",
+                        "id": "BN2026-00001",
                         "name": [{"family": "Nguyen", "given": ["Van A"]}],
                         "gender": "male",
                         "birthDate": "2003-01-01",
@@ -69,7 +69,7 @@ class FakePatientSearchClient:
                 {
                     "resource": {
                         "resourceType": "Patient",
-                        "id": "demo-patient-006",
+                        "id": "BN2026-00006",
                         "name": [{"family": "Nguyen", "given": ["Van B"]}],
                         "gender": "male",
                         "birthDate": "2004-02-02",
@@ -104,7 +104,7 @@ class FakeResourceClient:
             "id": resource_id,
             "status": "final",
             "code": {"text": "Blood pressure"},
-            "subject": {"reference": "Patient/demo-patient-001"},
+            "subject": {"reference": "Patient/BN2026-00001"},
             "component": [
                 {
                     "code": {"text": "Systolic blood pressure"},
@@ -143,10 +143,10 @@ def make_request(**overrides) -> ChatRequest:
 
 class ChatRoutesTests(unittest.TestCase):
     def test_detects_medication_intent(self) -> None:
-        self.assertEqual(_detect_intent("Patient/demo-patient-001 has what medications?"), "medications")
+        self.assertEqual(_detect_intent("Patient/BN2026-00001 has what medications?"), "medications")
 
     def test_detects_vietnamese_observation_intent_without_accents(self) -> None:
-        self.assertEqual(_detect_intent("huyet ap cua demo-patient-001"), "observations")
+        self.assertEqual(_detect_intent("huyet ap cua BN2026-00001"), "observations")
 
     def test_detects_vietnamese_phone_as_patient_intent(self) -> None:
         self.assertEqual(_detect_intent("so dien thoai cua benh nhan 001"), "patient")
@@ -161,24 +161,24 @@ class ChatRoutesTests(unittest.TestCase):
         self.assertEqual(_detect_intent("lich su kham cua benh nhan 001"), "encounters")
 
     def test_resolves_patient_reference(self) -> None:
-        request = make_request(message="Show medications for Patient/demo-patient-001")
+        request = make_request(message="Show medications for Patient/BN2026-00001")
 
-        self.assertEqual(_resolve_patient_id(request), "demo-patient-001")
+        self.assertEqual(_resolve_patient_id(request), "BN2026-00001")
 
     def test_resolves_numbered_demo_patient(self) -> None:
         request = make_request(message="so dien thoai cua benh nhan 001")
 
-        self.assertEqual(_resolve_patient_id(request), "demo-patient-001")
+        self.assertEqual(_resolve_patient_id(request), "BN2026-00001")
 
     def test_resolves_message_patient_before_request_patient(self) -> None:
         request = ChatRequest(
             user_id="user-001",
             user_role="DOCTOR",
             message="so dien thoai cua benh nhan 004",
-            patient_id="demo-patient-001",
+            patient_id="BN2026-00001",
         )
 
-        self.assertEqual(_resolve_patient_id(request), "demo-patient-004")
+        self.assertEqual(_resolve_patient_id(request), "BN2026-00004")
 
     def test_matches_vietnamese_blood_pressure_observation_type(self) -> None:
         observation = {
@@ -209,23 +209,23 @@ class ChatRoutesTests(unittest.TestCase):
             user_id="user-001",
             user_role="DOCTOR",
             message="benh nhan do dang dung thuoc gi?",
-            conversation_context={"active_patient_id": "demo-patient-004"},
+            conversation_context={"active_patient_id": "BN2026-00004"},
         )
 
-        self.assertEqual(_resolve_patient_id(request), "demo-patient-004")
+        self.assertEqual(_resolve_patient_id(request), "BN2026-00004")
 
     def test_selected_patient_context_clears_search_criteria_for_resource_tool(self) -> None:
-        request = make_request(message="thuoc cua benh nhan Nguyen", patient_id="demo-patient-006")
+        request = make_request(message="thuoc cua benh nhan Nguyen", patient_id="BN2026-00006")
         plan = IntentPlan(
             tool_name=TOOL_GET_MEDICATIONS,
-            patient_id="demo-patient-006",
+            patient_id="BN2026-00006",
             search_name="Nguyen",
         )
 
         result = _apply_selected_patient_context(request, plan)
 
         self.assertEqual(result.tool_name, TOOL_GET_MEDICATIONS)
-        self.assertEqual(result.patient_id, "demo-patient-006")
+        self.assertEqual(result.patient_id, "BN2026-00006")
         self.assertIsNone(result.search_name)
 
     def test_context_reference_does_not_override_explicit_resource_intent(self) -> None:
@@ -234,12 +234,12 @@ class ChatRoutesTests(unittest.TestCase):
             user_role="DOCTOR",
             message="benh nhan do dang dung thuoc gi?",
             conversation_context={
-                "active_patient_id": "demo-patient-001",
+                "active_patient_id": "BN2026-00001",
                 "last_resource_type": "Observation",
                 "last_resource_id": "obs-1",
             },
         )
-        plan = IntentPlan(tool_name=TOOL_GET_MEDICATIONS, patient_id="demo-patient-001")
+        plan = IntentPlan(tool_name=TOOL_GET_MEDICATIONS, patient_id="BN2026-00001")
 
         result = _apply_context_reference_context(request, plan)
 
@@ -251,12 +251,12 @@ class ChatRoutesTests(unittest.TestCase):
             user_role="DOCTOR",
             message="chi so do co cao khong?",
             conversation_context={
-                "active_patient_id": "demo-patient-001",
+                "active_patient_id": "BN2026-00001",
                 "last_resource_type": "Observation",
                 "last_resource_id": "obs-1",
             },
         )
-        plan = IntentPlan(tool_name=TOOL_UNSUPPORTED, patient_id="demo-patient-001")
+        plan = IntentPlan(tool_name=TOOL_UNSUPPORTED, patient_id="BN2026-00001")
 
         result = _apply_context_reference_context(request, plan)
 
@@ -264,17 +264,17 @@ class ChatRoutesTests(unittest.TestCase):
         self.assertEqual(result.source, "rules_context_reference")
 
     def test_selected_patient_context_turns_contact_search_into_patient_lookup(self) -> None:
-        request = make_request(message="so dien thoai cua Nguyen", patient_id="demo-patient-006")
+        request = make_request(message="so dien thoai cua Nguyen", patient_id="BN2026-00006")
         plan = IntentPlan(
             tool_name=TOOL_SEARCH_PATIENTS,
-            patient_id="demo-patient-006",
+            patient_id="BN2026-00006",
             search_name="Nguyen",
         )
 
         result = _apply_selected_patient_context(request, plan)
 
         self.assertEqual(result.tool_name, TOOL_GET_PATIENT)
-        self.assertEqual(result.patient_id, "demo-patient-006")
+        self.assertEqual(result.patient_id, "BN2026-00006")
         self.assertIsNone(result.search_name)
 
 
@@ -301,14 +301,14 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
     async def test_user_role_can_access_own_linked_patient(self) -> None:
         request = make_request(
             user_role="USER",
-            patient_id="demo-patient-001",
-            allowed_patient_ids=["demo-patient-001"],
+            patient_id="BN2026-00001",
+            allowed_patient_ids=["BN2026-00001"],
             patient_scope="SELF",
             message="Toi dang dung thuoc gi?",
         )
         plan = IntentPlan(
             tool_name=TOOL_GET_MEDICATIONS,
-            patient_id="demo-patient-001",
+            patient_id="BN2026-00001",
             source="rules",
         )
 
@@ -320,15 +320,15 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
             cache_service=FakeCacheService(),
         )
 
-        self.assertEqual(payload["patient_id"], "demo-patient-001")
+        self.assertEqual(payload["patient_id"], "BN2026-00001")
         self.assertEqual(payload["tool_name"], TOOL_GET_MEDICATIONS)
         self.assertEqual(payload["answer_source"], "llm")
 
     async def test_user_self_profile_search_plan_is_rerouted_to_own_patient(self) -> None:
         request = make_request(
             user_role="USER",
-            patient_id="demo-patient-001",
-            allowed_patient_ids=["demo-patient-001"],
+            patient_id="BN2026-00001",
+            allowed_patient_ids=["BN2026-00001"],
             patient_scope="SELF",
             message="Thong tin ca nhan cua toi la gi?",
         )
@@ -346,15 +346,15 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
             cache_service=FakeCacheService(),
         )
 
-        self.assertEqual(payload["patient_id"], "demo-patient-001")
+        self.assertEqual(payload["patient_id"], "BN2026-00001")
         self.assertEqual(payload["tool_name"], TOOL_GET_PATIENT)
         self.assertEqual(payload["intent"], "patient")
 
     async def test_user_self_phone_search_plan_is_rerouted_to_own_patient(self) -> None:
         request = make_request(
             user_role="USER",
-            patient_id="demo-patient-001",
-            allowed_patient_ids=["demo-patient-001"],
+            patient_id="BN2026-00001",
+            allowed_patient_ids=["BN2026-00001"],
             patient_scope="SELF",
             message="So dien thoai cua toi la gi?",
         )
@@ -372,20 +372,20 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
             cache_service=FakeCacheService(),
         )
 
-        self.assertEqual(payload["patient_id"], "demo-patient-001")
+        self.assertEqual(payload["patient_id"], "BN2026-00001")
         self.assertEqual(payload["tool_name"], TOOL_GET_PATIENT)
 
     async def test_user_role_is_blocked_for_other_patient(self) -> None:
         request = make_request(
             user_role="USER",
-            patient_id="demo-patient-001",
-            allowed_patient_ids=["demo-patient-001"],
+            patient_id="BN2026-00001",
+            allowed_patient_ids=["BN2026-00001"],
             patient_scope="SELF",
-            message="Thuoc cua Patient/demo-patient-002",
+            message="Thuoc cua Patient/BN2026-00002",
         )
         plan = IntentPlan(
             tool_name=TOOL_GET_MEDICATIONS,
-            patient_id="demo-patient-002",
+            patient_id="BN2026-00002",
             source="rules",
         )
 
@@ -422,7 +422,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
     async def test_ambiguous_patient_resolution_returns_candidates_without_llm(self) -> None:
         plan = IntentPlan(
             tool_name=TOOL_GET_MEDICATIONS,
-            patient_id="demo-patient-001",
+            patient_id="BN2026-00001",
             search_name="Nguyen",
             source="rules",
         )
@@ -437,7 +437,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result["needs_patient_selection"])
         self.assertEqual(len(result["patient_candidates"]), 2)
-        self.assertEqual(result["patient_candidates"][0]["id"], "demo-patient-001")
+        self.assertEqual(result["patient_candidates"][0]["id"], "BN2026-00001")
         self.assertEqual(result["answer_source"], "template_patient_selection")
         self.assertEqual(result["pending_question"], "thuoc cua benh nhan Nguyen")
         self.assertIn("Tìm thấy nhiều bệnh nhân phù hợp", result["answer"])
@@ -460,13 +460,13 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         payload = {
             "answer": "Template answer",
             "intent": "observations",
-            "patient_id": "demo-patient-003",
+            "patient_id": "BN2026-00003",
             "evidence": [{"resource_type": "Observation", "id": "obs-1", "summary": "HbA1c"}],
             "usage": {"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0},
         }
         plan = IntentPlan(
             tool_name=TOOL_GET_OBSERVATIONS,
-            patient_id="demo-patient-003",
+            patient_id="BN2026-00003",
             source="llm",
             usage={"input_tokens": 10, "output_tokens": 3, "estimated_cost_usd": 0},
         )
@@ -483,7 +483,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["answer_usage"]["input_tokens"], 20)
         self.assertEqual(result["usage"]["input_tokens"], 30)
         self.assertEqual(result["tool_name"], TOOL_GET_OBSERVATIONS)
-        self.assertEqual(result["memory_update"]["active_patient_id"], "demo-patient-003")
+        self.assertEqual(result["memory_update"]["active_patient_id"], "BN2026-00003")
         self.assertEqual(result["memory_update"]["last_resource_type"], "Observation")
         self.assertEqual(result["memory_update"]["last_resource_id"], "obs-1")
 
@@ -493,32 +493,32 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
             user_role="DOCTOR",
             message="chi so do co cao khong?",
             conversation_context={
-                "active_patient_id": "demo-patient-001",
+                "active_patient_id": "BN2026-00001",
                 "last_resource_type": "Observation",
                 "last_resource_id": "obs-1",
             },
         )
         plan = IntentPlan(
             tool_name=TOOL_GET_OBSERVATIONS,
-            patient_id="demo-patient-001",
+            patient_id="BN2026-00001",
             source="rules_context_reference",
         )
 
         payload = await _answer_context_resource_if_applicable(FakeResourceClient(), request, plan)
 
         self.assertIsNotNone(payload)
-        self.assertEqual(payload["patient_id"], "demo-patient-001")
+        self.assertEqual(payload["patient_id"], "BN2026-00001")
         self.assertEqual(payload["evidence"][0]["resource_type"], "Observation")
         self.assertEqual(payload["evidence"][0]["id"], "obs-1")
 
     async def test_rule_based_extractor_returns_fhir_tool_plan(self) -> None:
         plan = await RuleBasedIntentExtractor().extract(
-            "What medications is Patient/demo-patient-001 taking?"
+            "What medications is Patient/BN2026-00001 taking?"
         )
 
         self.assertEqual(plan.tool_name, TOOL_GET_MEDICATIONS)
         self.assertEqual(plan.intent, "medications")
-        self.assertEqual(plan.patient_id, "demo-patient-001")
+        self.assertEqual(plan.patient_id, "BN2026-00001")
         self.assertEqual(plan.source, "rules")
 
     async def test_rule_based_extractor_routes_phone_to_patient_tool(self) -> None:
@@ -526,17 +526,17 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(plan.tool_name, TOOL_GET_PATIENT)
         self.assertEqual(plan.intent, "patient")
-        self.assertEqual(plan.patient_id, "demo-patient-001")
+        self.assertEqual(plan.patient_id, "BN2026-00001")
 
     async def test_rule_based_extractor_routes_self_profile_to_patient_tool(self) -> None:
         plan = await RuleBasedIntentExtractor().extract(
             "Thong tin ca nhan cua toi la gi?",
-            provided_patient_id="demo-patient-001",
+            provided_patient_id="BN2026-00001",
         )
 
         self.assertEqual(plan.tool_name, TOOL_GET_PATIENT)
         self.assertEqual(plan.intent, "patient")
-        self.assertEqual(plan.patient_id, "demo-patient-001")
+        self.assertEqual(plan.patient_id, "BN2026-00001")
 
     async def test_rule_based_extractor_routes_patient_list(self) -> None:
         plan = await RuleBasedIntentExtractor().extract("danh sach benh nhan hien co")
@@ -587,7 +587,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(plan.tool_name, TOOL_GET_ENCOUNTERS)
         self.assertEqual(plan.intent, "encounters")
-        self.assertEqual(plan.patient_id, "demo-patient-005")
+        self.assertEqual(plan.patient_id, "BN2026-00005")
 
     async def test_rule_based_extractor_routes_all_patient_encounters(self) -> None:
         plan = await RuleBasedIntentExtractor().extract("lich su kham cua tat ca benh nhan")
@@ -598,7 +598,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
     def test_guardrail_routes_phone_to_patient_tool(self) -> None:
         plan = IntentPlan(
             tool_name=TOOL_GET_CONDITIONS,
-            patient_id="demo-patient-001",
+            patient_id="BN2026-00001",
             source="llm",
             usage={"input_tokens": 10, "output_tokens": 4, "estimated_cost_usd": 0},
         )
@@ -610,7 +610,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(routed.source, "llm_guardrail")
 
     def test_guardrail_routes_patient_list_tool(self) -> None:
-        plan = IntentPlan(tool_name=TOOL_GET_PATIENT, patient_id="demo-patient-001", source="llm")
+        plan = IntentPlan(tool_name=TOOL_GET_PATIENT, patient_id="BN2026-00001", source="llm")
 
         routed = enforce_patient_list_routing("liet ke tat ca benh nhan", plan)
 
@@ -619,7 +619,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(routed.source, "llm_guardrail")
 
     def test_all_patient_scope_changes_patient_list_to_medications(self) -> None:
-        plan = IntentPlan(tool_name=TOOL_SEARCH_PATIENTS, patient_id="demo-patient-001", source="llm")
+        plan = IntentPlan(tool_name=TOOL_SEARCH_PATIENTS, patient_id="BN2026-00001", source="llm")
 
         routed = apply_all_patient_scope("tat ca benh nhan dang dung thuoc gi", plan)
 
@@ -627,28 +627,28 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(routed.all_patients)
 
     def test_observation_type_hint_handles_vietnamese_blood_pressure(self) -> None:
-        plan = IntentPlan(tool_name=TOOL_GET_OBSERVATIONS, patient_id="demo-patient-001", source="llm")
+        plan = IntentPlan(tool_name=TOOL_GET_OBSERVATIONS, patient_id="BN2026-00001", source="llm")
 
         routed = add_observation_type_hint("huyet ap cua benh nhan 001", plan)
 
         self.assertEqual(routed.observation_type, "blood_pressure")
 
     def test_patient_id_hint_overrides_llm_default_when_message_has_number(self) -> None:
-        plan = IntentPlan(tool_name=TOOL_GET_PATIENT, patient_id="demo-patient-001", source="llm")
+        plan = IntentPlan(tool_name=TOOL_GET_PATIENT, patient_id="BN2026-00001", source="llm")
 
         routed = apply_patient_id_hint("so dien thoai cua benh nhan 004", None, plan)
 
-        self.assertEqual(routed.patient_id, "demo-patient-004")
+        self.assertEqual(routed.patient_id, "BN2026-00004")
 
     def test_patient_id_hint_prefers_message_over_provided_field(self) -> None:
-        plan = IntentPlan(tool_name=TOOL_GET_PATIENT, patient_id="demo-patient-001", source="llm")
+        plan = IntentPlan(tool_name=TOOL_GET_PATIENT, patient_id="BN2026-00001", source="llm")
 
-        routed = apply_patient_id_hint("so dien thoai cua benh nhan 004", "demo-patient-001", plan)
+        routed = apply_patient_id_hint("so dien thoai cua benh nhan 004", "BN2026-00001", plan)
 
-        self.assertEqual(routed.patient_id, "demo-patient-004")
+        self.assertEqual(routed.patient_id, "BN2026-00004")
 
     def test_patient_search_criteria_hint_adds_name_to_llm_plan(self) -> None:
-        plan = IntentPlan(tool_name=TOOL_GET_MEDICATIONS, patient_id="demo-patient-001", source="llm")
+        plan = IntentPlan(tool_name=TOOL_GET_MEDICATIONS, patient_id="BN2026-00001", source="llm")
 
         routed = apply_patient_search_criteria_hint("thuoc cua benh nhan Thi B Tran", plan)
 
@@ -660,17 +660,17 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         plan = plan_from_tool_call(
             tool_name=TOOL_GET_OBSERVATIONS,
             arguments={
-                "patient_id": "demo-patient-from-llm",
+                "patient_id": "BN2026-from-llm",
                 "observation_type": "glucose",
                 "limit": 100,
             },
-            provided_patient_id="demo-patient-001",
+            provided_patient_id="BN2026-00001",
             usage={"input_tokens": 10, "output_tokens": 5, "estimated_cost_usd": 0},
             source="llm",
         )
 
         self.assertEqual(plan.tool_name, TOOL_GET_OBSERVATIONS)
-        self.assertEqual(plan.patient_id, "demo-patient-001")
+        self.assertEqual(plan.patient_id, "BN2026-00001")
         self.assertEqual(plan.observation_type, "glucose")
         self.assertEqual(plan.limit, 20)
         self.assertEqual(plan.source, "llm")

@@ -151,7 +151,7 @@ class TextUtilsTests(unittest.TestCase):
         self.assertNotIn("kham", result)
 
     def test_normalize_patient_id_strips_fhir_prefix(self):
-        self.assertEqual(normalize_patient_id("Patient/demo-patient-001"), "demo-patient-001")
+        self.assertEqual(normalize_patient_id("Patient/BN2026-00001"), "BN2026-00001")
 
     def test_normalize_patient_id_returns_none_for_empty(self):
         self.assertIsNone(normalize_patient_id(""))
@@ -163,23 +163,23 @@ class TextUtilsTests(unittest.TestCase):
 
 class PatientUtilsTests(unittest.TestCase):
     def test_resolve_explicit_patient_id_from_fhir_reference(self):
-        result = resolve_explicit_patient_id("lay thong tin Patient/demo-patient-002")
-        self.assertEqual(result, "demo-patient-002")
+        result = resolve_explicit_patient_id("lay thong tin Patient/BN2026-00002")
+        self.assertEqual(result, "BN2026-00002")
 
     def test_resolve_explicit_patient_id_from_numbered_patient(self):
         result = resolve_explicit_patient_id("benh nhan so 3 dang dung thuoc gi")
-        self.assertEqual(result, "demo-patient-003")
+        self.assertEqual(result, "BN2026-00003")
 
     def test_resolve_explicit_patient_id_returns_none_when_absent(self):
         self.assertIsNone(resolve_explicit_patient_id("benh nhan nguyen van a"))
 
     def test_resolve_patient_id_for_request_prefers_message_id(self):
-        result = resolve_patient_id_for_request("Patient/demo-patient-005", provided_patient_id="demo-patient-001")
-        self.assertEqual(result, "demo-patient-005")
+        result = resolve_patient_id_for_request("Patient/BN2026-00005", provided_patient_id="BN2026-00001")
+        self.assertEqual(result, "BN2026-00005")
 
     def test_resolve_patient_id_for_request_falls_back_to_provided(self):
-        result = resolve_patient_id_for_request("thuoc gi", provided_patient_id="demo-patient-002")
-        self.assertEqual(result, "demo-patient-002")
+        result = resolve_patient_id_for_request("thuoc gi", provided_patient_id="BN2026-00002")
+        self.assertEqual(result, "BN2026-00002")
 
     def test_resolve_patient_id_for_request_returns_none_without_context(self):
         result = resolve_patient_id_for_request("thuoc gi")
@@ -310,12 +310,12 @@ class GuardrailTests(unittest.TestCase):
 
     def test_apply_patient_id_hint_overrides_missing_context(self):
         plan = self._base_plan(tool_name=TOOL_GET_PATIENT, patient_id=None)
-        result = apply_patient_id_hint("", "demo-patient-003", plan)
-        self.assertEqual(result.patient_id, "demo-patient-003")
+        result = apply_patient_id_hint("", "BN2026-00003", plan)
+        self.assertEqual(result.patient_id, "BN2026-00003")
 
     def test_apply_patient_id_hint_no_op_when_already_correct(self):
-        plan = self._base_plan(tool_name=TOOL_GET_PATIENT, patient_id="demo-patient-003")
-        result = apply_patient_id_hint("", "demo-patient-003", plan)
+        plan = self._base_plan(tool_name=TOOL_GET_PATIENT, patient_id="BN2026-00003")
+        result = apply_patient_id_hint("", "BN2026-00003", plan)
         self.assertIs(result, plan)
 
     def test_add_observation_type_hint_sets_blood_pressure(self):

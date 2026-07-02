@@ -5,6 +5,7 @@ import {
   apiDelete,
   apiDownload,
   apiGet,
+  apiPatch,
   apiPost,
   apiPut,
   ApiError,
@@ -13,6 +14,7 @@ import {
   todayIso,
 } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
+import { TEXT } from "../lib/constants";
 import { isDateLike, isPhoneLike, normalizePatientId, resourceList } from "../lib/formatters";
 import type {
   ChatMessageItem,
@@ -20,6 +22,7 @@ import type {
   ChatRequestBody,
   ChatResponse,
   ChatSessionListResponse,
+  ChatSessionRenameResponse,
   ChatSessionSummary,
   CostSummaryResponse,
   FhirResource,
@@ -38,6 +41,7 @@ import { ExportModal } from "../components/chat/ExportModal";
 import { AdminUsersModal } from "../components/chat/AdminUsersModal";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
+import { Modal } from "../components/ui/Modal";
 
 interface PatientProfileData {
   patient: FhirResource | null;
@@ -74,7 +78,7 @@ function patientSearchPath(term: string) {
   if (!value) {
     return null;
   }
-  if (/^(Patient\/)?demo-patient-|^(Patient\/)?[A-Za-z0-9.-]{6,}$/i.test(value) && !value.includes(" ")) {
+  if (/^(Patient\/)?[A-Za-z0-9.-]{6,}$/i.test(value) && !value.includes(" ")) {
     return `/api/patients/${encodeURIComponent(normalizePatientId(value) || value)}`;
   }
   if (isPhoneLike(value)) {
@@ -115,6 +119,8 @@ export function ChatPage() {
   const [cost, setCost] = useState<CostSummaryResponse | null>(null);
   const [exportModal, setExportModal] = useState<{ open: boolean; format: "pdf" | "csv" }>({ open: false, format: "pdf" });
   const [adminOpen, setAdminOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ChatSessionSummary | null>(null);
+  const [deletingSession, setDeletingSession] = useState(false);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -287,6 +293,44 @@ export function ChatPage() {
     setCurrentSessionId(null);
     setLastResponse(null);
     setMessages([]);
+  }
+
+  async function renameSession(session: ChatSessionSummary, title: string) {
+    const previous = sessions;
+    // Cập nhật lạc quan để UI phản hồi tức thì; hoàn tác nếu gọi API thất bại.
+    setSessions((current) => current.map((item) => (item.id === session.id ? { ...item, title } : item)));
+    try {
+      const updated = await apiPatch<ChatSessionRenameResponse>(
+        `/api/chat/sessions/${encodeURIComponent(session.id)}`,
+        { title },
+      );
+      setSessions((current) =>
+        current.map((item) => (item.id === session.id ? { ...item, title: updated.title } : item)),
+      );
+    } catch (error) {
+      setSessions(previous);
+      await handleError(error, "Không thể đổi tên hội thoại.");
+    }
+  }
+
+  async function confirmDeleteSession() {
+    if (!deleteTarget) {
+      return;
+    }
+    const target = deleteTarget;
+    setDeletingSession(true);
+    try {
+      await apiDelete(`/api/chat/sessions/${encodeURIComponent(target.id)}`);
+      setSessions((current) => current.filter((item) => item.id !== target.id));
+      if (currentSessionId === target.id) {
+        newChat();
+      }
+      setDeleteTarget(null);
+    } catch (error) {
+      await handleError(error, "Không thể xóa hội thoại.");
+    } finally {
+      setDeletingSession(false);
+    }
   }
 
   async function submitMessage(
@@ -517,6 +561,8 @@ export function ChatPage() {
           onRefresh={() => void loadSessions()}
           onNewChat={newChat}
           onSelectSession={(session) => void selectSession(session)}
+          onRenameSession={(session, title) => void renameSession(session, title)}
+          onDeleteSession={(session) => setDeleteTarget(session)}
           onExportHistory={(format) => setExportModal({ open: true, format })}
           onOpenUsage={() => setActiveView("usage")}
           onOpenAdmin={() => setAdminOpen(true)}
@@ -558,6 +604,8 @@ export function ChatPage() {
                 void selectSession(session);
                 setMobileHistoryOpen(false);
               }}
+              onRenameSession={(session, title) => void renameSession(session, title)}
+              onDeleteSession={(session) => setDeleteTarget(session)}
               onExportHistory={(format) => setExportModal({ open: true, format })}
               onOpenUsage={() => {
                 setActiveView("usage");
@@ -607,6 +655,32 @@ export function ChatPage() {
         onError={setGlobalError}
       />
       <AdminUsersModal open={adminOpen} onClose={() => setAdminOpen(false)} onError={setGlobalError} />
+
+      <Modal
+        open={deleteTarget !== null}
+        title="Xóa hội thoại"
+        description="Hành động này không thể hoàn tác."
+        size="sm"
+        onClose={() => {
+          if (!deletingSession) {
+            setDeleteTarget(null);
+          }
+        }}
+      >
+        <p className="text-sm text-foreground">
+          Bạn có chắc muốn xóa hội thoại{" "}
+          <strong>“{deleteTarget?.title || "Hội thoại chưa đặt tên"}”</strong>? Toàn bộ tin nhắn trong hội thoại sẽ bị
+          xóa vĩnh viễn.
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deletingSession}>
+            {TEXT.cancel}
+          </Button>
+          <Button type="button" variant="danger" onClick={() => void confirmDeleteSession()} disabled={deletingSession}>
+            {deletingSession ? "Đang xóa..." : TEXT.deleteSession}
+          </Button>
+        </div>
+      </Modal>
     </main>
   );
 }

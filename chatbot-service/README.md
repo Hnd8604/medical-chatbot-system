@@ -40,6 +40,11 @@ LITELLM_BASE_URL=http://localhost:4000
 LITELLM_MASTER_KEY=sk-local-dev
 LLM_REQUEST_TIMEOUT_SECONDS=20
 ENABLE_LLM_ANSWER=true
+
+# LLM Router: dùng model rẻ phân loại câu hỏi SIMPLE/COMPLEX (hybrid với keyword).
+# Mặc định false → chỉ dùng keyword classifier.
+ENABLE_LLM_ROUTER=false
+MODEL_ROUTER=gpt-4o-mini
 ```
 
 Provider API keys (`OPENAI_API_KEY`, `GROQ_API_KEY`) live only in `infra/litellm/.env`.
@@ -63,7 +68,7 @@ After FHIR retrieval, `agents/answer_generator.py` can call the LLM again with o
 
 - `GET /health`
 - `GET /fhir/status`
-- `GET /patients?name=Nguyen&phone=0900000001&birth_date=2003-01-01&identifier=DEMO-001&limit=20`
+- `GET /patients?name=Nguyen&phone=0900000001&birth_date=2003-01-01&identifier=BN2026-00001&limit=20`
 - `GET /patients/{patient_id}`
 - `GET /patients/{patient_id}/encounters?limit=5`
 - `GET /patients/{patient_id}/observations?limit=5`
@@ -74,15 +79,15 @@ After FHIR retrieval, `agents/answer_generator.py` can call the LLM again with o
 Demo patient:
 
 ```text
-demo-patient-001
+BN2026-00001
 ```
 
 Demo chat request:
 
 ```powershell
 $body = @{
-  message = "What medications is Patient/demo-patient-001 taking?"
-  patient_id = "demo-patient-001"
+  message = "What medications is Patient/BN2026-00001 taking?"
+  patient_id = "BN2026-00001"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Uri "http://localhost:8000/chat" -Method Post -ContentType "application/json" -Body $body

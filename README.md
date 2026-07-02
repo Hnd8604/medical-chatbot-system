@@ -502,8 +502,8 @@ Demo chat request:
 
 ```powershell
 $body = @{
-  message = "Bệnh nhân demo-patient-001 đang dùng thuốc gì?"
-  patient_id = "demo-patient-001"
+  message = "Bệnh nhân BN2026-00001 đang dùng thuốc gì?"
+  patient_id = "BN2026-00001"
 } | ConvertTo-Json
 
 Invoke-RestMethod `
@@ -547,11 +547,11 @@ Examples:
 
 ```http
 GET /fhir/metadata
-GET /fhir/Patient/demo-patient-001
-GET /fhir/Observation?patient=Patient/demo-patient-001&_sort=-date&_count=5
-GET /fhir/Encounter?patient=Patient/demo-patient-001&_sort=-date&_count=5
-GET /fhir/Condition?patient=Patient/demo-patient-001
-GET /fhir/MedicationRequest?patient=Patient/demo-patient-001
+GET /fhir/Patient/BN2026-00001
+GET /fhir/Observation?patient=Patient/BN2026-00001&_sort=-date&_count=5
+GET /fhir/Encounter?patient=Patient/BN2026-00001&_sort=-date&_count=5
+GET /fhir/Condition?patient=Patient/BN2026-00001
+GET /fhir/MedicationRequest?patient=Patient/BN2026-00001
 ```
 
 ## Demo Data
@@ -577,12 +577,12 @@ python infra/hapi-fhir/scripts/check_connection.py
 Demo patient IDs:
 
 ```text
-demo-patient-001
-demo-patient-002
-demo-patient-003
-demo-patient-004
-demo-patient-005
-demo-patient-006
+BN2026-00001
+BN2026-00002
+BN2026-00003
+BN2026-00004
+BN2026-00005
+BN2026-00006
 ```
 
 ## Token, Cost Và Quota

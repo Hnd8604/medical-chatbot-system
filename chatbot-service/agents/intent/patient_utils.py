@@ -81,16 +81,18 @@ def resolve_explicit_patient_id(message: str) -> str | None:
     if patient_ref:
         return patient_ref.group(1)
 
-    demo_id = re.search(r"\bdemo-patient-[A-Za-z0-9.-]+\b", message, flags=re.IGNORECASE)
-    if demo_id:
-        return demo_id.group(0)
+    # Ma ho so benh nhan thuc te, vd BN2026-00005.
+    record_id = re.search(r"\bBN\d{4}-\d{5}\b", message, flags=re.IGNORECASE)
+    if record_id:
+        return record_id.group(0).upper()
 
+    # Cho phep tra cuu ngan gon "benh nhan 5" -> BN2026-00005.
     numbered_patient = re.search(
         r"\b(?:patient|benh\s+nhan)\s*(?:so\s*)?[-#:]?\s*0*([1-9][0-9]*)\b",
         normalize_text(message),
         flags=re.IGNORECASE,
     )
     if numbered_patient:
-        return f"demo-patient-{int(numbered_patient.group(1)):03d}"
+        return f"BN2026-{int(numbered_patient.group(1)):05d}"
 
     return None

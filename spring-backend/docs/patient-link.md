@@ -1,13 +1,13 @@
 # Chức năng Liên kết User ↔ Bệnh nhân FHIR (`app_user_patient_links`)
 
 Tài liệu mô tả bảng `app_user_patient_links` — "cây cầu" nối **tài khoản app**
-(`app_users`) với **hồ sơ bệnh nhân FHIR** (`Patient/demo-patient-xxx` bên HAPI),
+(`app_users`) với **hồ sơ bệnh nhân FHIR** (`Patient/BN2026-xxx` bên HAPI),
 và cách nó được dùng để **kiểm soát quyền truy cập dữ liệu y tế**.
 
 > **Vì sao cần?** Tài khoản đăng nhập và hồ sơ y tế là hai thứ tách rời. User
 > `le_hoa` nằm trong Postgres app; còn dữ liệu khám bệnh của cô ấy nằm trên HAPI
-> FHIR dưới ID `demo-patient-007`. Bảng này khẳng định: *user `le_hoa` được phép
-> xem hồ sơ `demo-patient-007`*. Postgres app **không** lưu dữ liệu lâm sàng, chỉ
+> FHIR dưới ID `BN2026-00007`. Bảng này khẳng định: *user `le_hoa` được phép
+> xem hồ sơ `BN2026-00007`*. Postgres app **không** lưu dữ liệu lâm sàng, chỉ
 > giữ *liên kết* qua cột `fhir_patient_id` (xem [m12-database-erd.md](m12-database-erd.md)).
 
 ---
@@ -21,7 +21,7 @@ entity JPA tại [UserPatientLink.java](../src/main/java/com/medicalchatbot/back
 |---|---|---|
 | `id` | uuid | Khóa chính |
 | `user_id` | uuid → `app_users(id)` | Tài khoản app nào (xóa user → xóa link, `on delete cascade`) |
-| `fhir_patient_id` | varchar(100) | Hồ sơ FHIR nào, vd `demo-patient-007` |
+| `fhir_patient_id` | varchar(100) | Hồ sơ FHIR nào, vd `BN2026-00007` |
 | `relationship` | varchar(50) | Quan hệ: `SELF` \| `DEPENDENT` \| `CAREGIVER` (có `CHECK`) |
 | `is_primary` | boolean | Hồ sơ mặc định khi user không nói rõ đang hỏi về ai |
 | `created_at` / `updated_at` | timestamptz | Thời điểm tạo / cập nhật |
@@ -40,9 +40,9 @@ entity JPA tại [UserPatientLink.java](../src/main/java/com/medicalchatbot/back
 
 | Giá trị | Nghĩa | Ví dụ |
 |---|---|---|
-| `SELF` | Hồ sơ của chính user | `le_hoa` ↔ `demo-patient-007` |
+| `SELF` | Hồ sơ của chính user | `le_hoa` ↔ `BN2026-00007` |
 | `DEPENDENT` | Người phụ thuộc | Phụ huynh xem hồ sơ con |
-| `CAREGIVER` | Người chăm sóc / **theo dõi** người khác | Bác sĩ `dr_ngo` "theo dõi" `demo-patient-013` |
+| `CAREGIVER` | Người chăm sóc / **theo dõi** người khác | Bác sĩ `dr_ngo` "theo dõi" `BN2026-00013` |
 
 ---
 
@@ -81,9 +81,9 @@ rõ bệnh nhân, hệ thống lấy hồ sơ primary (sắp xếp `primaryLink 
    `SELF`, `is_primary = true`, kèm kiểm tra hồ sơ chưa thuộc về user khác
    ([AuthService.java:190-195](../src/main/java/com/medicalchatbot/backend/service/AuthService.java#L190-L195)).
 2. **Seed migration** — dữ liệu demo:
-   - [V12](../src/main/resources/db/migration/V12__create_user_patient_links.sql): `user_demo` ↔ `demo-patient-001` (SELF).
-   - [V17 mục 3](../src/main/resources/db/migration/V17__seed_additional_users_and_enterprise_tier.sql#L45-L62): 8 user thường ↔ `demo-patient-007..016` (SELF, primary).
-   - [V17 mục 4](../src/main/resources/db/migration/V17__seed_additional_users_and_enterprise_tier.sql#L64-L75): 2 bác sĩ `dr_ngo`/`dr_ly` "theo dõi" `demo-patient-013`/`014` (CAREGIVER, không primary).
+   - [V12](../src/main/resources/db/migration/V12__create_user_patient_links.sql): `user_demo` ↔ `BN2026-00001` (SELF).
+   - [V17 mục 3](../src/main/resources/db/migration/V17__seed_additional_users_and_enterprise_tier.sql#L45-L62): 8 user thường ↔ `BN2026-00007..016` (SELF, primary).
+   - [V17 mục 4](../src/main/resources/db/migration/V17__seed_additional_users_and_enterprise_tier.sql#L64-L75): 2 bác sĩ `dr_ngo`/`dr_ly` "theo dõi" `BN2026-00013`/`014` (CAREGIVER, không primary).
 
 > **`on conflict ... do update`** trong seed chỉ để migration chạy lại không lỗi
 > (idempotent): link đã tồn tại thì cập nhật thay vì báo trùng khóa.

@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import replace
 from typing import Any
 import logging
@@ -147,21 +148,28 @@ async def chat(
     except Exception:
         log.exception("Strict Cache read error")
 
+    if not hasattr(model_router, "route"):
+        model_router = get_model_router()
+
+    # Router chỉ cần message + quota nên chạy song song với intent extraction,
+    # LLM Router (nếu bật) gần như không cộng thêm latency.
     patient_hint = _patient_id_hint(request)
-    plan = await intent_extractor.extract(
-        request.message,
-        provided_patient_id=patient_hint,
+    plan, routing = await asyncio.gather(
+        intent_extractor.extract(request.message, provided_patient_id=patient_hint),
+        model_router.route(request.message, request.quota_used_ratio),
     )
     plan = _apply_user_patient_scope(request, plan)
     plan = _apply_selected_patient_context(request, plan)
     plan = _apply_context_reference_context(request, plan)
     plan = _apply_user_patient_scope(request, plan)
     _ensure_role_can_access_plan(request, plan)
-    if not hasattr(model_router, "route"):
-        model_router = get_model_router()
-    routed_model, complexity = model_router.route(request.message, request.quota_used_ratio)
 
-    routing_kwargs = dict(model=routed_model, query_complexity=complexity.value)
+    routing_kwargs = dict(
+        model=routing.model,
+        query_complexity=routing.complexity.value,
+        routing_source=routing.source,
+        router_usage=routing.usage,
+    )
 
     try:
         context_payload = await _answer_context_resource_if_applicable(client, request, plan)

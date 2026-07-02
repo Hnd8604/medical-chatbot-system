@@ -100,8 +100,8 @@ class ChatApplicationServiceTest {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000601");
         ChatSession session = new ChatSession(sessionId);
         session.applyMemory(new ChatSessionMemory(
-                "demo-patient-001",
-                "Da xem huyet ap cua demo-patient-001.",
+                "BN2026-00001",
+                "Da xem huyet ap cua BN2026-00001.",
                 "observations",
                 "get_observations",
                 "Observation",
@@ -113,7 +113,7 @@ class ChatApplicationServiceTest {
                   "answer": "Theo du lieu FHIR...",
                   "intent": "medications",
                   "tool_name": "get_medication_requests",
-                  "patient_id": "demo-patient-001",
+                  "patient_id": "BN2026-00001",
                   "evidence": [
                     {
                       "resource_type": "MedicationRequest",
@@ -122,12 +122,12 @@ class ChatApplicationServiceTest {
                     }
                   ],
                   "memory_update": {
-                    "active_patient_id": "demo-patient-001",
+                    "active_patient_id": "BN2026-00001",
                     "last_intent": "medications",
                     "last_tool_name": "get_medication_requests",
                     "last_resource_type": "MedicationRequest",
                     "last_resource_id": "med-1",
-                    "summary": "Da xem thuoc cua demo-patient-001.",
+                    "summary": "Da xem thuoc cua BN2026-00001.",
                     "evidence_refs": [
                       {
                         "resource_type": "MedicationRequest",
@@ -168,18 +168,18 @@ class ChatApplicationServiceTest {
         ChatbotChatRequest chatbotRequest = requestCaptor.getValue();
 
         assertEquals("DOCTOR", chatbotRequest.userRole());
-        assertEquals("demo-patient-001", chatbotRequest.patientId());
+        assertEquals("BN2026-00001", chatbotRequest.patientId());
         assertEquals(List.of(), chatbotRequest.allowedPatientIds());
         assertEquals("STAFF", chatbotRequest.patientScope());
-        assertEquals("demo-patient-001", chatbotRequest.conversationContext().activePatientId());
+        assertEquals("BN2026-00001", chatbotRequest.conversationContext().activePatientId());
         assertEquals("Observation", chatbotRequest.conversationContext().lastResourceType());
         assertEquals(2, chatbotRequest.conversationContext().recentMessages().size());
-        assertEquals("demo-patient-001", result.patientId());
+        assertEquals("BN2026-00001", result.patientId());
 
         ArgumentCaptor<ChatSessionMemory> memoryCaptor = ArgumentCaptor.forClass(ChatSessionMemory.class);
         verify(chatSessionRepository).updateMemory(org.mockito.ArgumentMatchers.eq(session), memoryCaptor.capture());
         ChatSessionMemory savedMemory = memoryCaptor.getValue();
-        assertEquals("demo-patient-001", savedMemory.activePatientId());
+        assertEquals("BN2026-00001", savedMemory.activePatientId());
         assertEquals("medications", savedMemory.lastIntent());
         assertEquals("MedicationRequest", savedMemory.lastResourceType());
         assertEquals("med-1", savedMemory.lastResourceId());
@@ -191,8 +191,8 @@ class ChatApplicationServiceTest {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000602");
         ChatSession session = new ChatSession(sessionId);
         session.applyMemory(new ChatSessionMemory(
-                "demo-patient-001",
-                "Da xem huyet ap cua demo-patient-001.",
+                "BN2026-00001",
+                "Da xem huyet ap cua BN2026-00001.",
                 "observations",
                 "get_observations",
                 "Observation",
@@ -235,7 +235,7 @@ class ChatApplicationServiceTest {
         ArgumentCaptor<ChatSessionMemory> memoryCaptor = ArgumentCaptor.forClass(ChatSessionMemory.class);
         verify(chatSessionRepository).updateMemory(org.mockito.ArgumentMatchers.eq(session), memoryCaptor.capture());
         ChatSessionMemory savedMemory = memoryCaptor.getValue();
-        assertEquals("demo-patient-001", savedMemory.activePatientId());
+        assertEquals("BN2026-00001", savedMemory.activePatientId());
         assertEquals("Observation", savedMemory.lastResourceType());
         assertEquals("obs-1", savedMemory.lastResourceId());
     }
@@ -293,10 +293,10 @@ class ChatApplicationServiceTest {
                   "answer": "Thuoc cua toi...",
                   "intent": "medications",
                   "tool_name": "get_medication_requests",
-                  "patient_id": "demo-patient-001",
+                  "patient_id": "BN2026-00001",
                   "evidence": [],
                   "memory_update": {
-                    "active_patient_id": "demo-patient-001"
+                    "active_patient_id": "BN2026-00001"
                   },
                   "usage": {
                     "input_tokens": 0,
@@ -307,7 +307,7 @@ class ChatApplicationServiceTest {
                 """);
 
         when(currentUserService.requireCurrentUser()).thenReturn(user);
-        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("BN2026-00001"));
         when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
         when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
@@ -320,8 +320,8 @@ class ChatApplicationServiceTest {
         ChatbotChatRequest chatbotRequest = requestCaptor.getValue();
 
         assertEquals("USER", chatbotRequest.userRole());
-        assertEquals("demo-patient-001", chatbotRequest.patientId());
-        assertEquals(List.of("demo-patient-001"), chatbotRequest.allowedPatientIds());
+        assertEquals("BN2026-00001", chatbotRequest.patientId());
+        assertEquals(List.of("BN2026-00001"), chatbotRequest.allowedPatientIds());
         assertEquals("SELF", chatbotRequest.patientScope());
     }
 
@@ -334,11 +334,11 @@ class ChatApplicationServiceTest {
         ChatApplicationService service = newService();
 
         when(currentUserService.requireCurrentUser()).thenReturn(user);
-        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+        when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("BN2026-00001"));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> service.chat(new ChatRequest(null, "demo-patient-002", "Thuoc cua Patient/demo-patient-002"))
+                () -> service.chat(new ChatRequest(null, "BN2026-00002", "Thuoc cua Patient/BN2026-00002"))
         );
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
@@ -414,7 +414,7 @@ class ChatApplicationServiceTest {
                 "Recent chat",
                 OffsetDateTime.parse("2026-06-01T10:00:00Z"),
                 OffsetDateTime.parse("2026-06-01T10:05:00Z"),
-                "demo-patient-001",
+                "BN2026-00001",
                 2,
                 "Latest answer"
         );
@@ -438,7 +438,7 @@ class ChatApplicationServiceTest {
                 "Medication chat",
                 OffsetDateTime.parse("2026-06-02T10:00:00Z"),
                 OffsetDateTime.parse("2026-06-02T10:05:00Z"),
-                "demo-patient-002",
+                "BN2026-00002",
                 4,
                 "Amlodipine"
         );

@@ -69,7 +69,7 @@ Kết quả của mỗi lần phân loại intent:
 @dataclass(frozen=True)
 class IntentPlan:
     tool_name: str           # tên FHIR tool sẽ gọi
-    patient_id: str          # FHIR patient ID (default: "demo-patient-001")
+    patient_id: str          # FHIR patient ID (default: "BN2026-00001")
     search_name: str | None  # tên bệnh nhân trích từ câu hỏi
     search_phone: str | None # số điện thoại trích từ câu hỏi
     search_birth_date: str | None  # ngày sinh (ISO YYYY-MM-DD)
@@ -160,7 +160,7 @@ File này có thể chỉnh sửa mà không cần hiểu code logic. Chỉ cầ
   "intent": "medications",
   "tool_name": "get_medication_requests",
   "intent_source": "rules",
-  "patient_id": "demo-patient-001",
+  "patient_id": "BN2026-00001",
   "evidence": [...],
   "usage": {...}
 }

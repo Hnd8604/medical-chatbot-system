@@ -53,12 +53,14 @@ async def _finalize_chat_response(
     *,
     model: str | None = None,
     query_complexity: str | None = None,
+    routing_source: str | None = None,
+    router_usage: dict[str, int | float] | None = None,
 ) -> dict[str, Any]:
     payload = _with_plan_metadata(payload, plan)
     if payload.get("needs_patient_selection"):
         payload["answer_source"] = "template_patient_selection"
         payload["answer_usage"] = _zero_usage()
-        payload["usage"] = combine_usage(plan.usage)
+        payload["usage"] = combine_usage(plan.usage, router_usage)
         payload.setdefault("patient_id", None)
         payload["pending_question"] = question
         return payload
@@ -86,6 +88,8 @@ async def _finalize_chat_response(
         payload["llm_provider"] = provider
     if query_complexity:
         payload["query_complexity"] = query_complexity
+    if routing_source:
+        payload["routing_source"] = routing_source
 
     if answer_result.source == "llm":
         try:
@@ -94,7 +98,8 @@ async def _finalize_chat_response(
 
             total_usage = combine_usage(
                 plan.usage,
-                answer_result.usage
+                answer_result.usage,
+                router_usage,
             )
 
             await cache_svc.save_to_cache(
@@ -110,7 +115,7 @@ async def _finalize_chat_response(
 
     if answer_result.reason:
         payload["answer_reason"] = answer_result.reason
-    payload["usage"] = combine_usage(plan.usage, answer_result.usage)
+    payload["usage"] = combine_usage(plan.usage, answer_result.usage, router_usage)
     memory_update = _build_memory_update(payload, plan)
     if memory_update:
         payload["memory_update"] = memory_update

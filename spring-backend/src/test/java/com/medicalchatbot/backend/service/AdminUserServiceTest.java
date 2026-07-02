@@ -97,7 +97,7 @@ class AdminUserServiceTest {
         User user = user(UUID.fromString("00000000-0000-0000-0000-000000000405"), "user_demo", UserRole.USER, UserStatus.ACTIVE);
         UserPatientLink link = UserPatientLink.builder()
                 .user(user)
-                .fhirPatientId("demo-patient-001")
+                .fhirPatientId("BN2026-00001")
                 .relationship("SELF")
                 .primaryLink(true)
                 .build();
@@ -111,7 +111,7 @@ class AdminUserServiceTest {
         assertEquals(1, response.users().size());
         AdminUserItemResponse item = response.users().get(0);
         assertEquals(1, item.patientLinks().size());
-        assertEquals("demo-patient-001", item.patientLinks().get(0).fhirPatientId());
+        assertEquals("BN2026-00001", item.patientLinks().get(0).fhirPatientId());
         assertEquals("SELF", item.patientLinks().get(0).relationship());
     }
 

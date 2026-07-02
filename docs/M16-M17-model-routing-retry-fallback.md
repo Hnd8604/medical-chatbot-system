@@ -9,24 +9,59 @@ Cả hai bổ trợ cho [M6 (AI Integration)](M6-ai-integration.md).
 
 # M16. Model Routing
 
+Ba kỹ thuật routing được áp dụng chồng lên nhau:
+
+| Kỹ thuật | Cơ chế | Trạng thái |
+|---|---|---|
+| Classifier Router | Keyword tiếng Việt (không dấu) → SIMPLE/COMPLEX, zero cost | Luôn bật |
+| LLM Router | Model rẻ (`MODEL_ROUTER`) phân loại qua tool call, hybrid với keyword | Bật qua `ENABLE_LLM_ROUTER=true` |
+| Cost-aware Routing | Quota gần cạn → hạ cấp COMPLEX xuống `model_simple` | Luôn bật, áp sau khi phân loại |
+
 ## M16.1 - Phân loại request
 
 **Mục tiêu:** Biết request đơn giản hay phức tạp.
 
-**Hành vi:**
+**Hành vi (Classifier Router — keyword):**
 - `ModelRouter._classify()` trả `QueryComplexity.SIMPLE | COMPLEX`.
 - Coi là **COMPLEX** khi câu hỏi chứa từ khóa phân tích (`phân tích`, `giải thích`, `so sánh`, `xu hướng`, `nguy hiểm`, `interpret`, `analyze`...).
 - Ngược lại là **SIMPLE** (vd patient lookup).
 
 **Tiêu chí hoàn thành:** Mỗi request có category rõ ràng (trả về kèm `query_complexity` trong metadata routing).
 
+## M16.1b - LLM Router (hybrid)
+
+**Mục tiêu:** Bắt được câu hỏi phức tạp mà keyword bỏ sót (recall thấp), vẫn giữ chi phí thấp.
+
+**Hành vi (`LLMModelRouter.route()`):**
+1. **Fast-path keyword:** keyword classifier nói COMPLEX → tin luôn (precision cao), **không** gọi LLM → `routing_source = "keyword"`.
+2. Keyword nói SIMPLE → gọi model rẻ (`MODEL_ROUTER`, mặc định `gpt-4o-mini`) qua **LiteLLM gateway** với tool `classify_complexity` (`tool_choice` ép buộc, `temperature=0`) để xác nhận lại → `routing_source = "llm_router"`.
+3. **Fallback:** LLM lỗi/timeout/kết quả không hợp lệ → dùng kết quả keyword (`routing_source = "keyword"`), không chặn request.
+4. **Cache phân loại:** kết quả LLM được cache theo `normalize_text(message)` (LRU in-memory, tối đa 512 entry) — cùng câu hỏi (kể cả khác dấu tiếng Việt) không gọi LLM lần hai.
+
+**Latency:** router chạy **song song với intent extraction** (`asyncio.gather` trong `/chat`) nên LLM Router gần như không cộng thêm độ trễ (call intent extraction thường chậm hơn).
+
+**Usage:** token của router call trả về trong `RoutingDecision.usage` và được cộng vào `usage` tổng của response (`combine_usage(plan.usage, answer_usage, router_usage)`) để Spring ghi usage log đúng ([M7](M7-usage-tracking.md)).
+
+**Cấu hình (`chatbot-service/.env`):**
+
+```env
+ENABLE_LLM_ROUTER=false   # bật LLM Router (cần LITELLM_MASTER_KEY)
+MODEL_ROUTER=gpt-4o-mini  # model rẻ chuyên phân loại
+```
+
+- Không có `LITELLM_MASTER_KEY` hoặc `ENABLE_LLM_ROUTER=false` → factory `build_model_router()` trả keyword router như cũ.
+
+**Trường response liên quan:** `query_complexity` (`simple|complex`), `routing_source` (`keyword|llm_router`).
+
+**Tiêu chí hoàn thành:** Câu hỏi suy luận không chứa keyword vẫn được route sang `model_complex`; LLM router lỗi không làm hỏng request.
+
 ## M16.2 - Routing rule
 
 **Mục tiêu:** Chọn model phù hợp.
 
 **Hành vi:**
-- `ModelRouter.route(message, quota_used_ratio)`: COMPLEX → `model_complex`, SIMPLE → `model_simple`.
-- **Hạ cấp theo quota:** khi COMPLEX nhưng `quota_used_ratio >= 0.8` (`_QUOTA_DOWNGRADE_RATIO`) thì vẫn dùng `model_simple` để tiết kiệm. `quota_used_ratio` do caller (`/chat`) truyền vào, mặc định `0.0`.
+- `route(message, quota_used_ratio)` (async, trả `RoutingDecision`): COMPLEX → `model_complex`, SIMPLE → `model_simple`.
+- **Hạ cấp theo quota (cost-aware):** khi COMPLEX nhưng `quota_used_ratio >= 0.8` (`_QUOTA_DOWNGRADE_RATIO`) thì vẫn dùng `model_simple` để tiết kiệm. `quota_used_ratio` do caller (`/chat`) truyền vào, mặc định `0.0`. Áp dụng cho cả keyword router lẫn LLM router.
 - Model lấy từ settings: `model_simple` (mặc định `gpt-4o-mini`), `model_complex` (mặc định `gpt-4.1-mini`).
 - Model được chọn truyền xuống `AnswerGenerator.generate(model=...)` và phản ánh trong `usage_logs.llm_model` ([M7.3](M7-usage-tracking.md)).
 
@@ -81,12 +116,24 @@ Cả hai bổ trợ cho [M6 (AI Integration)](M6-ai-integration.md).
 ## Luồng chương trình
 
 ```
-M16 routing (mỗi request):
-   model_router.route(message, quota_used_ratio)
+M16 routing (mỗi request, chạy song song với intent extraction qua asyncio.gather):
+   model_router.route(message, quota_used_ratio) → RoutingDecision
+
+   Keyword router (mặc định):
       _classify → COMPLEX nếu keyword phân tích, ngược lại SIMPLE
-      COMPLEX + quota_used_ratio ≥ 0.8 → model_simple (hạ cấp)
+
+   LLM Router (ENABLE_LLM_ROUTER=true, hybrid):
+      keyword nói COMPLEX → dùng luôn (source="keyword", 0 LLM call)
+      keyword nói SIMPLE  → cache hit? → dùng cache (source="llm_router")
+                          → gọi MODEL_ROUTER tool classify_complexity
+                               ├─ OK        → simple|complex (source="llm_router", có usage)
+                               └─ lỗi/lạ    → kết quả keyword (source="keyword")
+
+   Chọn model (chung cả hai router):
+      COMPLEX + quota_used_ratio ≥ 0.8 → model_simple (hạ cấp cost-aware)
       COMPLEX → model_complex   |   SIMPLE → model_simple
    → truyền model xuống AnswerGenerator → ghi vào usage_logs.llm_model
+   → router_usage cộng vào usage tổng; routing_source/query_complexity trong response
 
 M17 fallback (khi sinh câu trả lời):
    OpenAIAnswerGenerator.generate(model)
@@ -103,8 +150,9 @@ M17 fallback (khi sinh câu trả lời):
 
 ## Luồng trong code
 
-- **Routing:** `ModelRouter.route()` / `_classify()` ([model_router.py:29-41](chatbot-service/agents/model_router.py#L29-L41)); model từ settings ([config.py:12-13](chatbot-service/app/config.py#L12-L13)).
-- **Áp routing vào pipeline:** [chat_routes.py:192-196](chatbot-service/api/chat_routes.py#L192-L196).
+- **Routing (keyword):** `ModelRouter.route()` / `_classify()` / `_pick_model()` ([model_router.py](chatbot-service/agents/model_router.py#L64-L92)); model từ settings ([config.py](chatbot-service/app/config.py#L11-L18)).
+- **LLM Router (hybrid):** `LLMModelRouter.route()` / `_llm_classify()` + cache ([model_router.py](chatbot-service/agents/model_router.py#L127-L230)); factory `build_model_router()` chọn router theo `enable_llm_router` ([model_router.py](chatbot-service/agents/model_router.py#L248-L265)).
+- **Áp routing vào pipeline:** `asyncio.gather(intent, route)` + `routing_kwargs` ([chat_routes.py](chatbot-service/api/chat_routes.py#L151-L177)); gộp `router_usage` và gắn `routing_source` ([response_builder.py](chatbot-service/chat/response_builder.py#L48-L125)).
 - **Template fallback:** [answer_generator.py:104-145](chatbot-service/agents/answer_generator.py#L104-L145).
 - **Phân loại lỗi service (Spring):** [ApiExceptionHandler.java:82-131](spring-backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L82-L131).
 

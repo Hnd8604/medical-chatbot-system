@@ -34,7 +34,7 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_search_patient_resources_uses_safe_count_and_patient_ref(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
-            self.assertEqual(request.url.params["patient"], "Patient/demo-patient-001")
+            self.assertEqual(request.url.params["patient"], "Patient/BN2026-00001")
             self.assertEqual(request.url.params["_count"], "5")
             self.assertEqual(request.url.params["_sort"], "-date")
             return httpx.Response(200, json={"resourceType": "Bundle", "entry": []})
@@ -46,7 +46,7 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
 
         result = await client.search_patient_resources(
             "Observation",
-            "demo-patient-001",
+            "BN2026-00001",
             count=5,
             sort="-date",
         )
@@ -100,7 +100,7 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
             if request.url.params["name"] == "Tran":
                 return httpx.Response(200, json={
                     "resourceType": "Bundle",
-                    "entry": [{"resource": {"resourceType": "Patient", "id": "demo-patient-002"}}],
+                    "entry": [{"resource": {"resourceType": "Patient", "id": "BN2026-00002"}}],
                 })
             return httpx.Response(200, json={"resourceType": "Bundle", "entry": []})
 
@@ -112,7 +112,7 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
         result = await client.search_patients_flexible(count=5, name="Thi B Tran")
 
         self.assertEqual(seen_names, ["Thi B Tran", "Tran"])
-        self.assertEqual(result["entry"][0]["resource"]["id"], "demo-patient-002")
+        self.assertEqual(result["entry"][0]["resource"]["id"], "BN2026-00002")
 
 
 if __name__ == "__main__":

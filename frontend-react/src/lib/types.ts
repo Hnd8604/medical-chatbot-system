@@ -50,6 +50,11 @@ export interface ChatSessionListResponse {
   sessions: ChatSessionSummary[];
 }
 
+export interface ChatSessionRenameResponse {
+  id: string;
+  title: string;
+}
+
 export interface MessageFeedback {
   rating: number;
   comment: string | null;

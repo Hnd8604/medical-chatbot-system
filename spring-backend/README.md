@@ -52,7 +52,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 - `GET /api/admin/users?page=0&size=20`
 - `PATCH /api/admin/users/{id}/status`
 - `PATCH /api/admin/users/{id}/role`
-- `GET /api/patients?name=Nguyen&phone=0900000001&birth_date=2003-01-01&identifier=DEMO-001&limit=20`
+- `GET /api/patients?name=Nguyen&phone=0900000001&birth_date=2003-01-01&identifier=BN2026-00001&limit=20`
 - `GET /api/patients/{patientId}`
 - `GET /api/patients/{patientId}/observations?limit=5`
 - `GET /api/patients/{patientId}/conditions?limit=20`
@@ -62,15 +62,15 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 Demo:
 
 ```text
-http://localhost:8081/api/patients/demo-patient-001
+http://localhost:8081/api/patients/BN2026-00001
 ```
 
 Chat demo:
 
 ```powershell
 $body = @{
-  message = "What medications is Patient/demo-patient-001 taking?"
-  patient_id = "demo-patient-001"
+  message = "What medications is Patient/BN2026-00001 taking?"
+  patient_id = "BN2026-00001"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Uri "http://localhost:8081/api/chat" -Method Post -ContentType "application/json" -Body $body

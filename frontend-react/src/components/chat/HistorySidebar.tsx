@@ -1,18 +1,23 @@
 import {
   BarChart3,
+  Check,
   CircleDollarSign,
   ClipboardList,
   FileText,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Plus,
   RefreshCcw,
   Search,
   Shield,
   Table2,
+  Trash2,
   UsersRound,
+  X,
 } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ChatSessionSummary, AuthUser } from "../../lib/types";
 import { roleLabel } from "../../lib/formatters";
@@ -34,6 +39,8 @@ interface HistorySidebarProps {
   onRefresh: () => void;
   onNewChat: () => void;
   onSelectSession: (session: ChatSessionSummary) => void;
+  onRenameSession: (session: ChatSessionSummary, title: string) => void;
+  onDeleteSession: (session: ChatSessionSummary) => void;
   onExportHistory: (format: "pdf" | "csv") => void;
   onOpenUsage: () => void;
   onOpenAdmin: () => void;
@@ -62,13 +69,35 @@ export function HistorySidebar({
   onRefresh,
   onNewChat,
   onSelectSession,
+  onRenameSession,
+  onDeleteSession,
   onExportHistory,
   onOpenUsage,
   onOpenAdmin,
   onLogout,
   className,
 }: HistorySidebarProps) {
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const emptyText = query.trim() ? TEXT.emptySessionSearch : TEXT.emptySessions;
+
+  function startRename(session: ChatSessionSummary) {
+    setRenamingId(session.id);
+    setRenameValue(session.title || "");
+  }
+
+  function cancelRename() {
+    setRenamingId(null);
+    setRenameValue("");
+  }
+
+  function submitRename(session: ChatSessionSummary) {
+    const value = renameValue.trim();
+    if (value && value !== session.title) {
+      onRenameSession(session, value);
+    }
+    cancelRename();
+  }
   const displayName = user.display_name || user.username;
   const shortName = initials(displayName) || "U";
 
@@ -311,20 +340,87 @@ export function HistorySidebar({
         {loading ? <p className="px-2 py-3 text-sm text-muted-foreground">Đang tải hội thoại...</p> : null}
         {!loading && sessions.length === 0 ? <p className="px-2 py-3 text-sm text-muted-foreground">{emptyText}</p> : null}
         <div className="grid gap-1">
-          {sessions.map((session) => (
-            <button
-              key={session.id}
-              type="button"
-              className={cn(
-                "focus-ring rounded-xl px-3 py-2 text-left text-sm font-medium transition",
-                activeSessionId === session.id ? "bg-accent/10 text-accent" : "text-foreground hover:bg-muted",
-              )}
-              title={session.title || "Hội thoại chưa đặt tên"}
-              onClick={() => onSelectSession(session)}
-            >
-              <span className="line-clamp-1">{session.title || "Hội thoại chưa đặt tên"}</span>
-            </button>
-          ))}
+          {sessions.map((session) =>
+            renamingId === session.id ? (
+              <form
+                key={session.id}
+                className="flex items-center gap-1 px-1 py-1"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitRename(session);
+                }}
+              >
+                <input
+                  autoFocus
+                  className={inputClass("h-9")}
+                  value={renameValue}
+                  onChange={(event) => setRenameValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      cancelRename();
+                    }
+                  }}
+                  onBlur={() => submitRename(session)}
+                  maxLength={255}
+                  spellCheck={false}
+                />
+                <Button type="submit" variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label={TEXT.save}>
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  aria-label={TEXT.cancel}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={cancelRename}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </form>
+            ) : (
+              <div
+                key={session.id}
+                className={cn(
+                  "group relative flex items-center rounded-xl transition",
+                  activeSessionId === session.id ? "bg-accent/10" : "hover:bg-muted",
+                )}
+              >
+                <button
+                  type="button"
+                  className={cn(
+                    "focus-ring min-w-0 flex-1 rounded-xl px-3 py-2 text-left text-sm font-medium",
+                    activeSessionId === session.id ? "text-accent" : "text-foreground",
+                  )}
+                  title={session.title || "Hội thoại chưa đặt tên"}
+                  onClick={() => onSelectSession(session)}
+                >
+                  <span className="line-clamp-1">{session.title || "Hội thoại chưa đặt tên"}</span>
+                </button>
+                <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
+                  <button
+                    type="button"
+                    className="focus-ring grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-white hover:text-foreground"
+                    aria-label={TEXT.renameSession}
+                    title={TEXT.renameSession}
+                    onClick={() => startRename(session)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="focus-ring grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-white hover:text-danger"
+                    aria-label={TEXT.deleteSession}
+                    title={TEXT.deleteSession}
+                    onClick={() => onDeleteSession(session)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ),
+          )}
         </div>
       </section>
 

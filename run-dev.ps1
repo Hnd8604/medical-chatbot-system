@@ -44,6 +44,37 @@ function Require-Command {
     }
 }
 
+function Resolve-PythonExe {
+    # Tra ve duong dan toi mot Python that, tranh App execution alias cua
+    # Microsoft Store (stub 0 byte trong WindowsApps tra exit code 9009).
+
+    # 1. Uu tien virtualenv cua repo.
+    $venvPython = Join-Path $RootDir ".venv\Scripts\python.exe"
+    if ((Test-Path $venvPython) -and ((Get-Item $venvPython).Length -gt 0)) {
+        return $venvPython
+    }
+
+    # 2. Python launcher (py) -> interpreter that.
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        try {
+            $exe = (& py -3 -c "import sys; print(sys.executable)" 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $exe -and (Test-Path $exe.Trim())) {
+                return $exe.Trim()
+            }
+        } catch {}
+    }
+
+    # 3. python.exe tren PATH nhung khong phai stub Store (0 byte / WindowsApps).
+    foreach ($cmd in (Get-Command python -All -ErrorAction SilentlyContinue)) {
+        $src = $cmd.Source
+        if ($src -and (Test-Path $src) -and ((Get-Item $src).Length -gt 0) -and ($src -notlike "*\WindowsApps\*")) {
+            return $src
+        }
+    }
+
+    throw "Khong tim thay Python that. Hay cai Python (python.org) hoac tao venv .venv, roi TAT App execution alias cho python tai Settings > Apps > Advanced app settings > App execution aliases."
+}
+
 function Test-ListeningPort {
     param([int]$Port)
     $connections = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
@@ -172,7 +203,8 @@ if ($Stop) {
 
 Write-Step "Checking required commands"
 Require-Command "docker"
-Require-Command "python"
+$Python = Resolve-PythonExe
+Write-Host "Using Python: $Python"
 Require-Command "java"
 Require-Command "npm"
 
@@ -190,11 +222,11 @@ if (Test-Path $LiteLLMEnv) {
 
 Write-Step "Waiting for HAPI FHIR"
 Invoke-StepCommand "wait_for_hapi.py" {
-    python (Join-Path $RootDir "infra\hapi-fhir\scripts\wait_for_hapi.py")
+    & $Python (Join-Path $RootDir "infra\hapi-fhir\scripts\wait_for_hapi.py")
 }
 
 Write-Step "Checking FHIR demo data"
-python (Join-Path $RootDir "infra\hapi-fhir\scripts\check_connection.py")
+& $Python (Join-Path $RootDir "infra\hapi-fhir\scripts\check_connection.py")
 if ($LASTEXITCODE -ne 0) {
     if ($SkipSeed) {
         throw "FHIR demo data check failed and -SkipSeed was provided."
@@ -202,18 +234,18 @@ if ($LASTEXITCODE -ne 0) {
 
     Write-Step "Seeding FHIR demo data because check failed"
     Invoke-StepCommand "seed_fhir_data.py" {
-        python (Join-Path $RootDir "infra\hapi-fhir\scripts\seed_fhir_data.py")
+        & $Python (Join-Path $RootDir "infra\hapi-fhir\scripts\seed_fhir_data.py")
     }
 
     Invoke-StepCommand "check_connection.py" {
-        python (Join-Path $RootDir "infra\hapi-fhir\scripts\check_connection.py")
+        & $Python (Join-Path $RootDir "infra\hapi-fhir\scripts\check_connection.py")
     }
 }
 
 if (-not $SkipInstall) {
     Write-Step "Installing chatbot-service Python dependencies"
     Invoke-StepCommand "pip install" {
-        python -m pip install -r (Join-Path $ChatbotDir "requirements.txt")
+        & $Python -m pip install -r (Join-Path $ChatbotDir "requirements.txt")
     }
 
     Write-Step "Installing frontend dependencies"
@@ -245,7 +277,7 @@ if (Test-Path $LiteLLMEnv) {
 Write-Step "Starting chatbot-service"
 Start-ManagedProcess `
     -Name "chatbot-service" `
-    -FilePath "python" `
+    -FilePath $Python `
     -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000") `
     -WorkingDirectory $ChatbotDir `
     -Port 8000
@@ -298,8 +330,8 @@ if (-not $SkipFlowCheck) {
 
     # Keep the smoke-test payload ASCII to avoid Windows PowerShell source encoding issues.
     $body = @{
-        message = "Benh nhan demo-patient-001 dang dung thuoc gi?"
-        patient_id = "demo-patient-001"
+        message = "Benh nhan BN2026-00001 dang dung thuoc gi?"
+        patient_id = "BN2026-00001"
     } | ConvertTo-Json
     $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 

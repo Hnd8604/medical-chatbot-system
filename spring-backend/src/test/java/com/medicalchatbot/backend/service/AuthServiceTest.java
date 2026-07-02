@@ -289,23 +289,23 @@ class AuthServiceTest {
                                 "Password123!");
                 when(currentUserService.requireCurrentUser()).thenReturn(user);
                 when(userPatientLinkRepository.findSelfLinksForUser(userId)).thenReturn(List.of());
-                when(chatbotServiceClient.getPatient("demo-patient-001")).thenReturn(new ObjectMapper().readTree("""
+                when(chatbotServiceClient.getPatient("BN2026-00001")).thenReturn(new ObjectMapper().readTree("""
                                 {
-                                  "id": "demo-patient-001",
+                                  "id": "BN2026-00001",
                                   "birth_date": "2003-01-01",
                                   "phone": "0900000001"
                                 }
                                 """));
-                when(userPatientLinkRepository.existsSelfLinkForOtherUser("demo-patient-001", userId))
+                when(userPatientLinkRepository.existsSelfLinkForOtherUser("BN2026-00001", userId))
                                 .thenReturn(false);
                 when(userPatientLinkRepository.saveAndFlush(any(UserPatientLink.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
-                when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("demo-patient-001"));
+                when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("BN2026-00001"));
 
                 assertEquals(
                                 "Liên kết hồ sơ bệnh nhân thành công.",
                                 newService().linkPatient(new AuthLinkPatientRequest(
-                                                "Patient/demo-patient-001",
+                                                "Patient/BN2026-00001",
                                                 "2003-01-01",
                                                 "0900000001")).message());
         }
@@ -323,9 +323,9 @@ class AuthServiceTest {
                                 "Password123!");
                 when(currentUserService.requireCurrentUser()).thenReturn(user);
                 when(userPatientLinkRepository.findSelfLinksForUser(userId)).thenReturn(List.of());
-                when(chatbotServiceClient.getPatient("demo-patient-001")).thenReturn(new ObjectMapper().readTree("""
+                when(chatbotServiceClient.getPatient("BN2026-00001")).thenReturn(new ObjectMapper().readTree("""
                                 {
-                                  "id": "demo-patient-001",
+                                  "id": "BN2026-00001",
                                   "birth_date": "2003-01-01",
                                   "phone": "0900000001"
                                 }
@@ -334,7 +334,7 @@ class AuthServiceTest {
                 ResponseStatusException ex = assertThrows(
                                 ResponseStatusException.class,
                                 () -> newService().linkPatient(new AuthLinkPatientRequest(
-                                                "demo-patient-001",
+                                                "BN2026-00001",
                                                 "2004-01-01",
                                                 "0900000001")));
 

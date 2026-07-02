@@ -14,8 +14,8 @@ class NormalizerTests(unittest.TestCase):
     def test_normalize_patient(self) -> None:
         patient = {
             "resourceType": "Patient",
-            "id": "demo-patient-001",
-            "identifier": [{"system": "system", "value": "DEMO-001"}],
+            "id": "BN2026-00001",
+            "identifier": [{"system": "system", "value": "BN2026-00001"}],
             "name": [{"family": "Nguyen", "given": ["Van", "A"]}],
             "gender": "male",
             "birthDate": "2003-01-01",
@@ -24,7 +24,7 @@ class NormalizerTests(unittest.TestCase):
 
         result = normalize_patient(patient)
 
-        self.assertEqual(result["id"], "demo-patient-001")
+        self.assertEqual(result["id"], "BN2026-00001")
         self.assertEqual(result["name"], "Nguyen Van A")
         self.assertEqual(result["gender"], "male")
         self.assertEqual(result["phone"], "0900000001")
@@ -40,8 +40,8 @@ class NormalizerTests(unittest.TestCase):
                         "status": "final",
                         "category": [{"text": "Laboratory"}],
                         "code": {"text": "Blood glucose"},
-                        "subject": {"reference": "Patient/demo-patient-001"},
-                        "encounter": {"reference": "Encounter/demo-encounter-001"},
+                        "subject": {"reference": "Patient/BN2026-00001"},
+                        "encounter": {"reference": "Encounter/ENC-2026-00001"},
                         "effectiveDateTime": "2026-05-20T09:10:00+07:00",
                         "valueQuantity": {
                             "value": 145,
@@ -67,8 +67,8 @@ class NormalizerTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["code"], "Blood glucose")
         self.assertEqual(result[0]["value"]["value"], 145)
-        self.assertEqual(result[0]["subject"], "Patient/demo-patient-001")
-        self.assertEqual(result[0]["encounter"], "Encounter/demo-encounter-001")
+        self.assertEqual(result[0]["subject"], "Patient/BN2026-00001")
+        self.assertEqual(result[0]["encounter"], "Encounter/ENC-2026-00001")
         self.assertEqual(result[0]["interpretation"][0]["text"], "High")
         self.assertEqual(result[0]["reference_range"][0]["high"]["value"], 99)
 
@@ -79,7 +79,7 @@ class NormalizerTests(unittest.TestCase):
                 {
                     "resource": {
                         "resourceType": "Patient",
-                        "id": "demo-patient-001",
+                        "id": "BN2026-00001",
                         "name": [{"family": "Nguyen", "given": ["Van", "A"]}],
                     }
                 },
@@ -95,12 +95,12 @@ class NormalizerTests(unittest.TestCase):
         result = normalize_patient_bundle(bundle)
 
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["id"], "demo-patient-001")
+        self.assertEqual(result[0]["id"], "BN2026-00001")
 
     def test_normalize_patient_keeps_contact_address_and_email(self) -> None:
         patient = {
             "resourceType": "Patient",
-            "id": "demo-patient-005",
+            "id": "BN2026-00005",
             "active": True,
             "name": [{"family": "Hoang", "given": ["Anh", "E"]}],
             "telecom": [
@@ -127,14 +127,14 @@ class NormalizerTests(unittest.TestCase):
     def test_normalize_condition_keeps_detailed_fields(self) -> None:
         condition = {
             "resourceType": "Condition",
-            "id": "demo-condition-006",
+            "id": "CON-2026-00006",
             "clinicalStatus": {"text": "Active"},
             "verificationStatus": {"text": "Confirmed"},
             "category": [{"text": "Problem List Item"}],
             "severity": {"text": "Mild"},
             "code": {"text": "Asthma"},
-            "subject": {"reference": "Patient/demo-patient-005"},
-            "encounter": {"reference": "Encounter/demo-encounter-006"},
+            "subject": {"reference": "Patient/BN2026-00005"},
+            "encounter": {"reference": "Encounter/ENC-2026-00006"},
             "onsetDateTime": "2024-03-10",
             "recordedDate": "2026-05-29",
             "asserter": {"display": "Dr. Demo"},
@@ -145,19 +145,19 @@ class NormalizerTests(unittest.TestCase):
 
         self.assertEqual(result["code"], "Asthma")
         self.assertEqual(result["severity"]["text"], "Mild")
-        self.assertEqual(result["encounter"], "Encounter/demo-encounter-006")
+        self.assertEqual(result["encounter"], "Encounter/ENC-2026-00006")
         self.assertEqual(result["note"], ["Demo chronic condition."])
 
     def test_normalize_medication_request_keeps_dosage_and_dispense_request(self) -> None:
         medication = {
             "resourceType": "MedicationRequest",
-            "id": "demo-medication-006",
+            "id": "MED-2026-00006",
             "status": "active",
             "intent": "order",
             "priority": "routine",
             "medicationCodeableConcept": {"text": "Salbutamol inhaler"},
-            "subject": {"reference": "Patient/demo-patient-005"},
-            "encounter": {"reference": "Encounter/demo-encounter-006"},
+            "subject": {"reference": "Patient/BN2026-00005"},
+            "encounter": {"reference": "Encounter/ENC-2026-00006"},
             "authoredOn": "2026-05-29",
             "requester": {"display": "Dr. Demo"},
             "reasonCode": [{"text": "Asthma symptom relief"}],
@@ -185,11 +185,11 @@ class NormalizerTests(unittest.TestCase):
     def test_normalize_encounter_keeps_period_participant_reason_and_location(self) -> None:
         encounter = {
             "resourceType": "Encounter",
-            "id": "demo-encounter-006",
+            "id": "ENC-2026-00006",
             "status": "finished",
             "class": {"code": "AMB", "display": "ambulatory"},
             "type": [{"text": "Asthma follow-up visit"}],
-            "subject": {"reference": "Patient/demo-patient-005"},
+            "subject": {"reference": "Patient/BN2026-00005"},
             "participant": [{"individual": {"display": "Dr. Demo"}}],
             "period": {"start": "2026-05-29T08:00:00+07:00"},
             "reasonCode": [{"text": "Shortness of breath follow-up"}],

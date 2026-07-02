@@ -12,7 +12,7 @@ import urllib.request
 
 
 FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "http://localhost:8080/fhir").rstrip("/")
-DEMO_PATIENT_ID = os.getenv("DEMO_PATIENT_ID", "demo-patient-001")
+DEMO_PATIENT_ID = os.getenv("DEMO_PATIENT_ID", "BN2026-00001")
 
 
 def get_json(path: str, query: dict[str, str] | None = None) -> dict:

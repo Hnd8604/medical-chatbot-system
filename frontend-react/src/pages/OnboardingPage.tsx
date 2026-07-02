@@ -113,7 +113,7 @@ export function OnboardingPage() {
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
-            <Field label="Mã bệnh nhân" hint="Ví dụ: demo-patient-001 hoặc Patient/demo-patient-001.">
+            <Field label="Mã bệnh nhân" hint="Ví dụ: BN2026-00001 hoặc Patient/BN2026-00001.">
               <input
                 className={inputClass()}
                 value={patientId}

@@ -2,10 +2,12 @@ package com.medicalchatbot.backend.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.medicalchatbot.backend.dto.request.FeedbackRequest;
+import com.medicalchatbot.backend.dto.request.RenameSessionRequest;
 import com.medicalchatbot.backend.dto.response.ChatMessagesResponse;
 import com.medicalchatbot.backend.dto.request.ChatRequest;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
+import com.medicalchatbot.backend.dto.response.ChatSessionRenameResponse;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
 import com.medicalchatbot.backend.dto.response.FeedbackResponse;
 import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
@@ -28,6 +30,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -117,6 +120,20 @@ public class ChatbotController {
     @GetMapping("/chat/sessions/{sessionId}/messages")
     ChatMessagesResponse chatSessionMessages(@PathVariable UUID sessionId) {
         return chatApplicationService.sessionMessages(sessionId);
+    }
+
+    @PatchMapping("/chat/sessions/{sessionId}")
+    ChatSessionRenameResponse renameChatSession(
+            @PathVariable UUID sessionId,
+            @Valid @RequestBody RenameSessionRequest request
+    ) {
+        return chatApplicationService.renameSession(sessionId, request.title());
+    }
+
+    @DeleteMapping("/chat/sessions/{sessionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteChatSession(@PathVariable UUID sessionId) {
+        chatApplicationService.deleteSession(sessionId);
     }
 
     @GetMapping("/quota/status")

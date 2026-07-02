@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Seed local HAPI FHIR with demo resources through the FHIR REST API."""
+"""Seed local HAPI FHIR with synthetic resources through the FHIR REST API."""
 
 from __future__ import annotations
 
@@ -32,11 +32,7 @@ def post_bundle(bundle: bytes) -> dict:
 def main() -> int:
     try:
         seed_files = [
-            SEED_DIR / "ambiguous-patient-demo-data-transaction-bundle.json",
-            SEED_DIR / "demo-data-transaction-bundle.json",
-            SEED_DIR / "extended-demo-data-transaction-bundle.json",
-            SEED_DIR / "detailed-demo-data-transaction-bundle.json",
-            SEED_DIR / "additional-demo-data-transaction-bundle.json",
+            SEED_DIR / "synthetic-fhir-transaction-bundle.json",
         ]
         if not seed_files:
             print(f"No seed JSON files found in: {SEED_DIR}", file=sys.stderr)
@@ -74,7 +70,7 @@ def main() -> int:
         print(f"FHIR server is not reachable at {FHIR_BASE_URL}: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Seeded {total_entries} demo FHIR resources through {FHIR_BASE_URL}")
+    print(f"Seeded {total_entries} FHIR resources through {FHIR_BASE_URL}")
     return 0
 
 

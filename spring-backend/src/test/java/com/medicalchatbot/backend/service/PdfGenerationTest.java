@@ -47,7 +47,7 @@ public class PdfGenerationTest {
 
             document.add(new Paragraph("Medical Chatbot Export", titleFont));
             document.add(new Paragraph("Session 123", sessionFont));
-            document.add(new Paragraph("[2026-06-15] USER: Bệnh nhân demo-patient-001 hiện đang sử dụng hai loại thuốc sau:", roleFont));
+            document.add(new Paragraph("[2026-06-15] USER: Bệnh nhân BN2026-00001 hiện đang sử dụng hai loại thuốc sau:", roleFont));
             document.add(new Paragraph("1. Amlodipine 5 mg - Liều dùng: Một viên mỗi ngày, uống bụng miếng.", contentFont));
             document.close();
             System.out.println("PDF generated successfully at test-output.pdf");

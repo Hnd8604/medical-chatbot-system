@@ -18,6 +18,7 @@ import com.medicalchatbot.backend.dto.response.ChatMessagesResponse;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
+import com.medicalchatbot.backend.dto.response.ChatSessionRenameResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
@@ -156,6 +157,36 @@ public class ChatApplicationService {
         requireSessionForUser(sessionId, userId);
         List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(sessionId, userId);
         return new ChatMessagesResponse(sessionId, messages);
+    }
+
+    @Transactional
+    public ChatSessionRenameResponse renameSession(UUID sessionId, String title) {
+        UUID userId = currentUserService.requireCurrentUserId();
+        ChatSession session = chatSessionRepository.findByIdAndUser_Id(sessionId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiên trò chuyện."));
+        String normalizedTitle = normalizeSessionTitle(title);
+        session.setTitle(normalizedTitle);
+        chatSessionRepository.save(session);
+        return new ChatSessionRenameResponse(sessionId, normalizedTitle);
+    }
+
+    @Transactional
+    public void deleteSession(UUID sessionId) {
+        UUID userId = currentUserService.requireCurrentUserId();
+        // Xóa phiên: chat_messages/message_feedback cascade theo FK; usage_logs/audit_logs
+        // giữ lại và được set session_id = null (theo ràng buộc migration V1).
+        long deleted = chatSessionRepository.deleteByIdAndUser_Id(sessionId, userId);
+        if (deleted == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiên trò chuyện.");
+        }
+    }
+
+    private String normalizeSessionTitle(String title) {
+        String trimmed = title == null ? "" : title.strip();
+        if (trimmed.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tiêu đề hội thoại không được để trống.");
+        }
+        return trimmed.length() <= 255 ? trimmed : trimmed.substring(0, 255);
     }
 
     private ChatSession requireSessionForUser(UUID sessionId, UUID userId) {

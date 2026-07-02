@@ -27,7 +27,7 @@
     },
     {
       "key": "patientId",
-      "value": "demo-patient-001",
+      "value": "BN2026-00001",
       "type": "string"
     },
     {
@@ -209,7 +209,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patient_id\": \"demo-patient-001\",\n  \"birth_date\": \"2003-01-01\",\n  \"phone\": \"0900000001\"\n}"
+              "raw": "{\n  \"patient_id\": \"BN2026-00001\",\n  \"birth_date\": \"2003-01-01\",\n  \"phone\": \"0900000001\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/link-patient",

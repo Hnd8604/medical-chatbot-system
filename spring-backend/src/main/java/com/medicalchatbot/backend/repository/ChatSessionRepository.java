@@ -22,6 +22,8 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
 
     boolean existsByIdAndUser_Id(UUID id, UUID userId);
 
+    long deleteByIdAndUser_Id(UUID id, UUID userId);
+
     default ChatSession create(User user, String title) {
         return save(new ChatSession(user, title));
     }

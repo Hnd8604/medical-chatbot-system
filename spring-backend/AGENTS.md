@@ -62,10 +62,10 @@ Last checked on 2026-05-31:
 GET http://localhost:8081/api/health
 GET http://localhost:8081/api/chatbot/status
 GET http://localhost:8081/api/patients?name=Nguyen&limit=5
-GET http://localhost:8081/api/patients/demo-patient-001
-GET http://localhost:8081/api/patients/demo-patient-001/observations?limit=5
-GET http://localhost:8081/api/patients/demo-patient-001/conditions
-GET http://localhost:8081/api/patients/demo-patient-001/medications
+GET http://localhost:8081/api/patients/BN2026-00001
+GET http://localhost:8081/api/patients/BN2026-00001/observations?limit=5
+GET http://localhost:8081/api/patients/BN2026-00001/conditions
+GET http://localhost:8081/api/patients/BN2026-00001/medications
 GET http://localhost:8081/api/chat/sessions?limit=3
 GET http://localhost:8081/api/chat/sessions/{sessionId}/messages
 POST http://localhost:8081/api/chat

@@ -14,7 +14,7 @@ class AnswerGeneratorTests(unittest.IsolatedAsyncioTestCase):
             question="HbA1c cua benh nhan 003?",
             intent="observations",
             tool_name="get_observations",
-            patient_id="demo-patient-003",
+            patient_id="BN2026-00003",
             evidence=[],
             fallback_answer="Template answer",
         )

@@ -13,6 +13,7 @@ import com.medicalchatbot.backend.dto.response.ChatMessagesResponse;
 import com.medicalchatbot.backend.dto.request.ChatRequest;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
+import com.medicalchatbot.backend.dto.response.ChatSessionRenameResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.dto.response.CostByDay;
 import com.medicalchatbot.backend.dto.response.CostByModel;
@@ -79,17 +80,17 @@ class ChatbotControllerTest {
 
     @Test
     void patientReturnsChatbotServicePayload() throws Exception {
-        when(chatbotServiceClient.getPatient("demo-patient-001"))
+        when(chatbotServiceClient.getPatient("BN2026-00001"))
                 .thenReturn(objectMapper.readTree("""
                         {
-                          "id": "demo-patient-001",
+                          "id": "BN2026-00001",
                           "name": "Van A Nguyen"
                         }
                         """));
 
-        mockMvc.perform(get("/api/patients/demo-patient-001"))
+        mockMvc.perform(get("/api/patients/BN2026-00001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value("demo-patient-001"))
+                .andExpect(jsonPath("$.id").value("BN2026-00001"))
                 .andExpect(jsonPath("$.name").value("Van A Nguyen"));
     }
 
@@ -104,7 +105,7 @@ class ChatbotControllerTest {
                           },
                           "patients": [
                             {
-                              "id": "demo-patient-001",
+                              "id": "BN2026-00001",
                               "name": "Van A Nguyen"
                             }
                           ]
@@ -113,42 +114,42 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/patients?name=Nguyen Van A&birth_date=2003-01-01"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.patients[0].id").value("demo-patient-001"))
+                .andExpect(jsonPath("$.patients[0].id").value("BN2026-00001"))
                 .andExpect(jsonPath("$.criteria.name").value("Nguyen Van A"));
     }
 
     @Test
     void observationsRejectInvalidLimit() throws Exception {
-        mockMvc.perform(get("/api/patients/demo-patient-001/observations?limit=100"))
+        mockMvc.perform(get("/api/patients/BN2026-00001/observations?limit=100"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Dữ liệu yêu cầu không hợp lệ."));
     }
 
     @Test
     void encountersReturnChatbotServicePayload() throws Exception {
-        when(chatbotServiceClient.getPatientEncounters("demo-patient-005", 5))
+        when(chatbotServiceClient.getPatientEncounters("BN2026-00005", 5))
                 .thenReturn(objectMapper.readTree("""
                         {
-                          "patient_id": "demo-patient-005",
+                          "patient_id": "BN2026-00005",
                           "encounters": [
                             {
-                              "id": "demo-encounter-006",
+                              "id": "ENC-2026-00006",
                               "status": "finished"
                             }
                           ]
                         }
                         """));
 
-        mockMvc.perform(get("/api/patients/demo-patient-005/encounters"))
+        mockMvc.perform(get("/api/patients/BN2026-00005/encounters"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.patient_id").value("demo-patient-005"))
-                .andExpect(jsonPath("$.encounters[0].id").value("demo-encounter-006"));
+                .andExpect(jsonPath("$.patient_id").value("BN2026-00005"))
+                .andExpect(jsonPath("$.encounters[0].id").value("ENC-2026-00006"));
     }
 
     @Test
     void chatReturnsPersistedSessionResponse() throws Exception {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000301");
-        when(chatApplicationService.chat(new ChatRequest(null, "demo-patient-001", "Bệnh nhân 001 đang dùng thuốc gì?")))
+        when(chatApplicationService.chat(new ChatRequest(null, "BN2026-00001", "Bệnh nhân 001 đang dùng thuốc gì?")))
                 .thenReturn(new ChatResponse(
                         sessionId,
                         null,
@@ -158,7 +159,7 @@ class ChatbotControllerTest {
                         "llm",
                         "llm",
                         null,
-                        "demo-patient-001",
+                        "BN2026-00001",
                         null,
                         null,
                         objectMapper.readTree("null"),
@@ -192,7 +193,7 @@ class ChatbotControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "patient_id": "demo-patient-001",
+                                  "patient_id": "BN2026-00001",
                                   "message": "Bệnh nhân 001 đang dùng thuốc gì?"
                                 }
                                 """))
@@ -202,7 +203,7 @@ class ChatbotControllerTest {
                 .andExpect(jsonPath("$.tool_name").value("get_medication_requests"))
                 .andExpect(jsonPath("$.intent_source").value("llm"))
                 .andExpect(jsonPath("$.answer_source").value("llm"))
-                .andExpect(jsonPath("$.patient_id").value("demo-patient-001"));
+                .andExpect(jsonPath("$.patient_id").value("BN2026-00001"));
     }
 
     @Test
@@ -247,7 +248,7 @@ class ChatbotControllerTest {
                         "Thuốc của bệnh nhân 001",
                         OffsetDateTime.parse("2026-05-31T10:00:00Z"),
                         OffsetDateTime.parse("2026-05-31T10:05:00Z"),
-                        "demo-patient-001",
+                        "BN2026-00001",
                         2,
                         "Theo dữ liệu FHIR..."
                 ))));
@@ -256,7 +257,7 @@ class ChatbotControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessions[0].id").value(sessionId.toString()))
                 .andExpect(jsonPath("$.sessions[0].title").value("Thuốc của bệnh nhân 001"))
-                .andExpect(jsonPath("$.sessions[0].active_patient_id").value("demo-patient-001"))
+                .andExpect(jsonPath("$.sessions[0].active_patient_id").value("BN2026-00001"))
                 .andExpect(jsonPath("$.sessions[0].message_count").value(2))
                 .andExpect(jsonPath("$.sessions[0].last_message_preview").value("Theo dữ liệu FHIR..."));
     }
@@ -270,7 +271,7 @@ class ChatbotControllerTest {
                         "Thuoc cua benh nhan 002",
                         OffsetDateTime.parse("2026-06-01T10:00:00Z"),
                         OffsetDateTime.parse("2026-06-01T10:05:00Z"),
-                        "demo-patient-002",
+                        "BN2026-00002",
                         4,
                         "Benh nhan dang dung Amlodipine."
                 ))));
@@ -279,7 +280,7 @@ class ChatbotControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessions[0].id").value(sessionId.toString()))
                 .andExpect(jsonPath("$.sessions[0].title").value("Thuoc cua benh nhan 002"))
-                .andExpect(jsonPath("$.sessions[0].active_patient_id").value("demo-patient-002"))
+                .andExpect(jsonPath("$.sessions[0].active_patient_id").value("BN2026-00002"))
                 .andExpect(jsonPath("$.sessions[0].message_count").value(4));
     }
 
@@ -333,6 +334,51 @@ class ChatbotControllerTest {
                 .andExpect(jsonPath("$.messages[1].role").value("assistant"))
                 .andExpect(jsonPath("$.messages[1].feedback.rating").value(5))
                 .andExpect(jsonPath("$.messages[1].feedback.comment").value("Rất hữu ích"));
+    }
+
+    @Test
+    void renameChatSessionReturnsUpdatedTitle() throws Exception {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000601");
+        when(chatApplicationService.renameSession(sessionId, "Tên mới"))
+                .thenReturn(new ChatSessionRenameResponse(sessionId, "Tên mới"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/chat/sessions/{sessionId}", sessionId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Tên mới"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(sessionId.toString()))
+                .andExpect(jsonPath("$.title").value("Tên mới"));
+    }
+
+    @Test
+    void renameChatSessionRejectsBlankTitle() throws Exception {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000602");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/chat/sessions/{sessionId}", sessionId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "   "
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deleteChatSessionReturnsNoContent() throws Exception {
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000603");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/chat/sessions/{sessionId}", sessionId))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(chatApplicationService).deleteSession(sessionId);
     }
 
     @Test

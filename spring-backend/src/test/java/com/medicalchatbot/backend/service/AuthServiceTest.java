@@ -17,6 +17,7 @@ import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
 import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
 import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
 import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
+import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
 import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
 import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
@@ -359,6 +360,68 @@ class AuthServiceTest {
                 assertEquals(4, user.getTokenVersion());
                 verify(userRepository).save(user);
                 verify(refreshTokenService).revokeAllForUser(user.getId());
+        }
+
+        @Test
+        void changePasswordUpdatesHashAndRevokesSessions() {
+                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000501");
+                User user = user(
+                                userId,
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "OldPass123!");
+                ReflectionTestUtils.setField(user, "tokenVersion", 2);
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+
+                newService().changePassword(new ChangePasswordRequest("OldPass123!", "NewPass456!", "NewPass456!"));
+
+                assertTrue(passwordEncoder.matches("NewPass456!", user.getPasswordHash()));
+                assertEquals(3, user.getTokenVersion());
+                verify(userRepository).save(user);
+                verify(refreshTokenService).revokeAllForUser(userId);
+        }
+
+        @Test
+        void changePasswordRejectsWrongCurrentPassword() {
+                User user = user(
+                                UUID.fromString("00000000-0000-0000-0000-000000000502"),
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "OldPass123!");
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+
+                ResponseStatusException ex = assertThrows(
+                                ResponseStatusException.class,
+                                () -> newService().changePassword(
+                                                new ChangePasswordRequest("WrongPass123!", "NewPass456!", "NewPass456!")));
+
+                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        }
+
+        @Test
+        void changePasswordRejectsSameAsCurrentPassword() {
+                User user = user(
+                                UUID.fromString("00000000-0000-0000-0000-000000000503"),
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "OldPass123!");
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+
+                ResponseStatusException ex = assertThrows(
+                                ResponseStatusException.class,
+                                () -> newService().changePassword(
+                                                new ChangePasswordRequest("OldPass123!", "OldPass123!", "OldPass123!")));
+
+                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         }
 
         private AuthService newService() {

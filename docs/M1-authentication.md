@@ -103,5 +103,5 @@ Chat (USER): UserPatientScopeService.resolve → chặn patient_id ngoài hồ s
 
 ## Trạng thái
 
-- Done: register, login (JWT), RBAC, onboarding liên kết hồ sơ + scope USER, logout/thu hồi token.
-- Chưa: OAuth2/refresh token, quên mật khẩu, xác minh email, đăng ký DOCTOR/ADMIN tự phục vụ (hiện cấp thủ công).
+- Done: register, login (JWT), RBAC, onboarding liên kết hồ sơ + scope USER, logout/thu hồi token, refresh token ([auth-refresh-token.md](auth-refresh-token.md)), quên mật khẩu qua email OTP ([password-reset.md](password-reset.md)).
+- Chưa: OAuth2, xác minh email khi đăng ký, đăng ký DOCTOR/ADMIN tự phục vụ (hiện cấp thủ công).

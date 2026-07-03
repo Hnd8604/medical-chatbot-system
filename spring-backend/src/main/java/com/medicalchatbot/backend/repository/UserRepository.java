@@ -36,6 +36,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             """)
     Optional<User> findByUsernameOrEmailIgnoreCase(@Param("credential") String credential);
 
+    @Query("""
+            select u
+            from User u
+            where lower(coalesce(u.email, '')) = lower(:email)
+            """)
+    Optional<User> findByEmailIgnoreCase(@Param("email") String email);
+
     Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     long countByQuotaPolicyId(UUID quotaPolicyId);

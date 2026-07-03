@@ -1,6 +1,5 @@
 package com.medicalchatbot.backend.service;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -12,11 +11,13 @@ import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
 import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
 import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
 import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
+import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
 import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
 import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
 import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
 import com.medicalchatbot.backend.dto.response.AuthUserResponse;
+import com.medicalchatbot.backend.dto.response.ChangePasswordResponse;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.entity.UserPatientLink;
@@ -204,6 +205,31 @@ public class AuthService {
     }
 
     @Transactional
+    public ChangePasswordResponse changePassword(ChangePasswordRequest request) {
+        User user = currentUserService.requireCurrentUser();
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            logPasswordChangeFailure(user, "INVALID_CURRENT_PASSWORD");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu hiện tại không đúng.");
+        }
+
+        PasswordPolicy.validate(request.newPassword(), request.passwordConfirmation());
+
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu mới phải khác mật khẩu hiện tại.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        // Tăng token_version + thu hồi refresh token => mọi phiên đăng nhập cũ hết hiệu lực.
+        user.incrementTokenVersion();
+        userRepository.save(user);
+        refreshTokenService.revokeAllForUser(user.getId());
+
+        logPasswordChangeSuccess(user);
+        return new ChangePasswordResponse("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+    }
+
+    @Transactional
     public void logout() {
         User user = currentUserService.requireCurrentUser();
         user.incrementTokenVersion();
@@ -247,16 +273,7 @@ public class AuthService {
         if (!input.email().matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email không hợp lệ.");
         }
-        int passwordBytes = input.password().getBytes(StandardCharsets.UTF_8).length;
-        if (passwordBytes < 8 || passwordBytes > 72) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu phải có từ 8 đến 72 byte.");
-        }
-        if (!input.password().matches(".*\\p{L}.*") || !input.password().matches(".*\\d.*")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu phải có ít nhất một chữ và một số.");
-        }
-        if (!input.password().equals(input.passwordConfirmation())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Xác nhận mật khẩu không khớp.");
-        }
+        PasswordPolicy.validate(input.password(), input.passwordConfirmation());
     }
 
     private LinkPatientInput normalizeLinkPatient(AuthLinkPatientRequest request) {
@@ -391,6 +408,21 @@ public class AuthService {
         metadata.put("result", "success");
         metadata.put("role", user.getRole().name());
         auditLogRepository.save(user, null, "REGISTER_SUCCESS", "app_user", user.getId().toString(), metadata);
+    }
+
+    private void logPasswordChangeSuccess(User user) {
+        ObjectNode metadata = objectMapper.createObjectNode();
+        metadata.put("operation", "password_change");
+        metadata.put("result", "success");
+        auditLogRepository.save(user, null, "PASSWORD_CHANGE_SUCCESS", "app_user", user.getId().toString(), metadata);
+    }
+
+    private void logPasswordChangeFailure(User user, String reason) {
+        ObjectNode metadata = objectMapper.createObjectNode();
+        metadata.put("operation", "password_change");
+        metadata.put("result", "failed");
+        metadata.put("reason", reason);
+        auditLogRepository.save(user, null, "PASSWORD_CHANGE_FAILURE", "app_user", user.getId().toString(), metadata);
     }
 
     private void logLinkPatientSuccess(User user, String patientId) {

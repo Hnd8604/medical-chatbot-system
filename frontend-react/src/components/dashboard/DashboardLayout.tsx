@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
+  KeyRound,
   LogOut,
   MessageSquareText,
   Settings,
@@ -12,6 +13,7 @@ import {
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { cn } from "../../lib/cn";
+import { TEXT } from "../../lib/constants";
 import { roleLabel } from "../../lib/formatters";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -105,11 +107,15 @@ export function DashboardLayout({ eyebrow, title, description, actions, children
           ) : null}
         </nav>
 
+        <Link to="/change-password" className={cn(navClass({ isActive: false }), "mt-auto")}>
+          <KeyRound className="h-5 w-5" />
+          {TEXT.changePassword}
+        </Link>
         <Button
           type="button"
           variant="ghost"
           onClick={() => void logout()}
-          className="mt-auto w-full justify-start gap-3 text-white/80 hover:bg-white/10 hover:text-white"
+          className="w-full justify-start gap-3 text-white/80 hover:bg-white/10 hover:text-white"
         >
           <LogOut className="h-5 w-5" />
           Đăng xuất

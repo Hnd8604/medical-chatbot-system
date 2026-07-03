@@ -4,6 +4,8 @@ import { Spinner } from "./components/ui/Spinner";
 import { ForbiddenPage } from "./components/dashboard/ForbiddenPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { ChatPage } from "./pages/ChatPage";
 import { UsagePage } from "./pages/UsagePage";
@@ -71,6 +73,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route
         path="/onboarding"
         element={
@@ -86,6 +89,14 @@ export default function App() {
             <UserOnlyRoute>
               <ChatPage />
             </UserOnlyRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute>
+            <ChangePasswordPage />
           </ProtectedRoute>
         }
       />

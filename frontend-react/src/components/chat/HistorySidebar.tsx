@@ -4,6 +4,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   FileText,
+  KeyRound,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -220,6 +221,14 @@ export function HistorySidebar({
           >
             {shortName}
           </button>
+          <Link
+            to="/change-password"
+            className="focus-ring grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            title={TEXT.changePassword}
+            aria-label={TEXT.changePassword}
+          >
+            <KeyRound className="h-5 w-5" />
+          </Link>
           <Button type="button" variant="ghost" size="icon" onClick={onLogout} aria-label={TEXT.logoutButton} title={TEXT.logoutButton}>
             <LogOut className="h-5 w-5" />
           </Button>
@@ -436,6 +445,14 @@ export function HistorySidebar({
           <Badge tone={user.status === "ACTIVE" ? "green" : "amber"} className="hidden px-2 py-0.5 text-[9px] xl:inline-flex">
             {user.status}
           </Badge>
+          <Link
+            to="/change-password"
+            className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            title={TEXT.changePassword}
+            aria-label={TEXT.changePassword}
+          >
+            <KeyRound className="h-4 w-4" />
+          </Link>
           <Button type="button" variant="ghost" size="icon" onClick={onLogout} aria-label={TEXT.logoutButton}>
             <LogOut className="h-4 w-4" />
           </Button>

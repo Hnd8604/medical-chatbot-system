@@ -124,6 +124,12 @@ export function LoginPage() {
             </Button>
           </form>
 
+          <p className="mt-4 text-center text-sm">
+            <Link className="font-semibold text-accent hover:underline" to="/forgot-password">
+              {TEXT.forgotPasswordLink}
+            </Link>
+          </p>
+
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Chưa có tài khoản?{" "}
             <Link className="font-semibold text-accent hover:underline" to="/register">

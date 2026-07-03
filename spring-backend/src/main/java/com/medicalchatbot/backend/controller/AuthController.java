@@ -4,12 +4,21 @@ import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
 import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
 import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
 import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
+import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
+import com.medicalchatbot.backend.dto.request.ForgotPasswordRequest;
+import com.medicalchatbot.backend.dto.request.ResetPasswordRequest;
+import com.medicalchatbot.backend.dto.request.VerifyResetCodeRequest;
 import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
 import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
 import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
 import com.medicalchatbot.backend.dto.response.AuthUserResponse;
+import com.medicalchatbot.backend.dto.response.ChangePasswordResponse;
+import com.medicalchatbot.backend.dto.response.ForgotPasswordResponse;
+import com.medicalchatbot.backend.dto.response.ResetPasswordResponse;
+import com.medicalchatbot.backend.dto.response.VerifyResetCodeResponse;
 import com.medicalchatbot.backend.service.AuthService;
+import com.medicalchatbot.backend.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/login")
     public AuthLoginResponse login(@Valid @RequestBody AuthLoginRequest request) {
@@ -56,5 +66,25 @@ public class AuthController {
     public ResponseEntity<Void> logout() {
         authService.logout();
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/change-password")
+    public ChangePasswordResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        return authService.changePassword(request);
+    }
+
+    @PostMapping("/forgot-password")
+    public ForgotPasswordResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return passwordResetService.forgotPassword(request);
+    }
+
+    @PostMapping("/verify-reset-code")
+    public VerifyResetCodeResponse verifyResetCode(@Valid @RequestBody VerifyResetCodeRequest request) {
+        return passwordResetService.verifyResetCode(request);
+    }
+
+    @PostMapping("/reset-password")
+    public ResetPasswordResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return passwordResetService.resetPassword(request);
     }
 }

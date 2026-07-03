@@ -22,6 +22,8 @@ frontend-react (React)  ──HTTP──►  spring-backend (Spring Boot)  ─�
 | Module | Mô tả |
 |---|---|
 | [M1 — Authentication & Access Control](M1-authentication.md) | Đăng ký/đăng nhập (JWT), phân quyền role, onboarding liên kết hồ sơ bệnh nhân |
+| [Auth — Refresh Token](auth-refresh-token.md) | Access + refresh token (rotation, Redis) |
+| [Auth — Quên mật khẩu](password-reset.md) | Đặt lại mật khẩu qua mã OTP gửi email (Redis, dev fallback) |
 | [M2 — Conversation Management](M2-conversation-management.md) | Tạo session, gửi câu hỏi, nhận trả lời, tiếp tục hội thoại |
 | [M3 — Message History](M3-message-history.md) | Lưu & truy xuất tin nhắn (user/assistant/system) |
 | [M4 — Medical Data Query](M4-medical-data-query.md) | Phân loại intent y tế, tra cứu dữ liệu bệnh nhân |

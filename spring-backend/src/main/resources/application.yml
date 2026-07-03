@@ -21,9 +21,33 @@ spring:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
       timeout: 2000
+  mail:
+    # Bỏ trống host => không tạo bean JavaMailSender; EmailService rơi về dev fallback (log mã).
+    host: ${SPRING_MAIL_HOST:}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 server:
   port: ${SERVER_PORT:8081}
+
+password-reset:
+  # Mã OTP gửi qua email có thời hạn ngắn; lưu hash trong Redis (không đụng DB).
+  otp-ttl-minutes: ${PASSWORD_RESET_OTP_TTL_MINUTES:10}
+  # Ticket đặt lại mật khẩu cấp sau khi xác thực mã đúng, cũng ngắn hạn.
+  ticket-ttl-minutes: ${PASSWORD_RESET_TICKET_TTL_MINUTES:10}
+  # Số lần nhập sai mã tối đa trước khi vô hiệu mã.
+  max-attempts: ${PASSWORD_RESET_MAX_ATTEMPTS:5}
+  # Chặn gửi lại mã quá nhanh (giây).
+  resend-cooldown-seconds: ${PASSWORD_RESET_RESEND_COOLDOWN_SECONDS:60}
+  from-address: ${PASSWORD_RESET_FROM_ADDRESS:no-reply@medical-chatbot.local}
+  from-name: ${PASSWORD_RESET_FROM_NAME:Medical Chatbot}
 
 management:
   endpoints:

@@ -76,6 +76,9 @@ class ChatApplicationServiceTest {
     @Mock
     private UserPatientLinkRepository userPatientLinkRepository;
 
+    @Mock
+    private LlmGatewayKeyService llmGatewayKeyService;
+
     @Test
     void sessionMessagesRejectsSessionOutsideDemoUser() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
@@ -464,7 +467,8 @@ class ChatApplicationServiceTest {
                 costEstimationService,
                 new ObjectMapper(),
                 currentUserService,
-                new UserPatientScopeService(userPatientLinkRepository)
+                new UserPatientScopeService(userPatientLinkRepository),
+                llmGatewayKeyService
         );
     }
 

@@ -72,7 +72,7 @@ MODEL_ROUTER=gpt-4o-mini  # model rẻ chuyên phân loại
 **Mục tiêu:** Đổi routing mà không sửa code.
 
 **Hành vi hiện tại:**
-- Cấu hình qua **env** (`MODEL_SIMPLE`, `MODEL_COMPLEX`, `LLM_PROVIDER`, `OPENAI_BASE_URL` — `app/config.py`). `OPENAI_BASE_URL` cho phép trỏ sang provider OpenAI-compatible khác (vd **Groq**).
+- Cấu hình qua **env** (`MODEL_SIMPLE`, `MODEL_COMPLEX`, `LLM_PROVIDER`, `LITELLM_BASE_URL` — `app/config.py`). Đa provider (vd **Groq**) khai ở LiteLLM gateway (`infra/litellm/config.yaml`), không trỏ trực tiếp từ chatbot-service.
 - Bảng giá theo model + admin API (`model_pricing`, `/api/model-pricing`, `ModelPricingAdminController`) cho phép quản trị giá/model — đã seed giá cho Groq `llama-3.1-8b-instant` (`V13`, [M8](M8-cost-management.md)). (V2 hướng tới full admin routing UI.)
 
 **Tiêu chí hoàn thành:** Admin đổi model routing được an toàn (qua env/config).
@@ -95,7 +95,7 @@ MODEL_ROUTER=gpt-4o-mini  # model rẻ chuyên phân loại
 **Mục tiêu:** Chuyển phương án dự phòng khi model chính lỗi.
 
 **Hành vi:**
-- **Template fallback** khi LLM fail: `OpenAIAnswerGenerator` bắt exception → `TemplateAnswerGenerator` sinh câu trả lời từ evidence (`answer_source = "template_fallback"`) — xem [M6.5](M6-ai-integration.md).
+- **Template fallback** khi LLM fail: `LLMAnswerGenerator` bắt exception → `TemplateAnswerGenerator` sinh câu trả lời từ evidence (`answer_source = "template_fallback"`) — xem [M6.5](M6-ai-integration.md). Ngoại lệ: lỗi **vượt budget** từ gateway được `raise_if_budget_exceeded` chuyển thành `GatewayBudgetExceededError` → route trả HTTP 429 (không fallback template) — xem [M-litellm-gateway](M-litellm-gateway.md).
 - Khi không có evidence → `template_no_evidence`.
 - Khi không cấu hình API key → toàn bộ dùng `TemplateAnswerGenerator` (`answer_source = "template"`).
 - `answer_source` đóng vai trò metadata cho biết câu trả lời đến từ LLM hay fallback.
@@ -136,7 +136,7 @@ M16 routing (mỗi request, chạy song song với intent extraction qua asyncio
    → router_usage cộng vào usage tổng; routing_source/query_complexity trong response
 
 M17 fallback (khi sinh câu trả lời):
-   OpenAIAnswerGenerator.generate(model)
+   LLMAnswerGenerator.generate(model)
       try OpenAI
         ├─ OK            → answer_source="llm", usage=token
         ├─ Exception     → answer_source="template_fallback" (fallback_answer)

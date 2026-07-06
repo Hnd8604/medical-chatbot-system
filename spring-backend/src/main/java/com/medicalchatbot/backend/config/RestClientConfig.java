@@ -20,4 +20,20 @@ public class RestClientConfig {
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .build();
     }
+
+    @Bean
+    RestClient litellmRestClient(LiteLLMProperties properties) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(3000);
+        requestFactory.setReadTimeout(5000);
+
+        RestClient.Builder builder = RestClient.builder()
+                .requestFactory(requestFactory)
+                .baseUrl(properties.baseUrl() != null ? properties.baseUrl() : "http://localhost:4000")
+                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
+        if (properties.masterKey() != null && !properties.masterKey().isBlank()) {
+            builder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.masterKey());
+        }
+        return builder.build();
+    }
 }

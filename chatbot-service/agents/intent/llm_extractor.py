@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agents.gateway_context import gateway_call_kwargs, raise_if_budget_exceeded
 from agents.intent.models import IntentPlan
 from agents.intent.guardrails import (
     enforce_patient_list_routing,
@@ -73,6 +74,7 @@ class LLMIntentExtractor:
                 tools=FHIR_TOOL_DEFINITIONS,
                 tool_choice="required",
                 temperature=0,
+                **gateway_call_kwargs(),
             )
             log.info(
                 "Intent extraction response model=%s usage=%s",
@@ -84,7 +86,8 @@ class LLMIntentExtractor:
                 "Intent extraction raw response=%s",
                 response.model_dump_json(indent=2)
             )
-        except Exception:
+        except Exception as exc:
+            raise_if_budget_exceeded(exc)  # loi budget -> route tra 429, khong nuot
             return await self.fallback.extract(message, provided_patient_id)
 
         tool_calls = response.choices[0].message.tool_calls or []

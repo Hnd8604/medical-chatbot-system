@@ -214,6 +214,26 @@ docker compose -f $AppPostgresCompose up -d
 docker compose -f $RedisCompose up -d
 docker compose -f $QdrantCompose up -d
 if (Test-Path $LiteLLMEnv) {
+    Write-Step "Ensuring LiteLLM database exists"
+    # LiteLLM DB-backed dung 1 database rieng `litellm` tren instance app-postgres.
+    # Cho app-postgres san sang roi tao database idempotent (chi tao neu chua co).
+    $pgReady = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        docker exec medical-chatbot-app-postgres pg_isready -U app_user -d medical_chatbot_app *> $null
+        if ($LASTEXITCODE -eq 0) { $pgReady = $true; break }
+        Start-Sleep -Seconds 2
+    }
+    if (-not $pgReady) {
+        throw "app-postgres did not become ready; cannot create LiteLLM database."
+    }
+    $dbExists = (docker exec medical-chatbot-app-postgres psql -U app_user -d medical_chatbot_app -tAc "SELECT 1 FROM pg_database WHERE datname='litellm'").Trim()
+    if ($dbExists -ne "1") {
+        Write-Host "Creating database 'litellm' on app-postgres"
+        docker exec medical-chatbot-app-postgres createdb -U app_user litellm
+    } else {
+        Write-Host "Database 'litellm' already exists"
+    }
+
     Write-Step "Starting LiteLLM gateway"
     docker compose -f $LiteLLMCompose --env-file $LiteLLMEnv up -d
 } else {

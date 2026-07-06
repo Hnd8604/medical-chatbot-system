@@ -29,6 +29,11 @@ public record ChatbotChatRequest(
         ConversationContext conversationContext,
 
         @JsonProperty("quota_used_ratio")
-        Double quotaUsedRatio
+        Double quotaUsedRatio,
+
+        // Virtual key LiteLLM cua user; chatbot-service dung key nay khi goi LLM de
+        // gateway chan budget dung nguoi. Null => chatbot-service roi ve master key.
+        @JsonProperty("llm_key")
+        String llmKey
 ) {
 }

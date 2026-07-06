@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from agents.gateway_context import gateway_call_kwargs, raise_if_budget_exceeded
 from app.config import get_settings
 
 
@@ -110,8 +111,10 @@ class LLMAnswerGenerator:
                     {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
                 ],
                 temperature=0.2,
+                **gateway_call_kwargs(),
             )
         except Exception as exc:
+            raise_if_budget_exceeded(exc)  # loi budget -> route tra 429, khong nuot
             return AnswerResult(
                 answer=fallback_answer,  # fallback khi không thể call đc LLM
                 source="template_fallback",

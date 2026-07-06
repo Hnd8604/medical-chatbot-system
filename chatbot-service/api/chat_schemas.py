@@ -29,3 +29,6 @@ class ChatRequest(BaseModel):
     conversation_context: ConversationContext | None = None
 
     quota_used_ratio: float = Field(default=0.0, ge=0.0)
+
+    # Virtual key LiteLLM cua user (do Spring cap). None => dung master key mac dinh.
+    llm_key: str | None = None

@@ -51,6 +51,7 @@ public class ChatApplicationService {
     private final ObjectMapper objectMapper;
     private final CurrentUserService currentUserService;
     private final UserPatientScopeService userPatientScopeService;
+    private final LlmGatewayKeyService llmGatewayKeyService;
 
     @Transactional
     public ChatResponse chat(ChatRequest request) {
@@ -88,6 +89,8 @@ public class ChatApplicationService {
                 effectivePatientId
         ));
 
+        String llmKey = llmGatewayKeyService.resolveUserKey(user);
+
         long startedAtNanos = System.nanoTime();
         JsonNode chatbotResponse = chatbotServiceClient.chat(new ChatbotChatRequest(
                 userId.toString(),
@@ -98,7 +101,8 @@ public class ChatApplicationService {
                 patientScope.allowedPatientIds(),
                 patientScope.patientScope(),
                 conversationContext,
-                quotaUsedRatio
+                quotaUsedRatio,
+                llmKey
         ));
         long latencyMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
 

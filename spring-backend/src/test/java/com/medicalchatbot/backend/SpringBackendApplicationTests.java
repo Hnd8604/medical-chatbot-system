@@ -4,6 +4,7 @@ import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.AlertRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
+import com.medicalchatbot.backend.repository.LlmVirtualKeyRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
@@ -57,6 +58,9 @@ class SpringBackendApplicationTests {
 
 	@MockitoBean
 	private QuotaPolicyRepository quotaPolicyRepository;
+
+	@MockitoBean
+	private LlmVirtualKeyRepository llmVirtualKeyRepository;
 
 	@MockitoBean
 	private ChatbotServiceClient chatbotServiceClient;

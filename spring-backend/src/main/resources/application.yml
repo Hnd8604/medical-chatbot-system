@@ -59,6 +59,13 @@ chatbot:
   service:
     base-url: ${CHATBOT_SERVICE_BASE_URL:http://localhost:8000}
 
+litellm:
+  # AI Gateway: Spring dung master key de cap/dong bo virtual key theo user va doc spend.
+  base-url: ${LITELLM_BASE_URL:http://localhost:4000}
+  master-key: ${LITELLM_MASTER_KEY:}
+  # enabled=false hoac thieu master key => bo qua gateway, chatbot-service dung master key mac dinh.
+  enabled: ${LITELLM_GATEWAY_ENABLED:true}
+
 jwt:
   secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-please-1234567890}
   # Access token: TTL ngắn để giảm rủi ro khi lộ token; client tự gọi /api/auth/refresh để gia hạn.

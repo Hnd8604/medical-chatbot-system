@@ -3,6 +3,7 @@
 ## What Was Built
 
 This folder contains the first FastAPI chatbot/FHIR service slice for the Medical Chatbot project.
+Claude tự động nạp file này khi làm việc trong `chatbot-service/`.
 
 Implemented:
 
@@ -50,22 +51,6 @@ The HAPI stack is managed in:
 
 ```text
 infra/hapi-fhir
-```
-
-## Verified Demo Endpoints
-
-Use these after the server starts:
-
-```text
-GET http://localhost:8000/health
-GET http://localhost:8000/fhir/status
-GET http://localhost:8000/patients?name=Nguyen&limit=5
-GET http://localhost:8000/patients/BN2026-00001
-GET http://localhost:8000/patients/BN2026-00005/encounters?limit=5
-GET http://localhost:8000/patients/BN2026-00001/observations?limit=5
-GET http://localhost:8000/patients/BN2026-00001/conditions
-GET http://localhost:8000/patients/BN2026-00001/medications
-POST http://localhost:8000/chat
 ```
 
 ## Intent Extraction

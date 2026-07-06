@@ -7,10 +7,21 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      # DB-backed gateway: virtual keys, per-key budget, spend logs, Admin UI.
+      # Route sang instance app-postgres (published tren host cong 5433).
+      DATABASE_URL: ${DATABASE_URL:-postgresql://app_user:app_password@host.docker.internal:5433/litellm}
+      # Bat buoc de ma hoa virtual key khi luu DB. KHONG doi sau khi da sinh key.
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
+      # Dang nhap Admin UI tai /ui.
+      UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
+      UI_PASSWORD: ${LITELLM_UI_PASSWORD}
+      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB:-true}
     env_file:
       - .env
     healthcheck:

@@ -26,17 +26,20 @@ public class QuotaPolicyAdminService {
     private final UserRepository userRepository;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final LlmGatewayKeyService llmGatewayKeyService;
 
     public QuotaPolicyAdminService(
             QuotaPolicyRepository quotaPolicyRepository,
             UserRepository userRepository,
             AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            LlmGatewayKeyService llmGatewayKeyService
     ) {
         this.quotaPolicyRepository = quotaPolicyRepository;
         this.userRepository = userRepository;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.llmGatewayKeyService = llmGatewayKeyService;
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +94,8 @@ public class QuotaPolicyAdminService {
                 request.rateLimitPerMinute()
         );
         QuotaPolicy saved = quotaPolicyRepository.save(policy);
+        // Budget cost/ngay o gateway phai theo policy moi cho cac user da co virtual key.
+        llmGatewayKeyService.syncBudgetForPolicy(saved.getId(), saved.getDailyCostLimitUsd());
         audit("QUOTA_POLICY_UPDATED", saved);
         return QuotaPolicyAdminResponse.from(saved);
     }

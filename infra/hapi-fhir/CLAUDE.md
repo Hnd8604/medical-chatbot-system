@@ -27,7 +27,7 @@ infra/hapi-fhir/
     seed_fhir_data.py
     check_connection.py
   README.md
-  AGENTS.md
+  CLAUDE.md
 ```
 
 ## How To Run

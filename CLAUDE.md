@@ -44,8 +44,10 @@ Luồng: Frontend → Spring `/api/chat` → chatbot-service `/chat` → FHIR �
 
 ## Tài liệu sâu hơn (import khi cần)
 
-- @AGENTS.md — spec sản phẩm + quy tắc FHIR/RAG/usage/cache đầy đủ.
-- @spring-backend/AGENTS.md — package layout, endpoint, quy ước backend.
-- @chatbot-service/AGENTS.md — intent extraction, answer generation, evidence shape.
-- @MILESTONES.md — tiến độ + "Next Recommended Milestones".
+- @docs/product-spec.md — spec sản phẩm + quy tắc FHIR/RAG/usage/cache đầy đủ.
+- @docs/optimization-direction.md — hướng chuyên sâu: tối ưu token/quota/cache/routing/gateway + chỉ số đánh giá.
 - `docs/` — thiết kế từng module (vd `docs/M2-conversation-management.md`).
+
+> Mỗi thư mục con có `CLAUDE.md` riêng (Claude tự nạp khi làm việc trong đó):
+> `spring-backend/CLAUDE.md`, `chatbot-service/CLAUDE.md`,
+> `infra/hapi-fhir/CLAUDE.md`, `infra/app-postgres/CLAUDE.md`.

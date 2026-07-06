@@ -1,4 +1,7 @@
-# AGENTS.md
+# Product Spec — Medical Chatbot
+
+> Đây là spec sản phẩm đầy đủ + quy tắc FHIR/RAG/usage/cache. `CLAUDE.md` gốc import file này.
+> (Trước đây là `AGENTS.md` gốc — đổi tên theo chuẩn Claude Code.)
 
 ## 1. Tổng quan dự án
 
@@ -460,8 +463,6 @@ Hệ thống nên theo dõi mức sử dụng ở nhiều cấp độ.
 
 Theo dõi số lần gọi AI mà một người dùng thực hiện.
 
-Ví dụ:
-
 ```text
 Free user: 50 AI requests/ngày
 Admin user: 500 AI requests/ngày
@@ -469,13 +470,9 @@ Admin user: 500 AI requests/ngày
 
 Hữu ích để giới hạn spam và lạm dụng.
 
----
-
 ### 7.2 Quota theo Token
 
 Theo dõi token đầu vào và đầu ra.
-
-Ví dụ:
 
 ```text
 User A đã dùng 25,000 token hôm nay.
@@ -484,13 +481,9 @@ Giới hạn: 100,000 token/ngày.
 
 Hữu ích vì một request có thể rẻ hoặc đắt tùy vào kích thước ngữ cảnh.
 
----
-
 ### 7.3 Quota theo Chi phí
 
 Theo dõi chi phí ước tính.
-
-Ví dụ:
 
 ```text
 User A đã dùng khoảng $0.42 hôm nay.
@@ -499,11 +492,7 @@ Giới hạn: $1.00/ngày.
 
 Hữu ích vì các mô hình khác nhau có giá khác nhau.
 
----
-
 ### 7.4 Vì sao theo dõi cả ba?
-
-Số request, số token, và chi phí đo lường những thứ khác nhau.
 
 | Chỉ số | Kiểm soát |
 |---|---|
@@ -523,20 +512,7 @@ Hệ thống có thể cache các kết quả an toàn và có thể lặp lại
 
 Cache hit nghĩa là hệ thống tìm thấy một kết quả trước đó cho cùng request hoặc request tương đương và tái sử dụng nó thay vì gọi lại dịch vụ tốn kém.
 
-Ví dụ:
-
-```text
-Câu hỏi:
-"Glucose cao nghĩa là gì?"
-
-Kết quả đã cache tồn tại:
-Có → cache hit
-Không → cache miss
-```
-
 ### 8.2 Ứng viên Cache tốt
-
-Ứng viên tốt:
 
 - Giải thích y khoa chung.
 - Kết quả truy xuất RAG cho các khái niệm phổ biến.
@@ -548,9 +524,7 @@ Cẩn thận với dữ liệu riêng của bệnh nhân.
 
 ### 8.3 Cache dữ liệu bệnh nhân
 
-Dữ liệu riêng của bệnh nhân có thể thay đổi và nhạy cảm.
-
-Nếu cache, nó nên có:
+Dữ liệu riêng của bệnh nhân có thể thay đổi và nhạy cảm. Nếu cache, nó nên có:
 
 - TTL ngắn.
 - Phạm vi theo user/session.
@@ -561,8 +535,6 @@ Nếu cache, nó nên có:
 ---
 
 ## 9. Quy tắc An toàn và Riêng tư
-
-Dự án này xử lý dữ liệu chăm sóc sức khỏe, nên an toàn rất quan trọng.
 
 Hệ thống phải:
 
@@ -576,7 +548,7 @@ Hệ thống phải:
 - Ghi log dữ liệu nhạy cảm một cách cẩn thận.
 - Tránh lưu hồ sơ y tế thô trong prompt của LLM trừ khi cần thiết.
 
-Phong cách câu trả lời khuyến nghị:
+Phong cách khuyến nghị:
 
 ```text
 Theo dữ liệu FHIR hiện có, Patient/123 có các thuốc được ghi nhận sau...
@@ -594,136 +566,47 @@ trừ khi resource Condition hỗ trợ điều đó một cách rõ ràng.
 
 ## 10. Xử lý lỗi
 
-Backend nên xử lý rõ ràng các trường hợp sau:
+Backend nên xử lý rõ ràng các trường hợp:
 
-### Không tìm thấy bệnh nhân
-
-```text
-Không có bệnh nhân nào khớp với thông tin được cung cấp.
-```
-
-### Tìm thấy nhiều bệnh nhân
-
-```text
-Nhiều bệnh nhân khớp với tên này. Hãy hỏi thêm ngày sinh, mã định danh, hoặc một trường phân biệt khác.
-```
-
-### Không tìm thấy resource
-
-```text
-Không tìm thấy bản ghi Observation nào cho bệnh nhân này.
-```
-
-### Lỗi FHIR Server
-
-```text
-FHIR Server trả về lỗi. Ghi log chi tiết kỹ thuật ở nội bộ, nhưng trả về một thông báo đơn giản cho người dùng.
-```
-
-### Lỗi LLM Tool
-
-```text
-Hệ thống không thể hoàn tất bước truy xuất dữ liệu. Không bịa câu trả lời.
-```
+- **Không tìm thấy bệnh nhân**: "Không có bệnh nhân nào khớp với thông tin được cung cấp."
+- **Tìm thấy nhiều bệnh nhân**: "Nhiều bệnh nhân khớp với tên này. Hãy hỏi thêm ngày sinh, mã định danh, hoặc một trường phân biệt khác."
+- **Không tìm thấy resource**: "Không tìm thấy bản ghi Observation nào cho bệnh nhân này."
+- **Lỗi FHIR Server**: Ghi log chi tiết kỹ thuật ở nội bộ, trả về một thông báo đơn giản cho người dùng.
+- **Lỗi LLM Tool**: "Hệ thống không thể hoàn tất bước truy xuất dữ liệu." Không bịa câu trả lời.
 
 ---
 
 ## 11. Gợi ý cấu trúc thư mục Backend
 
-Ví dụ:
-
 ```text
 src/
-  app/
-    main.py
-    config.py
-
-  api/
-    chat_routes.py
-    health_routes.py
-
-  agents/
-    orchestrator.py
-    prompts.py
-    tool_registry.py
-
-  fhir/
-    client.py
-    patient_service.py
-    observation_service.py
-    encounter_service.py
-    condition_service.py
-    medication_service.py
-    normalizer.py
-
-  rag/
-    retriever.py
-    vector_store.py
-    document_loader.py
-
-  usage/
-    usage_tracker.py
-    quota_service.py
-    cost_estimator.py
-
-  cache/
-    cache_service.py
-    cache_keys.py
-
-  db/
-    models.py
-    session.py
-    migrations/
-
-  security/
-    auth.py
-    access_control.py
-
-  tests/
-    test_fhir_client.py
-    test_patient_service.py
-    test_usage_tracker.py
-    test_quota_service.py
+  app/         main.py, config.py
+  api/         chat_routes.py, health_routes.py
+  agents/      orchestrator.py, prompts.py, tool_registry.py
+  fhir/        client.py, patient_service.py, observation_service.py, ..., normalizer.py
+  rag/         retriever.py, vector_store.py, document_loader.py
+  usage/       usage_tracker.py, quota_service.py, cost_estimator.py
+  cache/       cache_service.py, cache_keys.py
+  db/          models.py, session.py, migrations/
+  security/    auth.py, access_control.py
+  tests/       test_fhir_client.py, test_patient_service.py, ...
 ```
 
 Điều chỉnh cấu trúc này theo framework thực tế.
 
 ---
 
-## 12. Gợi ý các dịch vụ Docker Compose
+## 12. Docker Compose
 
-Các dịch vụ khuyến nghị:
+Các dịch vụ khuyến nghị: `chatbot-backend`, `frontend`, `hapi-fhir`, `postgres`, `redis`, `vector-db`.
 
-```text
-chatbot-backend
-frontend
-hapi-fhir
-postgres
-redis
-vector-db
-```
+Tối thiểu cho demo FHIR: `chatbot-backend`, `hapi-fhir`, `postgres`.
 
-Các dịch vụ tối thiểu cho demo FHIR:
-
-```text
-chatbot-backend
-hapi-fhir
-postgres
-```
-
-Tùy chọn:
-
-```text
-redis       → cache và rate limit
-qdrant      → vector database cho RAG
-pgvector    → tìm kiếm vector bên trong PostgreSQL
-```
+Tùy chọn: `redis` (cache/rate limit), `qdrant` (vector DB cho RAG), `pgvector` (vector search trong PostgreSQL).
 
 ---
 
 ## 13. Biến môi trường
-
-Các biến khuyến nghị:
 
 ```env
 # HAPI FHIR
@@ -763,8 +646,7 @@ Không commit API key hoặc mật khẩu thật.
 - Giữ lớp LLM tách biệt với lớp FHIR client.
 - Giữ các lệnh gọi FHIR API tập trung trong module `fhir/`.
 - Giữ các template prompt tập trung.
-- Giữ việc theo dõi usage tập trung.
-- Không lặp lại logic quota giữa các controller.
+- Giữ việc theo dõi usage tập trung; không lặp lại logic quota giữa các controller.
 - Normalize response FHIR trước khi gửi cho LLM.
 
 ### 14.2 FHIR
@@ -774,14 +656,14 @@ Không commit API key hoặc mật khẩu thật.
 - Dùng `_sort=-date` khi lấy bản ghi mới nhất.
 - Dùng patient ID thay vì tên bệnh nhân khi đã xác định được bệnh nhân.
 - Xử lý response dạng Bundle đúng cách.
-- Giữ lại các trường quan trọng như `resourceType`, `id`, `code`, `display`, `effectiveDateTime`, `valueQuantity`, và `subject`.
+- Giữ lại các trường quan trọng: `resourceType`, `id`, `code`, `display`, `effectiveDateTime`, `valueQuantity`, `subject`.
 
 ### 14.3 LLM
 
 - LLM không được tạo ra sự thật không có trong dữ liệu đã truy xuất.
 - LLM nên hỏi lại để làm rõ nếu danh tính bệnh nhân không rõ ràng.
 - LLM nên gọi tool thay vì trả lời trực tiếp câu hỏi dữ liệu từ trí nhớ.
-- LLM nên được cung cấp dữ liệu gọn, đã normalize thay vì các bundle FHIR thô khổng lồ bất cứ khi nào có thể.
+- LLM nên được cung cấp dữ liệu gọn, đã normalize thay vì bundle FHIR thô khổng lồ.
 
 ### 14.4 RAG
 
@@ -792,84 +674,25 @@ Không commit API key hoặc mật khẩu thật.
 
 ### 14.5 Kiểm thử
 
-Test tối thiểu:
-
-- Tìm kiếm bệnh nhân.
-- Truy xuất observation.
-- Truy xuất lượt khám gần nhất.
-- Truy xuất condition.
-- Truy xuất MedicationRequest.
-- FHIR Server không khả dụng.
-- Kết quả FHIR rỗng.
-- Nhiều bệnh nhân khớp.
-- Vượt quota.
-- Cache hit và cache miss.
-- Phân tích (parse) lệnh gọi tool của LLM.
+Test tối thiểu: tìm kiếm bệnh nhân; truy xuất observation; lượt khám gần nhất; condition; MedicationRequest; FHIR Server không khả dụng; kết quả FHIR rỗng; nhiều bệnh nhân khớp; vượt quota; cache hit/miss; parse lệnh gọi tool của LLM.
 
 ---
 
 ## 15. Ví dụ các Request FHIR
 
-### Lấy metadata của server
-
 ```http
-GET /fhir/metadata
-```
-
-### Tạo một Patient
-
-```http
+GET  /fhir/metadata
 POST /fhir/Patient
-Content-Type: application/fhir+json
-
-{
-  "resourceType": "Patient",
-  "name": [
-    {
-      "family": "Nguyen",
-      "given": ["Van A"]
-    }
-  ],
-  "gender": "male",
-  "birthDate": "2003-01-01"
-}
-```
-
-### Tìm Patient theo tên
-
-```http
-GET /fhir/Patient?name=Nguyen
-```
-
-### Lấy Observation của một Patient
-
-```http
-GET /fhir/Observation?patient=Patient/123&_count=10
-```
-
-### Lấy Observation mới nhất
-
-```http
-GET /fhir/Observation?patient=Patient/123&_sort=-date&_count=5
-```
-
-### Lấy Condition
-
-```http
-GET /fhir/Condition?patient=Patient/123
-```
-
-### Lấy Medication Request
-
-```http
-GET /fhir/MedicationRequest?patient=Patient/123
+GET  /fhir/Patient?name=Nguyen
+GET  /fhir/Observation?patient=Patient/123&_count=10
+GET  /fhir/Observation?patient=Patient/123&_sort=-date&_count=5
+GET  /fhir/Condition?patient=Patient/123
+GET  /fhir/MedicationRequest?patient=Patient/123
 ```
 
 ---
 
 ## 16. Mẫu sinh câu trả lời khuyến nghị
-
-Khi trả lời người dùng, chatbot nên theo mẫu này:
 
 ```text
 1. Nêu rõ đã tìm thấy dữ liệu gì.
@@ -889,11 +712,9 @@ Theo dữ liệu FHIR hiện có, Patient/123 có ba bản ghi observation huy�
 
 ## 17. Phạm vi Demo tối thiểu
 
-Với một đồ án sinh viên 5 tuần, phạm vi hợp lý tối thiểu là:
-
 ```text
 1. HAPI FHIR + PostgreSQL chạy bằng Docker.
-2. Dữ liệu giả (mock) cho Patient, Encounter, Observation, Condition, MedicationRequest.
+2. Dữ liệu giả cho Patient, Encounter, Observation, Condition, MedicationRequest.
 3. Backend API cho chat.
 4. Trích xuất intent và gọi tool bằng LLM.
 5. Các tool truy xuất FHIR.
@@ -909,22 +730,11 @@ Không xây microservice quá mức trừ khi nhóm có đủ thời gian.
 
 ## 18. Ngoài phạm vi của phiên bản đầu
 
-Tránh những thứ sau trong phiên bản đầu trừ khi bắt buộc:
-
-- Tích hợp bệnh viện thật.
-- Dữ liệu bệnh nhân thật.
-- Hỗ trợ quyết định lâm sàng đầy đủ.
-- Mô hình phân quyền phức tạp.
-- Tích hợp đầy đủ terminology server SNOMED/LOINC.
-- Fine-tune một LLM y khoa.
-- Viết SQL trực tiếp vào các bảng nội bộ của HAPI FHIR.
-- Xây dựng một hệ thống EHR hoàn chỉnh.
+Tránh: tích hợp bệnh viện thật; dữ liệu bệnh nhân thật; hỗ trợ quyết định lâm sàng đầy đủ; mô hình phân quyền phức tạp; tích hợp đầy đủ terminology server SNOMED/LOINC; fine-tune một LLM y khoa; viết SQL trực tiếp vào bảng nội bộ HAPI; xây dựng hệ thống EHR hoàn chỉnh.
 
 ---
 
 ## 19. Nguyên tắc thiết kế cuối cùng
-
-Quy tắc quan trọng nhất của dự án này:
 
 ```text
 Dùng FHIR API cho dữ liệu y tế có cấu trúc chính xác.

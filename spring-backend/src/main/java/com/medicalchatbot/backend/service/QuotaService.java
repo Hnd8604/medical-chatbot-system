@@ -40,6 +40,7 @@ public class QuotaService {
     private final AlertService alertService;
     private final NotificationService notificationService;
     private final CurrentUserService currentUserService;
+    private final LiteLLMSpendService litellmSpendService;
     private final ZoneId quotaZone;
 
     @Autowired
@@ -51,7 +52,8 @@ public class QuotaService {
             ObjectMapper objectMapper,
             AlertService alertService,
             NotificationService notificationService,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            LiteLLMSpendService litellmSpendService) {
         this(
                 userRepository,
                 quotaPolicyRepository,
@@ -61,7 +63,8 @@ public class QuotaService {
                 alertService,
                 notificationService,
                 ZoneId.systemDefault(),
-                currentUserService);
+                currentUserService,
+                litellmSpendService);
     }
 
     QuotaService(
@@ -73,7 +76,8 @@ public class QuotaService {
             AlertService alertService,
             NotificationService notificationService,
             ZoneId quotaZone,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            LiteLLMSpendService litellmSpendService) {
         this.userRepository = userRepository;
         this.quotaPolicyRepository = quotaPolicyRepository;
         this.usageLogRepository = usageLogRepository;
@@ -82,6 +86,7 @@ public class QuotaService {
         this.alertService = alertService;
         this.notificationService = notificationService;
         this.currentUserService = currentUserService;
+        this.litellmSpendService = litellmSpendService;
         this.quotaZone = quotaZone;
     }
 
@@ -94,7 +99,8 @@ public class QuotaService {
             AlertService alertService,
             NotificationService notificationService,
             CurrentUserService currentUserService,
-            ZoneId quotaZone) {
+            ZoneId quotaZone,
+            LiteLLMSpendService litellmSpendService) {
         this(
                 userRepository,
                 quotaPolicyRepository,
@@ -104,7 +110,8 @@ public class QuotaService {
                 alertService,
                 notificationService,
                 quotaZone,
-                currentUserService);
+                currentUserService,
+                litellmSpendService);
     }
 
     public QuotaStatusResponse currentUserStatus() {
@@ -175,12 +182,15 @@ public class QuotaService {
                 startOfNextDay);
 
         int usedTokens = usage.usedTokens();
-        checkAndTriggerQuotaWarning(userId, policy, usage, usedTokens);
+        // Cost la nguon su that tu AI Gateway (LiteLLM budget). Neu gateway khong san
+        // sang thi roi ve so cost tich trong usage_logs.
+        BigDecimal usedCostUsd = effectiveUsedCost(userId, usage);
+        checkAndTriggerQuotaWarning(userId, policy, usage, usedTokens, usedCostUsd);
 
         int remainingRequests = remaining(policy.dailyRequestLimit(), usage.usedRequests());
         int remainingTokens = remaining(policy.dailyTokenLimit(), usedTokens);
-        BigDecimal remainingCost = remaining(policy.dailyCostLimitUsd(), usage.usedCostUsd());
-        String blockedReason = blockedReason(policy, usage, usedTokens);
+        BigDecimal remainingCost = remaining(policy.dailyCostLimitUsd(), usedCostUsd);
+        String blockedReason = blockedReason(policy, usage, usedTokens, usedCostUsd);
 
         return new QuotaStatusResponse(
                 username != null ? username : userId.toString(),
@@ -192,12 +202,28 @@ public class QuotaService {
                 usage.usedInputTokens(),
                 usage.usedOutputTokens(),
                 usedTokens,
-                usage.usedCostUsd(),
+                usedCostUsd,
                 remainingRequests,
                 remainingTokens,
                 remainingCost,
                 blockedReason == null,
                 blockedReason);
+    }
+
+    /**
+     * Cost da dung: uu tien spend cua gateway; fallback usage_logs khi gateway tat/loi.
+     *
+     * <p>Luu y cua so thoi gian: spend cua gateway theo budget_duration "1d" cua
+     * LiteLLM (cua so <b>rolling</b> tinh tu luc tao/reset key), con token/request
+     * o day tinh theo <b>ngay lich</b> trong quotaZone. Hai cua so co the lech nhau
+     * vai gio — chap nhan cho pham vi hien tai, xem docs/M-litellm-gateway.md.
+     */
+    private BigDecimal effectiveUsedCost(UUID userId, QuotaUsageSummary usage) {
+        LiteLLMSpendService.GatewaySpend spend = litellmSpendService.getSpendForUser(userId);
+        if (spend != null && spend.spendUsd() != null) {
+            return spend.spendUsd();
+        }
+        return usage.usedCostUsd();
     }
 
     private UUID getUserIdByUsername(String username) {
@@ -207,14 +233,14 @@ public class QuotaService {
                         "Không tìm thấy người dùng: " + username));
     }
 
-    private String blockedReason(QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens) {
+    private String blockedReason(QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens, BigDecimal usedCostUsd) {
         if (usage.usedRequests() >= policy.dailyRequestLimit()) {
             return "Đã vượt quá hạn mức " + policy.dailyRequestLimit() + " lượt gọi AI/ngày.";
         }
         if (usedTokens >= policy.dailyTokenLimit()) {
             return "Đã vượt quá hạn mức " + policy.dailyTokenLimit() + " token/ngày.";
         }
-        if (usage.usedCostUsd().compareTo(policy.dailyCostLimitUsd()) >= 0) {
+        if (usedCostUsd.compareTo(policy.dailyCostLimitUsd()) >= 0) {
             return "Đã vượt quá hạn mức chi phí AI/ngày.";
         }
         return null;
@@ -247,16 +273,18 @@ public class QuotaService {
     }
 
     private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyInfo policy, QuotaUsageSummary usage,
-            int usedTokens) {
+            int usedTokens, BigDecimal usedCostUsd) {
         double requestUsagePct = ratio(usage.usedRequests(), policy.dailyRequestLimit());
         double tokenUsagePct = ratio(usedTokens, policy.dailyTokenLimit());
+        // Cost tinh theo spend gateway (source of truth) da duoc effectiveUsedCost xu ly.
+        double costUsagePct = ratio(usedCostUsd, policy.dailyCostLimitUsd());
 
-        if (requestUsagePct < 0.8 && tokenUsagePct < 0.8) {
+        if (requestUsagePct < 0.8 && tokenUsagePct < 0.8 && costUsagePct < 0.8) {
             return;
         }
         try {
             if (!notificationService.hasQuotaWarningBeenSentToday(userId)) {
-                double maxPct = Math.max(requestUsagePct, tokenUsagePct);
+                double maxPct = Math.max(requestUsagePct, Math.max(tokenUsagePct, costUsagePct));
                 String content = String.format(
                         "Hạn mức sử dụng hằng ngày của bạn đã đạt %.1f%%. Vui lòng sử dụng tiết kiệm.",
                         maxPct * 100);

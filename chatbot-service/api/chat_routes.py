@@ -19,6 +19,7 @@ from agents.intent_extractor import (
     is_self_patient_reference,
     normalize_patient_id,
 )
+from agents.gateway_context import GatewayBudgetExceededError, set_gateway_context
 from api.chat_schemas import ChatRequest
 from chat.cache_flow import get_cached_chat_payload
 from chat.context_memory import (
@@ -51,6 +52,15 @@ router = APIRouter(tags=["chat"])
 
 
 USER_ALLOWED_FHIR_TOOLS = FHIR_PROTECTED_TOOLS - {TOOL_SEARCH_PATIENTS}
+
+
+def _budget_exceeded_http() -> HTTPException:
+    # Gateway chan vi virtual key vuot budget cost/ngay. Spring nhan 429 va chuyen tiep
+    # nguyen status/detail xuong frontend (giong quota exceeded).
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Đã đạt hạn mức chi phí AI trong ngày. Vui lòng thử lại sau khi hạn mức được đặt lại.",
+    )
 
 
 def _allowed_patient_ids(request: ChatRequest) -> list[str]:
@@ -140,6 +150,8 @@ async def chat(
     model_router: ModelRouter = Depends(get_model_router),
 ) -> dict[str, Any]:
     current_user_context.set(request.user_id)
+    # Virtual key + end-user cho AI Gateway: cac call site LLM doc lai qua contextvar.
+    set_gateway_context(request.llm_key, request.user_id)
 
     try:
         cached_payload = await get_cached_chat_payload(request, cache_service)
@@ -153,11 +165,22 @@ async def chat(
 
     # Router chỉ cần message + quota nên chạy song song với intent extraction,
     # LLM Router (nếu bật) gần như không cộng thêm latency.
+    # return_exceptions=True: cả hai nhánh chạy đến cùng và exception của từng nhánh
+    # đều được retrieve — tránh task mồ côi ("Task exception was never retrieved")
+    # khi một nhánh raise GatewayBudgetExceededError trước nhánh kia.
     patient_hint = _patient_id_hint(request)
     plan, routing = await asyncio.gather(
         intent_extractor.extract(request.message, provided_patient_id=patient_hint),
         model_router.route(request.message, request.quota_used_ratio),
+        return_exceptions=True,
     )
+    for result in (plan, routing):
+        if isinstance(result, GatewayBudgetExceededError):
+            raise _budget_exceeded_http() from result
+    if isinstance(plan, BaseException):
+        raise plan
+    if isinstance(routing, BaseException):
+        raise routing
     plan = _apply_user_patient_scope(request, plan)
     plan = _apply_selected_patient_context(request, plan)
     plan = _apply_context_reference_context(request, plan)
@@ -277,6 +300,8 @@ async def chat(
                 answer_generator,
                 **routing_kwargs,
             )
+    except GatewayBudgetExceededError as exc:
+        raise _budget_exceeded_http() from exc
     except FhirClientError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

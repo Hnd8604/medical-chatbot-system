@@ -20,6 +20,7 @@ import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertSeverity;
+import com.medicalchatbot.backend.enums.NotificationType;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
@@ -53,6 +54,9 @@ class QuotaServiceTest {
 
     @Mock
     private CurrentUserService currentUserService;
+
+    @Mock
+    private LiteLLMSpendService litellmSpendService;
 
     @Test
     void currentUserStatusReturnsRemainingQuota() {
@@ -176,6 +180,45 @@ class QuotaServiceTest {
         );
     }
 
+    @Test
+    void quotaWarningTriggersWhenCostUsageReaches80Percent() {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        QuotaService service = newService();
+
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getUsername()).thenReturn("user_demo");
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        // Request/token con thap, chi cost cham nguong 85% -> van phai canh bao.
+        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
+                "free",
+                30,
+                50000,
+                new BigDecimal("1.00")
+        )));
+        when(usageLogRepository.summarizeSuccessfulUsage(
+                eq(userId),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(new QuotaUsageSummary(
+                1,
+                100,
+                50,
+                new BigDecimal("0.85")
+        ));
+        when(notificationService.hasQuotaWarningBeenSentToday(userId)).thenReturn(false);
+
+        var status = service.currentUserStatus();
+
+        assertEquals(true, status.allowed());
+        verify(notificationService).createNotification(
+                eq(userId),
+                eq(NotificationType.QUOTA_WARNING),
+                anyString(),
+                org.mockito.ArgumentMatchers.contains("85")
+        );
+    }
+
     private QuotaService newService() {
         return new QuotaService(
                 userRepository,
@@ -186,7 +229,8 @@ class QuotaServiceTest {
                 alertService,
                 notificationService,
                 ZoneId.of("Asia/Saigon"),
-                currentUserService
+                currentUserService,
+                litellmSpendService
         );
     }
 }

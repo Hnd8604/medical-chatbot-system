@@ -1,6 +1,7 @@
 # Spring Backend Notes
 
 This folder contains the main Spring Boot backend for the web application.
+Claude tự động nạp file này khi làm việc trong `spring-backend/`.
 
 Implemented:
 
@@ -53,6 +54,8 @@ src/main/java/com/medicalchatbot/backend/
 cd spring-backend
 .\mvnw.cmd spring-boot:run
 ```
+
+> **JAVA_HOME bắt buộc** cho mọi lệnh `mvnw.cmd`: `C:\Program Files\Java\jdk-21.0.10` (Java 21).
 
 ## Verified Endpoints
 

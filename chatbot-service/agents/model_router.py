@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
 
+from agents.gateway_context import gateway_call_kwargs, raise_if_budget_exceeded
 from agents.intent.text_utils import normalize_text
 
 log = logging.getLogger(__name__)
@@ -202,8 +203,10 @@ class LLMModelRouter:
                 tools=_ROUTER_TOOL_DEFINITIONS,
                 tool_choice={"type": "function", "function": {"name": "classify_complexity"}},
                 temperature=0,
+                **gateway_call_kwargs(),
             )
-        except Exception:
+        except Exception as exc:
+            raise_if_budget_exceeded(exc)  # loi budget -> route tra 429, khong nuot
             log.exception("LLM router loi, fallback keyword classifier")
             return keyword_complexity, _zero_usage(), "keyword"
 

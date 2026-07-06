@@ -1,421 +1,186 @@
 # Medical Chatbot
 
-Medical Chatbot là demo webapp giúp staff/admin y tế tra cứu dữ liệu bệnh nhân bằng ngôn ngữ tự nhiên. Hệ thống được thiết kế quanh FHIR: LLM không sinh SQL và không truy vấn trực tiếp database nội bộ của HAPI FHIR.
+Medical Chatbot là webapp demo giúp người dùng (bệnh nhân, bác sĩ, admin) tra cứu
+dữ liệu y tế bằng ngôn ngữ tự nhiên tiếng Việt. Hệ thống thiết kế quanh **FHIR**:
+LLM không sinh SQL, không truy vấn trực tiếp database nội bộ của HAPI FHIR — mọi
+dữ liệu y tế đi qua FHIR REST API.
 
-## Mục Tiêu
+Đề tài trọng tâm: **tối ưu vận hành hệ thống chatbot y tế qua quản lý token,
+quota, cache và model routing** — xem `docs/optimization-direction.md`.
 
-- Tìm kiếm bệnh nhân theo tên, số điện thoại, ngày sinh, identifier hoặc FHIR id.
-- Hỏi đáp bằng tiếng Việt về thông tin bệnh nhân.
-- Lấy dữ liệu có cấu trúc từ HAPI FHIR qua FHIR REST API.
-- Hỗ trợ các FHIR resource demo:
-  - `Patient`
-  - `Encounter`
-  - `Observation`
-  - `Condition`
-  - `MedicationRequest`
-- Lưu lịch sử hội thoại, message và session memory.
-- Theo dõi quota, token usage, estimated AI cost và audit log.
-- Có dashboard demo cho staff để chọn bệnh nhân, xem hồ sơ tóm tắt và chat theo context bệnh nhân.
+## Tính năng chính
 
-## Kiến Trúc Hệ Thống
+- Tìm bệnh nhân theo tên / SĐT / ngày sinh / identifier; hỏi đáp tiếng Việt về
+  `Patient`, `Encounter`, `Observation`, `Condition`, `MedicationRequest`.
+- Auth JWT (access + refresh token rotation qua Redis), 3 role `USER` /
+  `DOCTOR` / `ADMIN`, liên kết tài khoản ↔ FHIR Patient, quên/đổi mật khẩu (OTP email).
+- Lịch sử hội thoại, session memory + **rolling summary** (LangGraph) để nén ngữ cảnh.
+- **Quota** theo ngày (request / token / cost) + rate limit theo phút; chặn và audit khi vượt.
+- **Semantic cache** (Qdrant + embedding đa ngôn ngữ) và exact cache cho câu trả lời.
+- **Model routing** (M16): câu đơn giản → model rẻ, phức tạp → model mạnh;
+  keyword classifier + LLM Router tùy chọn. **Retry / fallback** khi LLM lỗi (M17).
+- **AI Gateway (LiteLLM)**: provider key chỉ nằm ở gateway; Spring cấp virtual key theo user.
+- Dashboard admin: quản lý user, quota policy, bảng giá model, chi phí,
+  analytics (intent / error / performance), alerts, audit log.
+- Thông báo realtime qua SSE; feedback 1–5 sao cho từng câu trả lời.
 
-```text
-Staff / Admin Demo
-  -> Frontend (React + Vite)
-  -> Spring Boot backend
-  -> FastAPI chatbot-service
-  -> HAPI FHIR REST API
-  -> HAPI PostgreSQL
-```
-
-Spring Boot dùng app database riêng:
-
-```text
-Spring Boot backend
-  -> App PostgreSQL
-```
-
-Quy tắc quan trọng:
-
-```text
-Dùng FHIR REST API để lấy dữ liệu y tế có cấu trúc.
-Không query trực tiếp HAPI PostgreSQL internal tables.
-Không để LLM sinh SQL.
-```
-
-## Sơ Đồ Tổng Quan
+## Kiến trúc
 
 ```mermaid
 flowchart LR
-    Staff["Staff / Admin Demo"] --> FE["Frontend React + Vite<br/>localhost:5174"]
+    U["User / Doctor / Admin"] --> FE["Frontend React + Vite<br/>localhost:5174"]
     FE --> Spring["Spring Boot Backend<br/>localhost:8081"]
     Spring --> AppDB[("App PostgreSQL<br/>localhost:5433")]
-    Spring --> Chatbot["FastAPI chatbot-service<br/>localhost:8000"]
-    Chatbot --> LLM["OpenAI API<br/>Intent + Answer"]
-    Chatbot --> HAPI["HAPI FHIR Server<br/>localhost:8080/fhir"]
+    Spring --> Redis[("Redis<br/>localhost:6379")]
+    Spring --> Bot["FastAPI chatbot-service<br/>localhost:8000"]
+    Spring --> GW["LiteLLM Gateway<br/>localhost:4000"]
+    Bot --> GW
+    GW --> LLM["LLM Provider<br/>(OpenAI, ...)"]
+    Bot --> Qdrant[("Qdrant<br/>localhost:6333")]
+    Bot --> HAPI["HAPI FHIR Server<br/>localhost:8080/fhir"]
     HAPI --> HapiDB[("HAPI PostgreSQL<br/>localhost:5434")]
 
     Spring -. "không query trực tiếp" .- HapiDB
     FE -. "không gọi trực tiếp" .- HAPI
 ```
 
-## Workflow Chat
+Quy tắc quan trọng:
+
+```text
+Dùng FHIR REST API cho dữ liệu y tế có cấu trúc.
+Không query trực tiếp bảng nội bộ HAPI (hfj_*).
+Không để LLM sinh SQL.
+Provider key LLM chỉ nằm trong LiteLLM gateway.
+```
+
+| Service | Thư mục | Vai trò |
+|---|---|---|
+| Frontend | `frontend-react/` | Chat UI, lịch sử hội thoại, panel bệnh nhân, dashboard admin. Chỉ gọi Spring. |
+| Spring Backend | `spring-backend/` | Backend chính: auth, quota, session/message, usage/audit, notifications, virtual key. |
+| chatbot-service | `chatbot-service/` | Intent extraction, policy theo role, gọi FHIR, routing, semantic cache, sinh câu trả lời. |
+| HAPI FHIR | `infra/hapi-fhir/` | FHIR Server R4 — source of truth dữ liệu y tế. |
+| Hạ tầng khác | `infra/` | App Postgres, Redis, Qdrant, LiteLLM — Docker Compose. |
+
+Mỗi service có README/CLAUDE.md riêng với chi tiết API và quy ước.
+
+## Workflow chat
 
 ```mermaid
 sequenceDiagram
-    actor Staff
+    actor User
     participant FE as Frontend
     participant Spring as Spring Backend
-    participant AppDB as App PostgreSQL
     participant Bot as chatbot-service
-    participant LLM as OpenAI API
+    participant GW as LiteLLM Gateway
     participant HAPI as HAPI FHIR
-    participant HapiDB as HAPI PostgreSQL
 
-    Staff->>FE: Gửi câu hỏi
-    FE->>Spring: POST /api/chat
-    Spring->>AppDB: Kiem tra JWT user, session, quota
-    Spring->>AppDB: Lưu user message
-    Spring->>Bot: POST /chat + conversation_context
-    Bot->>LLM: Extract intent/tool
-    LLM-->>Bot: Tool plan
-    Bot->>HAPI: FHIR REST request
-    HAPI->>HapiDB: Đọc FHIR internal data
-    HapiDB-->>HAPI: Data
-    HAPI-->>Bot: FHIR Bundle
-    Bot->>Bot: Normalize evidence
-    Bot->>LLM: Generate Vietnamese answer
-    LLM-->>Bot: Final answer
+    User->>FE: Gửi câu hỏi
+    FE->>Spring: POST /api/chat (JWT)
+    Spring->>Spring: Check quota + rate limit, lưu user message
+    Spring->>Bot: POST /chat + conversation_context + virtual key
+    Bot->>Bot: Check semantic/exact cache
+    alt Cache miss
+        Bot->>GW: Extract intent + route model
+        Bot->>HAPI: FHIR REST request
+        HAPI-->>Bot: FHIR Bundle
+        Bot->>Bot: Normalize evidence
+        Bot->>GW: Sinh câu trả lời tiếng Việt (song song: rolling summary)
+    end
     Bot-->>Spring: answer + evidence + usage + memory_update
-    Spring->>AppDB: Lưu assistant message, usage, audit, memory
-    Spring-->>FE: ChatResponse
-    FE-->>Staff: Hiển thị câu trả lời
+    Spring->>Spring: Lưu assistant message, usage/audit log, memory
+    Spring-->>FE: ChatResponse (answer, evidence, token/cost)
 ```
 
-## Cấu Trúc Thư Mục
-
-```text
-Medical_Chatbot/
-  frontend-react/
-    src/
-    index.html
-    package.json
-    vite.config.ts
-
-  spring-backend/
-    src/main/java/com/medicalchatbot/backend/
-      config/
-      controller/
-      dto/
-        request/
-        response/
-      entity/
-      enums/
-      exception/
-      mapper/
-      repository/
-      service/
-    src/main/resources/db/migration/
-
-  chatbot-service/
-    app/
-    api/
-    agents/
-    fhir/
-    tests/
-
-  infra/
-    hapi-fhir/
-      docker-compose.yml
-      config/
-      seed/
-      scripts/
-    app-postgres/
-      docker-compose.yml
-
-  logs/
-  run-dev.ps1
-  AGENTS.md
-  MILESTONES.md
-```
-
-## Thành Phần Chính
-
-### Frontend
-
-Folder: `frontend-react/`
-
-Vai trò:
-
-- Staff dashboard demo.
-- Tìm kiếm và chọn bệnh nhân.
-- Hiển thị lịch sử hội thoại.
-- Hiển thị chat area.
-- Hiển thị hồ sơ tóm tắt, evidence, token/cost/quota.
-- Chỉ gọi Spring backend, không gọi trực tiếp HAPI FHIR.
-
-### Spring Boot Backend
-
-Folder: `spring-backend/`
-
-Vai trò:
-
-- Backend chính của webapp.
-- Expose REST API cho frontend.
-- Quản lý chat session, messages, session memory.
-- Kiểm tra quota trước khi gọi AI.
-- Lưu usage logs, audit logs.
-- Tính estimated cost dựa trên token và bảng giá model.
-- Proxy các endpoint patient/FHIR read sang `chatbot-service`.
-
-Flow code chính:
-
-```text
-controller -> service -> repository -> entity -> app database
-```
-
-### FastAPI chatbot-service
-
-Folder: `chatbot-service/`
-
-Vai trò:
-
-- Nhận request chat từ Spring.
-- Extract intent/tool bằng LLM hoặc rule fallback.
-- Gọi HAPI FHIR qua REST API.
-- Normalize FHIR response.
-- Tạo câu trả lời tiếng Việt bằng LLM hoặc template fallback.
-- Trả `answer`, `evidence`, `usage`, `memory_update` về Spring.
-
-### HAPI FHIR
-
-Folder: `infra/hapi-fhir/`
-
-Vai trò:
-
-- FHIR Server R4.
-- Source of truth cho dữ liệu y tế có cấu trúc.
-- Lưu dữ liệu vào PostgreSQL nội bộ do HAPI quản lý.
-
-### App PostgreSQL
-
-Folder: `infra/app-postgres/`
-
-Vai trò:
-
-- Database riêng của Spring app.
-- Lưu user/session/message/usage/quota/cost/audit.
-- Không lưu HAPI internal resource tables.
-
-## Yêu Cầu Cài Đặt
-
-Cần có:
+## Yêu cầu cài đặt
 
 - Docker Desktop
 - PowerShell
-- Python 3.11+ hoặc Python 3.12+
-- Java 21
+- Python 3.11+
+- Java 21 — mặc định tại `C:\Program Files\Java\jdk-21.0.10` (Maven dùng wrapper `mvnw.cmd`, không cần cài Maven)
+- Node.js 18+ (frontend)
 - Git
 
-Maven không cần cài riêng vì Spring dùng Maven Wrapper:
-
-```text
-spring-backend/mvnw.cmd
-```
-
-## Cấu Hình Môi Trường
-
-### Chatbot Service Env
-
-Tạo file:
-
-```text
-chatbot-service/.env
-```
-
-Có thể copy từ:
-
-```text
-chatbot-service/.env.example
-```
-
-Nội dung mẫu:
-
-```env
-FHIR_BASE_URL=http://localhost:8080/fhir
-FHIR_REQUEST_TIMEOUT_SECONDS=20
-APP_NAME=Dịch vụ Chatbot Y tế
-
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=replace_me
-LLM_REQUEST_TIMEOUT_SECONDS=20
-ENABLE_LLM_ANSWER=true
-```
-
-Lưu ý:
-
-- Không commit API key thật.
-- Nếu không có `OPENAI_API_KEY`, chatbot-service có thể fallback sang rule/template, nhưng sẽ không có LLM answer thật.
-
-### Spring Backend Config
-
-File:
-
-```text
-spring-backend/src/main/resources/application.yml
-```
-
-Mặc định:
-
-```yaml
-server:
-  port: 8081
-
-chatbot:
-  service:
-    base-url: http://localhost:8000
-```
-
-App database:
-
-```text
-Host: localhost
-Port: 5433
-Database: medical_chatbot_app
-User: app_user
-Password: app_password
-```
-
-## Chạy Nhanh Toàn Bộ Dự Án
+## Chạy nhanh toàn bộ dự án
 
 Từ root repo:
 
 ```powershell
-cd D:\PROGRAMMING\VDT\project\Medical_Chatbot
 .\run-dev.ps1
+```
+
+Script tự động: bật Docker infra (HAPI FHIR + 2 Postgres + Redis + Qdrant +
+LiteLLM), đợi HAPI sẵn sàng, seed FHIR data nếu thiếu, cài Python deps, bật
+chatbot-service (8000) → Spring (8081) → frontend (5174), rồi chạy smoke test
+luồng chat end-to-end.
+
+```powershell
+.\run-dev.ps1 -Stop           # dừng cả stack
+.\run-dev.ps1 -SkipInstall    # bỏ qua cài dependency
+.\run-dev.ps1 -SkipSeed       # bỏ qua seed FHIR data
+.\run-dev.ps1 -SkipFlowCheck  # bỏ qua smoke test
+.\run-dev.ps1 -JavaHome "C:\Program Files\Java\jdk-21.0.10"  # nếu JDK ở path khác
 ```
 
 Nếu PowerShell chặn script:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\run-dev.ps1
 ```
-
-Script sẽ tự động:
-
-- Start HAPI FHIR + HAPI PostgreSQL bằng Docker.
-- Start App PostgreSQL bằng Docker.
-- Đợi HAPI FHIR sẵn sàng.
-- Check demo FHIR data.
-- Seed FHIR data nếu cần.
-- Cài Python dependencies cho chatbot-service.
-- Cấu hình Java 21.
-- Start chatbot-service port `8000`.
-- Start Spring backend port `8081`.
-- Start frontend (React + Vite) port `5174`.
-- Chạy smoke test full chat flow qua Spring.
 
 Sau khi chạy thành công:
 
 ```text
 Frontend:        http://localhost:5174
-Spring backend:  http://localhost:8081
-chatbot-service: http://localhost:8000
+Spring backend:  http://localhost:8081  (Swagger: /swagger-ui/index.html)
+chatbot-service: http://localhost:8000  (OpenAPI: /docs)
 HAPI FHIR:       http://localhost:8080/fhir
+LiteLLM:         http://localhost:4000
 ```
 
-Dừng stack:
+## Chạy thủ công từng phần
 
 ```powershell
-.\run-dev.ps1 -Stop
-```
-
-Một số option hữu ích:
-
-```powershell
-.\run-dev.ps1 -SkipInstall
-.\run-dev.ps1 -SkipSeed
-.\run-dev.ps1 -SkipFlowCheck
-```
-
-Nếu Java 21 nằm ở path khác:
-
-```powershell
-.\run-dev.ps1 -JavaHome "C:\Program Files\Java\jdk-21.0.11"
-```
-
-## Chạy Thủ Công Từng Phần
-
-### 1. Start HAPI FHIR
-
-```powershell
+# 1. Infra (Docker)
 docker compose -f infra/hapi-fhir/docker-compose.yml up -d
-python infra/hapi-fhir/scripts/wait_for_hapi.py
-python infra/hapi-fhir/scripts/check_connection.py
-```
-
-Nếu chưa có data:
-
-```powershell
-python infra/hapi-fhir/scripts/seed_fhir_data.py
-python infra/hapi-fhir/scripts/check_connection.py
-```
-
-### 2. Start App PostgreSQL
-
-```powershell
 docker compose -f infra/app-postgres/docker-compose.yml up -d
-```
+docker compose -f infra/redis/docker-compose.yml up -d
+docker compose -f infra/qdrant/docker-compose.yml up -d
+docker compose -f infra/litellm/docker-compose.yml up -d
+python infra/hapi-fhir/scripts/wait_for_hapi.py
+python infra/hapi-fhir/scripts/seed_fhir_data.py      # nếu chưa có data
 
-### 3. Start chatbot-service
-
-```powershell
+# 2. chatbot-service
 cd chatbot-service
 python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
 
-### 4. Start Spring backend
-
-Mở terminal mới:
-
-```powershell
+# 3. Spring backend (terminal mới)
 cd spring-backend
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.11"
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 .\mvnw.cmd spring-boot:run
-```
 
-### 5. Start frontend
-
-Mở terminal mới:
-
-```powershell
+# 4. Frontend (terminal mới)
 cd frontend-react
 npm install
 npm run dev
 ```
 
-Mở trình duyệt:
-
-```text
-http://localhost:5174
-```
-
-## Port Và Credential Local
+## Port và credential local
 
 | Service | URL / Host | Credential |
 |---|---|---|
-| Frontend | `http://localhost:5174` | none |
-| Spring backend | `http://localhost:8081` | JWT login required |
-| chatbot-service | `http://localhost:8000` | none |
-| HAPI FHIR | `http://localhost:8080/fhir` | none |
+| Frontend | `http://localhost:5174` | — |
+| Spring backend | `http://localhost:8081` | JWT (login) |
+| chatbot-service | `http://localhost:8000` | — |
+| HAPI FHIR | `http://localhost:8080/fhir` | — |
+| LiteLLM Gateway | `http://localhost:4000` | master key trong `infra/litellm` |
 | App PostgreSQL | `localhost:5433/medical_chatbot_app` | `app_user` / `app_password` |
 | HAPI PostgreSQL | `localhost:5434/hapi` | `admin` / `admin` |
+| Redis | `localhost:6379` | — |
+| Qdrant | `localhost:6333` | — |
 
-Local demo login accounts:
+Tài khoản demo (Flyway seed sẵn):
 
 | Username | Password | Role |
 |---|---|---|
@@ -423,384 +188,121 @@ Local demo login accounts:
 | `doctor_demo` | `DoctorDemo123!` | `DOCTOR` |
 | `admin_demo` | `AdminDemo123!` | `ADMIN` |
 
-## Kết Nối Database Bằng pgAdmin
+Demo patient IDs (seed FHIR): `BN2026-00001` … `BN2026-00006`.
+`user_demo` được liên kết sẵn với `BN2026-00001`.
 
-### App Database
-
-Dùng để xem chat history, quota, usage, audit:
-
-```text
-Host: localhost
-Port: 5433
-Database: medical_chatbot_app
-Username: app_user
-Password: app_password
-```
-
-Bảng chính:
-
-```text
-app_users
-quota_policies
-chat_sessions
-chat_messages
-usage_logs
-audit_logs
-model_pricing
-cache_entries
-```
-
-### HAPI Database
-
-Chỉ dùng để quan sát HAPI internal storage, không viết app logic dựa vào đây:
-
-```text
-Host: localhost
-Port: 5434
-Database: hapi
-Username: admin
-Password: admin
-```
-
-Cần nhớ:
-
-```text
-Dùng FHIR API để đọc/ghi FHIR data.
-Không query trực tiếp HAPI internal tables trong chatbot/app code.
-```
-
-## API Chính
-
-### Spring Backend
-
-Base URL:
-
-```text
-http://localhost:8081
-```
-
-Endpoints:
-
-```http
-GET  /api/health
-GET  /api/chatbot/status
-GET  /api/patients?name=&phone=&birth_date=&identifier=&limit=
-GET  /api/patients/{patientId}
-GET  /api/patients/{patientId}/observations?limit=5
-GET  /api/patients/{patientId}/conditions?limit=20
-GET  /api/patients/{patientId}/encounters?limit=5
-GET  /api/patients/{patientId}/medications?limit=20
-POST /api/chat
-GET  /api/chat/sessions?limit=20
-GET  /api/chat/sessions/{sessionId}/messages
-GET  /api/quota/status
-GET  /api/usage/cost-summary?from=YYYY-MM-DD&to=YYYY-MM-DD
-GET  /api/model-pricing
-```
-
-Demo chat request:
-
-```powershell
-$body = @{
-  message = "Bệnh nhân BN2026-00001 đang dùng thuốc gì?"
-  patient_id = "BN2026-00001"
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Uri "http://localhost:8081/api/chat" `
-  -Method Post `
-  -ContentType "application/json; charset=utf-8" `
-  -Body $body
-```
+## Cấu hình môi trường
 
 ### chatbot-service
 
-Base URL:
+Copy `chatbot-service/.env.example` → `chatbot-service/.env`. Các nhóm chính:
 
-```text
-http://localhost:8000
+```env
+FHIR_BASE_URL=http://localhost:8080/fhir
+
+# Model routing: câu đơn giản → MODEL_SIMPLE, phức tạp → MODEL_COMPLEX
+MODEL_SIMPLE=gpt-4o-mini
+MODEL_COMPLEX=gpt-4.1-mini
+ENABLE_LLM_ROUTER=false            # bật LLM Router lai (M16)
+
+# AI Gateway — đường LLM duy nhất, không gọi provider trực tiếp
+LITELLM_BASE_URL=http://localhost:4000
+LITELLM_MASTER_KEY=sk-local-dev
+
+# Rolling summary hội thoại (LangGraph)
+ENABLE_LLM_SUMMARY=true
+SUMMARY_TRIGGER_MESSAGE_COUNT=6
 ```
 
-Endpoints:
-
-```http
-GET  /health
-GET  /fhir/status
-GET  /patients?name=&phone=&birth_date=&identifier=&limit=
-GET  /patients/{patient_id}
-GET  /patients/{patient_id}/observations?limit=5
-GET  /patients/{patient_id}/conditions?limit=20
-GET  /patients/{patient_id}/encounters?limit=5
-GET  /patients/{patient_id}/medications?limit=20
-POST /chat
-```
-
-### HAPI FHIR
-
-Base URL:
-
-```text
-http://localhost:8080/fhir
-```
-
-Examples:
-
-```http
-GET /fhir/metadata
-GET /fhir/Patient/BN2026-00001
-GET /fhir/Observation?patient=Patient/BN2026-00001&_sort=-date&_count=5
-GET /fhir/Encounter?patient=Patient/BN2026-00001&_sort=-date&_count=5
-GET /fhir/Condition?patient=Patient/BN2026-00001
-GET /fhir/MedicationRequest?patient=Patient/BN2026-00001
-```
-
-## Demo Data
-
-FHIR demo data nằm trong:
-
-```text
-infra/hapi-fhir/seed/
-```
-
-Seed bằng:
-
-```powershell
-python infra/hapi-fhir/scripts/seed_fhir_data.py
-```
-
-Kiểm tra:
-
-```powershell
-python infra/hapi-fhir/scripts/check_connection.py
-```
-
-Demo patient IDs:
-
-```text
-BN2026-00001
-BN2026-00002
-BN2026-00003
-BN2026-00004
-BN2026-00005
-BN2026-00006
-```
-
-## Token, Cost Và Quota
-
-Token được lấy từ OpenAI response trong `chatbot-service`:
-
-```text
-response.usage.prompt_tokens
-response.usage.completion_tokens
-```
-
-Sau đó Spring lưu vào `usage_logs`:
-
-```text
-input_tokens
-output_tokens
-llm_provider
-llm_model
-estimated_cost_usd
-latency_ms
-status
-```
-
-Quota kiểm theo ngày:
-
-```text
-daily_request_limit
-daily_token_limit
-daily_cost_limit_usd
-```
-
-Spring sẽ check quota trước khi gọi AI. Nếu vượt quota, API chat bị chặn và audit log ghi `QUOTA_BLOCKED`.
-
-Xem quota:
-
-```http
-GET http://localhost:8081/api/quota/status
-```
-
-Xem cost summary:
-
-```http
-GET http://localhost:8081/api/usage/cost-summary?from=2026-06-10&to=2026-06-10
-```
-
-## Session Memory
-
-Mỗi chat session có memory nhẹ trong `chat_sessions`:
-
-```text
-active_patient_id
-memory_summary
-last_intent
-last_tool_name
-last_resource_type
-last_resource_id
-```
-
-Mục đích:
-
-- Hiểu các câu hỏi tiếp theo như "bệnh nhân đó", "chỉ số đó", "thuốc đó".
-- Không cần gửi toàn bộ lịch sử hội thoại vào LLM.
-- Chỉ gửi memory ngắn và một số message gần nhất.
-
-## Chạy Test
-
-### chatbot-service
-
-```powershell
-cd chatbot-service
-python -m unittest discover tests
-```
+Không có master key → chatbot-service fallback sang rule/template (không gọi LLM thật).
 
 ### Spring backend
 
+Mặc định trong `spring-backend/src/main/resources/application.yml`, override qua
+biến môi trường hoặc file `.env` (JWT secret, mail OTP, LiteLLM master key,
+Telegram alert…). Chi tiết xem `spring-backend/README.md`.
+
+### LiteLLM
+
+Provider key (OpenAI…) cấu hình trong `infra/litellm/` — **không** đặt trong
+chatbot-service hay Spring. Không commit key thật.
+
+## API chính
+
+Chi tiết đầy đủ xem Swagger của từng service. Tóm tắt:
+
+- **Spring** (`:8081`, prefix `/api`) — `auth/*` (login/register/refresh/OTP),
+  `chat` + `chat/sessions/*` (kể cả export, feedback), `patients/*` (proxy FHIR),
+  `quota/status`, `usage/cost-summary`, `notifications/*` (SSE),
+  `admin/*` (users, quota-policies, model-pricing, costs, analytics, alerts),
+  `audit-logs`, `metrics/cache`, `health`.
+- **chatbot-service** (`:8000`) — `POST /chat`, `GET /patients*`, `GET /health`,
+  `GET /fhir/status`.
+- **HAPI FHIR** (`:8080/fhir`) — FHIR REST chuẩn, ví dụ:
+  `GET /fhir/Observation?patient=Patient/BN2026-00001&_sort=-date&_count=5`.
+
+Demo chat qua API (cần login lấy token trước):
+
 ```powershell
-cd spring-backend
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.11"
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-.\mvnw.cmd test -q
+$login = Invoke-RestMethod -Uri "http://localhost:8081/api/auth/login" -Method Post -ContentType "application/json" `
+  -Body (@{ username = "user_demo"; password = "UserDemo123!" } | ConvertTo-Json)
+
+Invoke-RestMethod -Uri "http://localhost:8081/api/chat" -Method Post -ContentType "application/json; charset=utf-8" `
+  -Headers @{ Authorization = "Bearer $($login.access_token)" } `
+  -Body (@{ message = "Bệnh nhân BN2026-00001 đang dùng thuốc gì?"; patient_id = "BN2026-00001" } | ConvertTo-Json)
 ```
 
-### Frontend type check
+## Token, cost và quota
 
-Nếu máy có Node.js:
+- chatbot-service trả `usage` (token intent + answer + router + summary) và
+  `answer_source` / `routing_source` / `query_complexity` cho từng câu trả lời.
+- Spring lưu vào `usage_logs` (token in/out, model, cost ước tính, latency,
+  cache hit, saved tokens/cost) — nguồn dữ liệu cho dashboard admin.
+- Quota theo ngày (`daily_request_limit`, `daily_token_limit`,
+  `daily_cost_limit_usd`) + rate limit/phút, cấu hình theo policy trong
+  `quota_policies`. Vượt quota → chat bị chặn, audit log ghi `QUOTA_BLOCKED`.
+- Xem nhanh: `GET /api/quota/status`, `GET /api/usage/cost-summary`.
 
-```powershell
-cd frontend-react
-npm run typecheck
-```
+Chỉ số đánh giá trước–sau tối ưu (token, cost, latency, cache hit rate, tỉ lệ
+routing model rẻ…) xem `docs/optimization-direction.md`.
 
-### FHIR smoke test
+## Chạy test
 
-```powershell
-python infra/hapi-fhir/scripts/check_connection.py
-```
-
-## Kiểm Tra Bằng SQL
-
-Kết nối App DB và chạy:
-
-```sql
-select * from chat_sessions order by updated_at desc limit 5;
-select * from chat_messages order by created_at desc limit 10;
-select * from usage_logs order by created_at desc limit 5;
-select * from audit_logs order by created_at desc limit 5;
-select * from model_pricing order by provider, model;
-```
+| Service | Lệnh | Thư mục |
+|---|---|---|
+| Spring | `.\mvnw.cmd test` (cần `JAVA_HOME` = JDK 21) | `spring-backend` |
+| chatbot-service | `python -m unittest discover tests` | `chatbot-service` |
+| Frontend | `npm run typecheck` | `frontend-react` |
+| FHIR smoke | `python infra/hapi-fhir/scripts/check_connection.py` | gốc |
 
 ## Troubleshooting
 
-### PowerShell không cho chạy script
+- **PowerShell chặn script** — `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`.
+- **Port bị chiếm** — `Get-NetTCPConnection -LocalPort 8081 -State Listen`; dừng stack bằng `.\run-dev.ps1 -Stop`.
+- **HAPI chưa có data** — chạy `python infra/hapi-fhir/scripts/seed_fhir_data.py`.
+- **Spring không start vì sai Java** — `java -version` phải là 21; đặt
+  `$env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"`.
+- **Chatbot trả lời nhanh bất thường / không tốn token** — đang chạy fallback
+  rule/template hoặc trúng cache. Kiểm tra `LITELLM_MASTER_KEY`,
+  `ENABLE_LLM_ANSWER` trong `chatbot-service/.env`; trong response xem
+  `answer_source` (`llm` = có gọi LLM) và `usage`.
+- **pgAdmin không kết nối được** — App DB `5433` (`app_user`/`app_password`),
+  HAPI DB `5434` (`admin`/`admin`); đừng dùng `postgres/postgres`.
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\run-dev.ps1
-```
+## Quy tắc phát triển
 
-### Port bị chiếm
+- Frontend chỉ gọi Spring; Spring gọi chatbot-service; chatbot-service gọi FHIR REST.
+- Không query trực tiếp bảng nội bộ HAPI (`hfj_*`); không để LLM sinh SQL.
+- Schema app DB do Flyway sở hữu — đổi schema = thêm migration `VN__...sql`.
+- LLM chỉ trả lời từ evidence đã normalize; câu trả lời cuối là tiếng Việt.
+- Không commit `.env` / API key thật.
+- Chạy test của service liên quan sau mỗi thay đổi.
+- Hoàn thành milestone → cập nhật `MILESTONES.md`; đổi port/lệnh/kiến trúc → cập nhật README.
 
-Kiểm tra port:
+## Tài liệu
 
-```powershell
-Get-NetTCPConnection -LocalPort 8081 -State Listen
-Get-NetTCPConnection -LocalPort 8000 -State Listen
-Get-NetTCPConnection -LocalPort 5174 -State Listen
-```
-
-Dừng stack:
-
-```powershell
-.\run-dev.ps1 -Stop
-```
-
-### HAPI FHIR chưa có data
-
-```powershell
-python infra/hapi-fhir/scripts/seed_fhir_data.py
-python infra/hapi-fhir/scripts/check_connection.py
-```
-
-### Spring không start vì sai Java
-
-Kiểm tra:
-
-```powershell
-java -version
-```
-
-Cần Java 21. Nếu đang trỏ sai JDK:
-
-```powershell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.11"
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-```
-
-### Chatbot trả lời nhanh bất thường
-
-Có thể đang dùng rule/template fallback thay vì gọi OpenAI. Kiểm tra:
-
-```text
-chatbot-service/.env
-OPENAI_API_KEY
-ENABLE_LLM_ANSWER=true
-```
-
-Trong response, xem:
-
-```text
-intent_source
-answer_source
-usage.input_tokens
-usage.output_tokens
-```
-
-Nếu `answer_source=llm` và token > 0 thì đã gọi LLM.
-
-### Lỗi database khi kết nối pgAdmin
-
-Dùng đúng port:
-
-```text
-App DB:  localhost:5433 / medical_chatbot_app / app_user / app_password
-HAPI DB: localhost:5434 / hapi / admin / admin
-```
-
-Không dùng `postgres/postgres` nếu compose đang cấu hình user/password khác.
-
-## Quy Tắc Phát Triển
-
-- Frontend chỉ gọi Spring backend.
-- Spring backend là API chính của webapp.
-- chatbot-service phụ trách LLM/FHIR orchestration.
-- HAPI FHIR là source of truth cho structured medical data.
-- Không query trực tiếp HAPI PostgreSQL internal tables.
-- Không commit `.env` có API key thật.
-- Cập nhật `MILESTONES.md` mỗi khi hoàn thành milestone/tính năng lớn.
-- Cập nhật README nếu đổi port, lệnh chạy, endpoint hoặc kiến trúc.
-
-## Trạng Thái Hiện Tại
-
-Đã có end-to-end demo:
-
-```text
-Frontend
-  -> Spring Boot backend
-  -> FastAPI chatbot-service
-  -> LLM intent extraction
-  -> FHIR REST retrieval
-  -> HAPI FHIR
-  -> normalized evidence
-  -> LLM Vietnamese answer generation
-  -> Spring quota/cost/audit/session persistence
-  -> Staff dashboard displays answer and evidence
-```
-
-Xem chi tiết tiến độ tại:
-
-```text
-MILESTONES.md
-```
+- `docs/product-spec.md` — spec sản phẩm + quy tắc FHIR/RAG/usage/cache đầy đủ.
+- `docs/optimization-direction.md` — hướng tối ưu token/quota/cache/routing/gateway + chỉ số đánh giá.
+- `docs/M-*.md` — thiết kế từng milestone (LiteLLM gateway, model routing, rolling summary…).
+- `MILESTONES.md` — tiến độ chi tiết.
+- README riêng của từng service: `spring-backend/README.md`, …

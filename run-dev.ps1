@@ -3,7 +3,7 @@ param(
     [switch]$SkipInstall,
     [switch]$SkipSeed,
     [switch]$SkipFlowCheck,
-    [string]$JavaHome = "C:\Program Files\Java\jdk-21.0.11"
+    [string]$JavaHome = "C:\Program Files\Java\jdk-21.0.10"
 )
 
 $ErrorActionPreference = "Stop"

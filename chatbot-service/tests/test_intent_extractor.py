@@ -380,5 +380,112 @@ class RuleBasedExtractorTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotEqual(plan.tool_name, TOOL_UNSUPPORTED, f"Failed for: {msg}")
 
 
+# ---------------------------------------------------------------------------
+# Conversation context trong prompt LLM (context compression)
+# ---------------------------------------------------------------------------
+
+class ConversationContextPromptTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rule_extractor_accepts_conversation_context_kwarg(self):
+        plan = await RuleBasedIntentExtractor().extract(
+            "thuoc cua benh nhan BN2026-00003",
+            conversation_context={"memory_summary": "abc", "recent_messages": []},
+        )
+        self.assertEqual(plan.tool_name, TOOL_GET_MEDICATIONS)
+
+    async def test_llm_extractor_includes_conversation_context_in_prompt(self):
+        import json
+        from types import SimpleNamespace
+
+        from agents.intent.llm_extractor import LLMIntentExtractor
+
+        captured: dict = {}
+
+        class FakeCompletions:
+            async def create(self, **kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                tool_calls=[
+                                    SimpleNamespace(
+                                        function=SimpleNamespace(
+                                            name=TOOL_GET_OBSERVATIONS,
+                                            arguments=json.dumps({"patient_id": "BN2026-00003"}),
+                                        )
+                                    )
+                                ]
+                            )
+                        )
+                    ],
+                    usage=SimpleNamespace(
+                        prompt_tokens=12,
+                        completion_tokens=3,
+                        model_dump=lambda: {"prompt_tokens": 12, "completion_tokens": 3},
+                    ),
+                    model_dump_json=lambda **_kwargs: "{}",
+                )
+
+        extractor = LLMIntentExtractor(
+            api_key="sk-test", model="gpt-4o-mini", timeout_seconds=5, base_url="http://localhost:4000"
+        )
+        extractor.client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+
+        conversation = {
+            "memory_summary": "Đang trao đổi về Patient/BN2026-00003.",
+            "recent_messages": [{"role": "user", "content": "HbA1c của bệnh nhân BN2026-00003?"}],
+        }
+        plan = await extractor.extract(
+            "chỉ số đó có cao không?",
+            provided_patient_id="BN2026-00003",
+            conversation_context=conversation,
+        )
+
+        self.assertEqual(plan.tool_name, TOOL_GET_OBSERVATIONS)
+        user_prompt = json.loads(captured["messages"][1]["content"])
+        self.assertEqual(user_prompt["conversation"], conversation)
+        self.assertIn("recent_messages", captured["messages"][0]["content"])
+
+    async def test_llm_extractor_omits_conversation_key_when_context_missing(self):
+        import json
+        from types import SimpleNamespace
+
+        from agents.intent.llm_extractor import LLMIntentExtractor
+
+        captured: dict = {}
+
+        class FakeCompletions:
+            async def create(self, **kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                tool_calls=[
+                                    SimpleNamespace(
+                                        function=SimpleNamespace(
+                                            name=TOOL_GET_OBSERVATIONS,
+                                            arguments="{}",
+                                        )
+                                    )
+                                ]
+                            )
+                        )
+                    ],
+                    usage=None,
+                    model_dump_json=lambda **_kwargs: "{}",
+                )
+
+        extractor = LLMIntentExtractor(
+            api_key="sk-test", model="gpt-4o-mini", timeout_seconds=5, base_url="http://localhost:4000"
+        )
+        extractor.client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+
+        await extractor.extract("huyet ap benh nhan BN2026-00003")
+
+        user_prompt = json.loads(captured["messages"][1]["content"])
+        self.assertNotIn("conversation", user_prompt)
+
+
 if __name__ == "__main__":
     unittest.main()

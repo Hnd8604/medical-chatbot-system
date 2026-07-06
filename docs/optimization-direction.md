@@ -20,7 +20,7 @@ Mục tiêu định lượng:
 | Quota | Theo user hoặc nhóm user | `quota_policies`, `QuotaService`, `QuotaPolicyAdminService` |
 | Rate limit + budget limit | Giới hạn tần suất và ngân sách | một phần trong QuotaService |
 | Cache câu trả lời / kết quả truy vấn | Exact + **semantic cache** | `cache_entries`; semantic cache = việc cần làm |
-| Context pruning / summary hội thoại | Rút gọn hội thoại cũ | việc cần làm |
+| Context pruning / summary hội thoại | Rút gọn hội thoại cũ | LLM rolling summary bằng LangGraph — `docs/M-context-rolling-summary.md` |
 | Model routing | Câu đơn giản → model rẻ; phức tạp → model mạnh | `agents/model_router.py` (M16), LLM Router |
 | Retry / fallback | Khi AI service lỗi | M17 (retry/fallback), xem docs bên dưới |
 | AI Gateway | Lớp trung gian quản lý key/log/cost/routing | **LiteLLM** — `infra/litellm/`, `docs/M-litellm-gateway.md` |
@@ -29,6 +29,7 @@ Tài liệu milestone liên quan đã có trong repo:
 
 - `docs/M-litellm-gateway.md` — AI Gateway (LiteLLM): API key, logging, cost tracking, routing.
 - `docs/M16-M17-model-routing-retry-fallback.md` — model routing + retry + fallback.
+- `docs/M-context-rolling-summary.md` — context compression: LLM rolling summary (LangGraph), trigger theo độ dài hội thoại, chạy song song với answer.
 
 ---
 
@@ -58,6 +59,9 @@ Rút gọn hội thoại cũ để giảm token đầu vào. Kỹ thuật:
 - Memory Compression
 
 Framework tham khảo: **LangGraph Memory**.
+
+Trạng thái repo: **đã triển khai Rolling Summary bằng LangGraph** trong
+`chatbot-service/agents/summary_generator.py` — xem `docs/M-context-rolling-summary.md`.
 
 ### 2.3 Intelligent Model Routing
 

@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
 
+    long countBySession_Id(UUID sessionId);
+
     default void save(ChatSession session, ChatMessageRole role, String content) {
         save(session, role, content, null);
     }

@@ -1,18 +1,17 @@
+import asyncio
 import unittest
 from fastapi import HTTPException
 
 from api.chat_routes import (
-    _apply_selected_patient_context,
-    _apply_context_reference_context,
-    _answer_context_resource_if_applicable,
     _finalize_chat_response,
     _resolve_patient_id_for_tool,
     chat,
     ChatRequest,
 )
-from chat.context_memory import _detect_intent, _resolve_patient_id
+from chat.context_memory import _resolve_patient_id
 from chat.resource_answerers import _observation_matches_type
 from agents.answer_generator import AnswerResult
+from agents.summary_generator import SummaryResult
 from agents.intent_extractor import (
     IntentPlan,
     TOOL_GET_CONDITIONS,
@@ -21,7 +20,6 @@ from agents.intent_extractor import (
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_PATIENT,
     TOOL_SEARCH_PATIENTS,
-    TOOL_UNSUPPORTED,
     RuleBasedIntentExtractor,
     apply_all_patient_scope,
     add_observation_type_hint,
@@ -40,6 +38,23 @@ class FakeAnswerGenerator:
             source="llm",
             usage={"input_tokens": 20, "output_tokens": 5, "estimated_cost_usd": 0.01},
         )
+
+
+class FakeSummaryGenerator:
+    def __init__(self, result: SummaryResult | None = None):
+        self.result = result or SummaryResult()
+        self.calls: list[dict] = []
+
+    async def summarize(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
+
+
+def make_summary_task(result: SummaryResult) -> "asyncio.Task[SummaryResult]":
+    async def _run() -> SummaryResult:
+        return result
+
+    return asyncio.ensure_future(_run())
 
 
 class FakePatientSearchClient:
@@ -97,32 +112,24 @@ class FakePatientSearchClient:
         return {"entry": []}
 
 
-class FakeResourceClient:
-    async def get_resource(self, resource_type: str, resource_id: str):
-        return {
-            "resourceType": resource_type,
-            "id": resource_id,
-            "status": "final",
-            "code": {"text": "Blood pressure"},
-            "subject": {"reference": "Patient/BN2026-00001"},
-            "component": [
-                {
-                    "code": {"text": "Systolic blood pressure"},
-                    "valueQuantity": {"value": 150, "unit": "mmHg"},
-                },
-                {
-                    "code": {"text": "Diastolic blood pressure"},
-                    "valueQuantity": {"value": 92, "unit": "mmHg"},
-                },
-            ],
-        }
-
-
 class FakeIntentExtractor:
     def __init__(self, plan: IntentPlan):
         self.plan = plan
+        self.calls: list[dict] = []
 
-    async def extract(self, message: str, provided_patient_id: str | None = None) -> IntentPlan:
+    async def extract(
+        self,
+        message: str,
+        provided_patient_id: str | None = None,
+        conversation_context: dict | None = None,
+    ) -> IntentPlan:
+        self.calls.append(
+            {
+                "message": message,
+                "provided_patient_id": provided_patient_id,
+                "conversation_context": conversation_context,
+            }
+        )
         return self.plan
 
 
@@ -142,24 +149,6 @@ def make_request(**overrides) -> ChatRequest:
 
 
 class ChatRoutesTests(unittest.TestCase):
-    def test_detects_medication_intent(self) -> None:
-        self.assertEqual(_detect_intent("Patient/BN2026-00001 has what medications?"), "medications")
-
-    def test_detects_vietnamese_observation_intent_without_accents(self) -> None:
-        self.assertEqual(_detect_intent("huyet ap cua BN2026-00001"), "observations")
-
-    def test_detects_vietnamese_phone_as_patient_intent(self) -> None:
-        self.assertEqual(_detect_intent("so dien thoai cua benh nhan 001"), "patient")
-
-    def test_detects_patient_list_intent(self) -> None:
-        self.assertEqual(_detect_intent("danh sach benh nhan hien co"), "patients")
-
-    def test_detects_patient_search_by_name_intent(self) -> None:
-        self.assertEqual(_detect_intent("tim benh nhan Nguyen Van A"), "patients")
-
-    def test_detects_vietnamese_encounter_intent(self) -> None:
-        self.assertEqual(_detect_intent("lich su kham cua benh nhan 001"), "encounters")
-
     def test_resolves_patient_reference(self) -> None:
         request = make_request(message="Show medications for Patient/BN2026-00001")
 
@@ -213,69 +202,6 @@ class ChatRoutesTests(unittest.TestCase):
         )
 
         self.assertEqual(_resolve_patient_id(request), "BN2026-00004")
-
-    def test_selected_patient_context_clears_search_criteria_for_resource_tool(self) -> None:
-        request = make_request(message="thuoc cua benh nhan Nguyen", patient_id="BN2026-00006")
-        plan = IntentPlan(
-            tool_name=TOOL_GET_MEDICATIONS,
-            patient_id="BN2026-00006",
-            search_name="Nguyen",
-        )
-
-        result = _apply_selected_patient_context(request, plan)
-
-        self.assertEqual(result.tool_name, TOOL_GET_MEDICATIONS)
-        self.assertEqual(result.patient_id, "BN2026-00006")
-        self.assertIsNone(result.search_name)
-
-    def test_context_reference_does_not_override_explicit_resource_intent(self) -> None:
-        request = ChatRequest(
-            user_id="user-001",
-            user_role="DOCTOR",
-            message="benh nhan do dang dung thuoc gi?",
-            conversation_context={
-                "active_patient_id": "BN2026-00001",
-                "last_resource_type": "Observation",
-                "last_resource_id": "obs-1",
-            },
-        )
-        plan = IntentPlan(tool_name=TOOL_GET_MEDICATIONS, patient_id="BN2026-00001")
-
-        result = _apply_context_reference_context(request, plan)
-
-        self.assertEqual(result.tool_name, TOOL_GET_MEDICATIONS)
-
-    def test_context_reference_routes_unsupported_to_last_resource_tool(self) -> None:
-        request = ChatRequest(
-            user_id="user-001",
-            user_role="DOCTOR",
-            message="chi so do co cao khong?",
-            conversation_context={
-                "active_patient_id": "BN2026-00001",
-                "last_resource_type": "Observation",
-                "last_resource_id": "obs-1",
-            },
-        )
-        plan = IntentPlan(tool_name=TOOL_UNSUPPORTED, patient_id="BN2026-00001")
-
-        result = _apply_context_reference_context(request, plan)
-
-        self.assertEqual(result.tool_name, TOOL_GET_OBSERVATIONS)
-        self.assertEqual(result.source, "rules_context_reference")
-
-    def test_selected_patient_context_turns_contact_search_into_patient_lookup(self) -> None:
-        request = make_request(message="so dien thoai cua Nguyen", patient_id="BN2026-00006")
-        plan = IntentPlan(
-            tool_name=TOOL_SEARCH_PATIENTS,
-            patient_id="BN2026-00006",
-            search_name="Nguyen",
-        )
-
-        result = _apply_selected_patient_context(request, plan)
-
-        self.assertEqual(result.tool_name, TOOL_GET_PATIENT)
-        self.assertEqual(result.patient_id, "BN2026-00006")
-        self.assertIsNone(result.search_name)
 
 
 class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
@@ -486,30 +412,118 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["memory_update"]["active_patient_id"], "BN2026-00003")
         self.assertEqual(result["memory_update"]["last_resource_type"], "Observation")
         self.assertEqual(result["memory_update"]["last_resource_id"], "obs-1")
+        # Không có summary task → summary rỗng, Spring giữ summary cũ.
+        self.assertEqual(result["memory_update"]["summary"], "")
+        self.assertEqual(result["summary_usage"]["input_tokens"], 0)
 
-    async def test_context_resource_reference_fetches_last_observation(self) -> None:
-        request = ChatRequest(
-            user_id="user-001",
+    async def test_finalize_adds_summary_to_memory_update_and_combined_usage_when_triggered(self) -> None:
+        payload = {
+            "answer": "Template answer",
+            "intent": "observations",
+            "patient_id": "BN2026-00003",
+            "evidence": [{"resource_type": "Observation", "id": "obs-1", "summary": "HbA1c"}],
+            "usage": {"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0},
+        }
+        plan = IntentPlan(
+            tool_name=TOOL_GET_OBSERVATIONS,
+            patient_id="BN2026-00003",
+            source="llm",
+            usage={"input_tokens": 10, "output_tokens": 3, "estimated_cost_usd": 0},
+        )
+        summary_result = SummaryResult(
+            summary="Đã xem HbA1c của Patient/BN2026-00003.",
+            usage={"input_tokens": 50, "output_tokens": 30, "estimated_cost_usd": 0},
+            source="llm",
+        )
+
+        result = await _finalize_chat_response(
+            payload,
+            "lan kham gan nhat cua benh nhan do?",
+            plan,
+            FakeAnswerGenerator(),
+            summary_task=make_summary_task(summary_result),
+        )
+
+        self.assertEqual(result["memory_update"]["summary"], "Đã xem HbA1c của Patient/BN2026-00003.")
+        self.assertEqual(result["summary_usage"]["input_tokens"], 50)
+        # usage tổng = intent(10) + answer(20) + summary(50)
+        self.assertEqual(result["usage"]["input_tokens"], 80)
+        self.assertEqual(result["usage"]["output_tokens"], 38)
+
+    async def test_finalize_summary_error_does_not_fail_chat(self) -> None:
+        payload = {
+            "answer": "Template answer",
+            "intent": "observations",
+            "patient_id": "BN2026-00003",
+            "evidence": [{"resource_type": "Observation", "id": "obs-1", "summary": "HbA1c"}],
+            "usage": {"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0},
+        }
+        plan = IntentPlan(tool_name=TOOL_GET_OBSERVATIONS, patient_id="BN2026-00003", source="llm")
+        error_result = SummaryResult(source="error", reason="gateway down")
+
+        result = await _finalize_chat_response(
+            payload,
+            "chi so do co cao khong?",
+            plan,
+            FakeAnswerGenerator(),
+            summary_task=make_summary_task(error_result),
+        )
+
+        self.assertEqual(result["answer"], "LLM: Template answer")
+        self.assertEqual(result["memory_update"]["summary"], "")
+        self.assertEqual(result["summary_reason"], "gateway down")
+        self.assertEqual(result["summary_usage"]["input_tokens"], 0)
+
+    async def test_chat_passes_conversation_context_to_intent_extractor_and_summary(self) -> None:
+        request = make_request(
             user_role="DOCTOR",
             message="chi so do co cao khong?",
             conversation_context={
+                "memory_summary": "Đang trao đổi về Patient/BN2026-00001.",
                 "active_patient_id": "BN2026-00001",
-                "last_resource_type": "Observation",
-                "last_resource_id": "obs-1",
+                "recent_messages": [
+                    {"role": "user", "content": "huyet ap cua BN2026-00001?"},
+                    {"role": "assistant", "content": "Huyết áp 130/85."},
+                ],
+                "total_message_count": 6,
             },
         )
         plan = IntentPlan(
             tool_name=TOOL_GET_OBSERVATIONS,
             patient_id="BN2026-00001",
-            source="rules_context_reference",
+            source="llm",
+        )
+        intent_extractor = FakeIntentExtractor(plan)
+        summary_generator = FakeSummaryGenerator(
+            SummaryResult(
+                summary="Tóm tắt mới.",
+                usage={"input_tokens": 40, "output_tokens": 25, "estimated_cost_usd": 0},
+                source="llm",
+            )
         )
 
-        payload = await _answer_context_resource_if_applicable(FakeResourceClient(), request, plan)
+        payload = await chat(
+            request=request,
+            client=FakePatientSearchClient(),
+            intent_extractor=intent_extractor,
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+            summary_generator=summary_generator,
+        )
 
-        self.assertIsNotNone(payload)
-        self.assertEqual(payload["patient_id"], "BN2026-00001")
-        self.assertEqual(payload["evidence"][0]["resource_type"], "Observation")
-        self.assertEqual(payload["evidence"][0]["id"], "obs-1")
+        extractor_call = intent_extractor.calls[0]
+        self.assertEqual(
+            extractor_call["conversation_context"]["memory_summary"],
+            "Đang trao đổi về Patient/BN2026-00001.",
+        )
+        self.assertEqual(len(extractor_call["conversation_context"]["recent_messages"]), 2)
+
+        summary_call = summary_generator.calls[0]
+        self.assertEqual(summary_call["total_message_count"], 6)
+        self.assertEqual(summary_call["patient_id"], "BN2026-00001")
+
+        self.assertEqual(payload["memory_update"]["summary"], "Tóm tắt mới.")
+        self.assertEqual(payload["summary_usage"]["input_tokens"], 40)
 
     async def test_rule_based_extractor_returns_fhir_tool_plan(self) -> None:
         plan = await RuleBasedIntentExtractor().extract(

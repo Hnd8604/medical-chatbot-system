@@ -30,11 +30,12 @@ Quản lý ngữ cảnh hội thoại để chatbot trả lời được các c�
 
 **Mục tiêu:** Tóm tắt hội thoại để tiết kiệm token, không cần gửi full history.
 
-**Hành vi (V1 - rule-based):**
-- Chatbot-service sinh `memory_summary` bằng hàm `_memory_summary()` (rule-based) dựa trên patient + evidence + intent gần nhất, ví dụ: *"Da xem Observation/123 cho Patient/abc: ..."*.
-- Summary được trả về trong `memory_update.summary`, Spring backend lưu vào `chat_sessions.memory_summary` và gửi lại ở lượt sau qua `ConversationContext.memorySummary`.
-- Giữ được patient/resource context quan trọng vì summary luôn kèm `active_patient_id` và `last_resource_*`.
-- (V2 - LLM summary khi session quá dài: định hướng nâng cấp, chưa bắt buộc.)
+**Hành vi (V2 - LLM rolling summary, thay thế hoàn toàn V1 rule-based):**
+- Chatbot-service sinh `memory_summary` bằng **LLM rolling summary trên LangGraph** (`agents/summary_generator.py`): summary cũ + 6 recent messages + câu hỏi mới → summary mới ≤120 từ tiếng Việt.
+- Chỉ trigger khi `total_message_count >= 6` (hội thoại vượt cửa sổ recent); chạy **song song** với answer generation nên latency cộng thêm ≈ 0.
+- Summary được trả về trong `memory_update.summary` kèm `summary_usage`, Spring lưu vào `chat_sessions.memory_summary` và gửi lại ở lượt sau qua `ConversationContext.memorySummary`.
+- `memory_summary` + `recent_messages` được inject vào prompt của intent extractor và answer generator — câu follow-up ("cái đó", "thuốc đó") do LLM tự resolve, keyword matching cũ đã gỡ bỏ.
+- Chi tiết: [M-context-rolling-summary.md](M-context-rolling-summary.md).
 
 **Tiêu chí hoàn thành:** Không cần gửi full history vào LLM.
 

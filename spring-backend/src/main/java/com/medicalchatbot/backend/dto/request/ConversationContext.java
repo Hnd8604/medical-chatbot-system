@@ -24,6 +24,11 @@ public record ConversationContext(
         String lastResourceId,
 
         @JsonProperty("recent_messages")
-        List<ChatContextMessage> recentMessages
+        List<ChatContextMessage> recentMessages,
+
+        // Tổng số message của session TRƯỚC khi lưu message hiện tại; chatbot-service
+        // dùng để quyết định có kích hoạt rolling summary hay không.
+        @JsonProperty("total_message_count")
+        Integer totalMessageCount
 ) {
 }

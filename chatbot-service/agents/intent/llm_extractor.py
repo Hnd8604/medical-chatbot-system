@@ -41,7 +41,12 @@ class LLMIntentExtractor:
         self.model = model
         self.fallback = RuleBasedIntentExtractor() # fallback về rulebase
 
-    async def extract(self, message: str, provided_patient_id: str | None = None) -> IntentPlan:
+    async def extract(
+        self,
+        message: str,
+        provided_patient_id: str | None = None,
+        conversation_context: dict[str, Any] | None = None,
+    ) -> IntentPlan:
         patient_id_hint = normalize_patient_id(provided_patient_id)
         system_prompt = (
             "You extract the user's intent for a medical chatbot. "
@@ -57,12 +62,16 @@ class LLMIntentExtractor:
             "Questions about phone, contact, 'so dien thoai', or 'dien thoai' must use get_patient_by_id only when a patient id is provided; otherwise use search_patients with name or phone criteria. "
             "Questions about encounters, visits, appointments, 'lan kham', 'lich su kham', or 'kham gan nhat' must use get_encounters."
             "Questions about medications, medicines, prescriptions, 'thuoc', 'don thuoc', 'dang dung thuoc gi', 'medication', 'current medications' must use get_medication_requests. "
+            "Use conversation.memory_summary and conversation.recent_messages to resolve follow-up references such as 'cai do', 'thuoc do', 'chi so do', 'lan kham do', 'benh nhan do', 'no', or 'vua roi' to the concrete tool, resource type, and patient. "
+            "Prefer provided_patient_id over patients that are only mentioned in older conversation messages. "
         )
         user_prompt = {
             "message": message,
             "normalized_message": normalize_text(message),
             "provided_patient_id": patient_id_hint,
         }
+        if conversation_context:
+            user_prompt["conversation"] = conversation_context
 
         try:
             response = await self.client.chat.completions.create(
@@ -88,7 +97,7 @@ class LLMIntentExtractor:
             )
         except Exception as exc:
             raise_if_budget_exceeded(exc)  # loi budget -> route tra 429, khong nuot
-            return await self.fallback.extract(message, provided_patient_id)
+            return await self.fallback.extract(message, provided_patient_id, conversation_context)
 
         tool_calls = response.choices[0].message.tool_calls or []
 
@@ -104,7 +113,7 @@ class LLMIntentExtractor:
                 tool_calls[0].function.arguments,
             )
         if not tool_calls:
-            return await self.fallback.extract(message, provided_patient_id)
+            return await self.fallback.extract(message, provided_patient_id, conversation_context)
 
         tool_call = tool_calls[0] # Lấy tool đầu tiên LLM chọn
         arguments = _parse_tool_arguments(tool_call.function.arguments)

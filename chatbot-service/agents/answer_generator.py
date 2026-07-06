@@ -37,6 +37,7 @@ class AnswerGenerator(Protocol):
         evidence: list[dict[str, Any]],
         fallback_answer: str,
         model: str | None = None,
+        conversation_context: dict[str, Any] | None = None,
     ) -> AnswerResult:
         ...
 
@@ -52,6 +53,7 @@ class TemplateAnswerGenerator:
         evidence: list[dict[str, Any]],
         fallback_answer: str,
         model: str | None = None,
+        conversation_context: dict[str, Any] | None = None,
     ) -> AnswerResult:
         return AnswerResult(answer=fallback_answer, source="template")
 
@@ -74,6 +76,7 @@ class LLMAnswerGenerator:
         evidence: list[dict[str, Any]],
         fallback_answer: str,
         model: str | None = None,
+        conversation_context: dict[str, Any] | None = None,
     ) -> AnswerResult:
         compact_evidence = compact_evidence_for_llm(evidence)
         if not compact_evidence:
@@ -92,6 +95,8 @@ class LLMAnswerGenerator:
             "Trả lời bằng tiếng Việt, rõ ràng, có cấu trúc ngắn gọn. "
             "Không dùng Markdown đậm/nghiêng; dùng văn bản thường, xuống dòng và danh sách đánh số nếu cần. "
             "Ưu tiên nêu giá trị, đơn vị, thời điểm, diễn giải/reference range nếu có. "
+            "Có thể dùng phần conversation (tóm tắt + tin nhắn gần đây) để hiểu câu hỏi nối tiếp, "
+            "nhưng mọi dữ kiện y tế trong câu trả lời vẫn phải lấy từ evidence. "
             "Kết thúc bằng một câu nhắc rằng câu trả lời chỉ dựa trên dữ liệu hiện có nếu câu hỏi có tính y khoa."
         )
         user_payload = {
@@ -102,6 +107,8 @@ class LLMAnswerGenerator:
             "evidence": compact_evidence,
             "fallback_answer": fallback_answer,
         }
+        if conversation_context:
+            user_payload["conversation"] = conversation_context
 
         try:
             response = await self.client.chat.completions.create(

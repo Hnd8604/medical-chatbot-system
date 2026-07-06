@@ -5,7 +5,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from agents.answer_generator import AnswerGenerator, get_answer_generator
+from agents.context_payload import compact_conversation_for_llm
 from agents.model_router import ModelRouter, get_model_router
+from agents.summary_generator import SummaryGenerator, get_summary_generator
 from agents.intent_extractor import (
     FHIR_PROTECTED_TOOLS,
     TOOL_GET_CONDITIONS,
@@ -22,12 +24,7 @@ from agents.intent_extractor import (
 from agents.gateway_context import GatewayBudgetExceededError, set_gateway_context
 from api.chat_schemas import ChatRequest
 from chat.cache_flow import get_cached_chat_payload
-from chat.context_memory import (
-    _answer_context_resource_if_applicable,
-    _apply_context_reference_context,
-    _apply_selected_patient_context,
-    _patient_id_hint,
-)
+from chat.context_memory import _patient_id_hint
 from chat.resource_answerers import (
     _answer_all_patient_conditions,
     _answer_all_patient_encounters,
@@ -148,6 +145,7 @@ async def chat(
     answer_generator: AnswerGenerator = Depends(get_answer_generator),
     cache_service: SemanticCacheService = Depends(get_semantic_cache),
     model_router: ModelRouter = Depends(get_model_router),
+    summary_generator: SummaryGenerator = Depends(get_summary_generator),
 ) -> dict[str, Any]:
     current_user_context.set(request.user_id)
     # Virtual key + end-user cho AI Gateway: cac call site LLM doc lai qua contextvar.
@@ -162,56 +160,74 @@ async def chat(
 
     if not hasattr(model_router, "route"):
         model_router = get_model_router()
+    if not hasattr(summary_generator, "summarize"):
+        summary_generator = get_summary_generator()
 
-    # Router chỉ cần message + quota nên chạy song song với intent extraction,
-    # LLM Router (nếu bật) gần như không cộng thêm latency.
-    # return_exceptions=True: cả hai nhánh chạy đến cùng và exception của từng nhánh
-    # đều được retrieve — tránh task mồ côi ("Task exception was never retrieved")
-    # khi một nhánh raise GatewayBudgetExceededError trước nhánh kia.
     patient_hint = _patient_id_hint(request)
-    plan, routing = await asyncio.gather(
-        intent_extractor.extract(request.message, provided_patient_id=patient_hint),
-        model_router.route(request.message, request.quota_used_ratio),
-        return_exceptions=True,
+    conversation_context = compact_conversation_for_llm(request.conversation_context)
+    total_message_count = (
+        request.conversation_context.total_message_count if request.conversation_context else None
     )
-    for result in (plan, routing):
-        if isinstance(result, GatewayBudgetExceededError):
-            raise _budget_exceeded_http() from result
-    if isinstance(plan, BaseException):
-        raise plan
-    if isinstance(routing, BaseException):
-        raise routing
-    plan = _apply_user_patient_scope(request, plan)
-    plan = _apply_selected_patient_context(request, plan)
-    plan = _apply_context_reference_context(request, plan)
-    plan = _apply_user_patient_scope(request, plan)
-    _ensure_role_can_access_plan(request, plan)
 
-    routing_kwargs = dict(
+    # Rolling summary (context compression) chạy song song với toàn bộ phần còn lại
+    # của request (intent + FHIR + answer); _finalize_chat_response mới await kết quả.
+    # Task tự nuốt mọi lỗi (kể cả budget) và luôn trả SummaryResult.
+    summary_task = asyncio.create_task(
+        summary_generator.summarize(
+            conversation_context=conversation_context,
+            question=request.message,
+            patient_id=patient_hint,
+            total_message_count=total_message_count,
+        )
+    )
+
+    try:
+        # Router chỉ cần message + quota nên chạy song song với intent extraction,
+        # LLM Router (nếu bật) gần như không cộng thêm latency.
+        # return_exceptions=True: cả hai nhánh chạy đến cùng và exception của từng nhánh
+        # đều được retrieve — tránh task mồ côi ("Task exception was never retrieved")
+        # khi một nhánh raise GatewayBudgetExceededError trước nhánh kia.
+        plan, routing = await asyncio.gather(
+            intent_extractor.extract(
+                request.message,
+                provided_patient_id=patient_hint,
+                conversation_context=conversation_context,
+            ),
+            model_router.route(request.message, request.quota_used_ratio),
+            return_exceptions=True,
+        )
+        for result in (plan, routing):
+            if isinstance(result, GatewayBudgetExceededError):
+                raise _budget_exceeded_http() from result
+        if isinstance(plan, BaseException):
+            raise plan
+        if isinstance(routing, BaseException):
+            raise routing
+        plan = _apply_user_patient_scope(request, plan)
+        _ensure_role_can_access_plan(request, plan)
+    except BaseException:
+        # Request kết thúc sớm (429/403/lỗi) → không rò task summary chạy nền.
+        if not summary_task.done():
+            summary_task.cancel()
+        raise
+
+    finalize_kwargs = dict(
         model=routing.model,
         query_complexity=routing.complexity.value,
         routing_source=routing.source,
         router_usage=routing.usage,
+        summary_task=summary_task,
+        conversation_context=conversation_context,
     )
 
     try:
-        context_payload = await _answer_context_resource_if_applicable(client, request, plan)
-        if context_payload:
-            return await _finalize_chat_response(
-                context_payload,
-                request.message,
-                plan,
-                answer_generator,
-                **routing_kwargs,
-            )
-
         if plan.tool_name == TOOL_SEARCH_PATIENTS:
             return await _finalize_chat_response(
                 await _answer_patients(client, plan),
                 request.message,
                 plan,
                 answer_generator,
-                **routing_kwargs,
+                **finalize_kwargs,
             )
         if plan.tool_name == TOOL_GET_MEDICATIONS:
             if plan.all_patients:
@@ -220,17 +236,17 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
-                    **routing_kwargs,
+                    **finalize_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **finalize_kwargs)
             return await _finalize_chat_response(
                 await _answer_medications(client, resolved_patient_id, plan.limit),
                 request.message,
                 plan,
                 answer_generator,
-                **routing_kwargs,
+                **finalize_kwargs,
             )
         if plan.tool_name == TOOL_GET_ENCOUNTERS:
             if plan.all_patients:
@@ -239,17 +255,17 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
-                    **routing_kwargs,
+                    **finalize_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **finalize_kwargs)
             return await _finalize_chat_response(
                 await _answer_encounters(client, resolved_patient_id, plan.limit),
                 request.message,
                 plan,
                 answer_generator,
-                **routing_kwargs,
+                **finalize_kwargs,
             )
         if plan.tool_name == TOOL_GET_OBSERVATIONS:
             if plan.all_patients:
@@ -258,17 +274,17 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
-                    **routing_kwargs,
+                    **finalize_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **finalize_kwargs)
             return await _finalize_chat_response(
                 await _answer_observations(client, resolved_patient_id, plan.limit, plan.observation_type),
                 request.message,
                 plan,
                 answer_generator,
-                **routing_kwargs,
+                **finalize_kwargs,
             )
         if plan.tool_name == TOOL_GET_CONDITIONS:
             if plan.all_patients:
@@ -277,36 +293,41 @@ async def chat(
                     request.message,
                     plan,
                     answer_generator,
-                    **routing_kwargs,
+                    **finalize_kwargs,
                 )
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **finalize_kwargs)
             return await _finalize_chat_response(
                 await _answer_conditions(client, resolved_patient_id, plan.limit),
                 request.message,
                 plan,
                 answer_generator,
-                **routing_kwargs,
+                **finalize_kwargs,
             )
         if plan.tool_name == TOOL_GET_PATIENT:
             resolved_patient_id = await _resolve_patient_id_for_tool(client, plan)
             if isinstance(resolved_patient_id, dict):
-                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **routing_kwargs)
+                return await _finalize_chat_response(resolved_patient_id, request.message, plan, answer_generator, **finalize_kwargs)
             return await _finalize_chat_response(
                 await _answer_patient(client, resolved_patient_id),
                 request.message,
                 plan,
                 answer_generator,
-                **routing_kwargs,
+                **finalize_kwargs,
             )
     except GatewayBudgetExceededError as exc:
+        summary_task.cancel()  # no-op nếu task đã xong
         raise _budget_exceeded_http() from exc
     except FhirClientError as exc:
+        summary_task.cancel()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=exc.user_message,
         ) from exc
+    except BaseException:
+        summary_task.cancel()
+        raise
 
     payload = {
         "answer": (
@@ -322,4 +343,4 @@ async def chat(
         "intent_source": plan.source,
         "intent_reason": plan.reason,
     }
-    return await _finalize_chat_response(payload, request.message, plan, answer_generator, **routing_kwargs)
+    return await _finalize_chat_response(payload, request.message, plan, answer_generator, **finalize_kwargs)

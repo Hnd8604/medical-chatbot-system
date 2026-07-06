@@ -30,6 +30,7 @@ frontend-react (React)  ──HTTP──►  spring-backend (Spring Boot)  ─�
 | [M5 — FHIR Integration](M5-fhir-integration.md) | Tích hợp HAPI FHIR (client, endpoint, normalize, seed) |
 | [M6 — AI Integration](M6-ai-integration.md) | LLM: intent, tool execution, answer generation, fallback |
 | [M15 — Context Management](M15-context-management.md) | Recent messages, session memory, summary, token budget |
+| [Context Compression — Rolling Summary](M-context-rolling-summary.md) | LLM rolling summary bằng LangGraph, chạy song song, trigger theo độ dài hội thoại |
 
 ### Vận hành AI
 | Module | Mô tả |

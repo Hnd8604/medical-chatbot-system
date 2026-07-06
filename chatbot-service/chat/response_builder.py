@@ -1,9 +1,11 @@
+import asyncio
 import contextvars
 import logging
 from typing import Any
 
 from agents.answer_generator import AnswerGenerator, combine_usage
 from agents.intent_extractor import IntentPlan, has_patient_search_criteria
+from agents.summary_generator import SummaryResult
 from app.config import get_settings
 from services.semantic_cache import get_semantic_cache
 
@@ -55,14 +57,20 @@ async def _finalize_chat_response(
     query_complexity: str | None = None,
     routing_source: str | None = None,
     router_usage: dict[str, int | float] | None = None,
+    summary_task: "asyncio.Task[SummaryResult] | None" = None,
+    conversation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = _with_plan_metadata(payload, plan)
     if payload.get("needs_patient_selection"):
         payload["answer_source"] = "template_patient_selection"
         payload["answer_usage"] = _zero_usage()
+        payload["summary_usage"] = _zero_usage()
         payload["usage"] = combine_usage(plan.usage, router_usage)
         payload.setdefault("patient_id", None)
         payload["pending_question"] = question
+        # Chưa chốt được bệnh nhân → không cập nhật memory, hủy summary đang chạy nền.
+        if summary_task and not summary_task.done():
+            summary_task.cancel()
         return payload
 
     template_answer = payload.get("answer") or "" # lấy câu trả lời đã xây dựng từ trước
@@ -74,6 +82,7 @@ async def _finalize_chat_response(
         evidence=payload.get("evidence") or [],
         fallback_answer=template_answer,  # fallback khi không thể call đc LLM hoặc LLM trả về empty answer
         model=model,
+        conversation_context=conversation_context,
     )
     payload["answer"] = answer_result.answer
     payload["answer_source"] = answer_result.source
@@ -96,6 +105,9 @@ async def _finalize_chat_response(
             cache_svc = get_semantic_cache()
             patient_id_for_cache = payload.get("patient_id") or plan.patient_id or NO_PATIENT_CACHE_KEY
 
+            # Không cộng summary_usage: giá trị saved khi cache hit đại diện cho
+            # chi phí intent+answer+router có thể tiết kiệm; summary vẫn phải
+            # chạy riêng theo hội thoại nên không "tiết kiệm" được khi hit.
             total_usage = combine_usage(
                 plan.usage,
                 answer_result.usage,
@@ -115,13 +127,31 @@ async def _finalize_chat_response(
 
     if answer_result.reason:
         payload["answer_reason"] = answer_result.reason
-    payload["usage"] = combine_usage(plan.usage, answer_result.usage, router_usage)
-    memory_update = _build_memory_update(payload, plan)
+
+    # Rolling summary chạy song song với answer generation từ đầu route;
+    # đến đây mới cần kết quả. Task tự nuốt mọi lỗi và luôn trả SummaryResult.
+    summary_result = await summary_task if summary_task else SummaryResult()
+    payload["summary_usage"] = summary_result.usage
+    if summary_result.source == "error" and summary_result.reason:
+        payload["summary_reason"] = summary_result.reason
+
+    payload["usage"] = combine_usage(plan.usage, answer_result.usage, router_usage, summary_result.usage)
+    memory_update = _build_memory_update(payload, plan, summary=summary_result.summary)
     if memory_update:
         payload["memory_update"] = memory_update
     return payload
 
-def _build_memory_update(payload: dict[str, Any], plan: IntentPlan) -> dict[str, Any] | None:
+def _build_memory_update(
+    payload: dict[str, Any],
+    plan: IntentPlan,
+    summary: str = "",
+) -> dict[str, Any] | None:
+    """Cấu trúc memory cho Spring merge vào chat_sessions.
+
+    ``summary`` là rolling summary do LLM sinh (agents/summary_generator.py);
+    chuỗi rỗng nghĩa là lượt này không trigger summary — Spring giữ summary cũ
+    qua firstNonBlank(memory_update.summary, current).
+    """
     if payload.get("needs_patient_selection"):
         return None
 
@@ -134,12 +164,21 @@ def _build_memory_update(payload: dict[str, Any], plan: IntentPlan) -> dict[str,
         return {
             "last_intent": payload.get("intent") or plan.intent,
             "last_tool_name": plan.tool_name,
-            "summary": _memory_summary(payload, patient_id=None, evidence_refs=[]),
+            "summary": summary,
             "evidence_refs": [],
         }
 
     if not patient_id and not evidence_refs:
-        return None
+        # Không có gì mới về patient/resource; vẫn trả memory_update nếu có
+        # summary mới để nó được persist.
+        if not summary:
+            return None
+        return {
+            "last_intent": payload.get("intent") or plan.intent,
+            "last_tool_name": plan.tool_name,
+            "summary": summary,
+            "evidence_refs": [],
+        }
 
     first_ref = evidence_refs[0] if evidence_refs else {}
     return {
@@ -148,7 +187,7 @@ def _build_memory_update(payload: dict[str, Any], plan: IntentPlan) -> dict[str,
         "last_tool_name": plan.tool_name,
         "last_resource_type": first_ref.get("resource_type"),
         "last_resource_id": first_ref.get("resource_id"),
-        "summary": _memory_summary(payload, patient_id=patient_id, evidence_refs=evidence_refs),
+        "summary": summary,
         "evidence_refs": evidence_refs,
     }
 
@@ -171,26 +210,6 @@ def _evidence_refs(evidence: Any) -> list[dict[str, Any]]:
             }
         )
     return refs
-
-def _memory_summary(
-    payload: dict[str, Any],
-    *,
-    patient_id: Any,
-    evidence_refs: list[dict[str, Any]],
-) -> str:
-    intent = payload.get("intent") or "unknown"
-    if patient_id and evidence_refs:
-        first = evidence_refs[0]
-        return (
-            f"Da xem {first.get('resource_type')}/{first.get('resource_id')} "
-            f"cho Patient/{patient_id}: {first.get('summary') or intent}."
-        )
-    if patient_id:
-        return f"Dang trao doi ve Patient/{patient_id}, intent gan nhat la {intent}."
-    if evidence_refs:
-        first = evidence_refs[0]
-        return f"Da xem {first.get('resource_type')}/{first.get('resource_id')}: {first.get('summary') or intent}."
-    return f"Intent gan nhat la {intent}."
 
 def _with_plan_metadata(payload: dict[str, Any], plan: IntentPlan) -> dict[str, Any]:
     settings = get_settings()

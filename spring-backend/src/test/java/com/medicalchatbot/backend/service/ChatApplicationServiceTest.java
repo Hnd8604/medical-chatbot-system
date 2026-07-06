@@ -157,6 +157,7 @@ class ChatApplicationServiceTest {
                 new ChatContextMessage("user", "huyet ap cua benh nhan nay"),
                 new ChatContextMessage("assistant", "Huyet ap 150/92 mmHg")
         ));
+        when(chatMessageRepository.countBySession_Id(sessionId)).thenReturn(6L);
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
         mockAssistantMessageSave();
 
@@ -177,6 +178,7 @@ class ChatApplicationServiceTest {
         assertEquals("BN2026-00001", chatbotRequest.conversationContext().activePatientId());
         assertEquals("Observation", chatbotRequest.conversationContext().lastResourceType());
         assertEquals(2, chatbotRequest.conversationContext().recentMessages().size());
+        assertEquals(6, chatbotRequest.conversationContext().totalMessageCount());
         assertEquals("BN2026-00001", result.patientId());
 
         ArgumentCaptor<ChatSessionMemory> memoryCaptor = ArgumentCaptor.forClass(ChatSessionMemory.class);
@@ -326,6 +328,44 @@ class ChatApplicationServiceTest {
         assertEquals("BN2026-00001", chatbotRequest.patientId());
         assertEquals(List.of("BN2026-00001"), chatbotRequest.allowedPatientIds());
         assertEquals("SELF", chatbotRequest.patientScope());
+    }
+
+    @Test
+    void chatSendsZeroTotalMessageCountForNewSession() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000605");
+        ChatSession session = new ChatSession(sessionId);
+        ChatApplicationService service = newService();
+        JsonNode response = new ObjectMapper().readTree("""
+                {
+                  "answer": "Danh sach benh nhan...",
+                  "intent": "patients",
+                  "tool_name": "search_patients",
+                  "evidence": [],
+                  "memory_update": {},
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "estimated_cost_usd": 0
+                  }
+                }
+                """);
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
+        when(chatMessageRepository.countBySession_Id(sessionId)).thenReturn(0L);
+        when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
+        mockAssistantMessageSave();
+
+        service.chat(new ChatRequest(null, null, "danh sach benh nhan"));
+
+        ArgumentCaptor<ChatbotChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatbotChatRequest.class);
+        verify(chatbotServiceClient).chat(requestCaptor.capture());
+        assertEquals(0, requestCaptor.getValue().conversationContext().totalMessageCount());
     }
 
     @Test

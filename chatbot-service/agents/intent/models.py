@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from agents.intent.constants import TOOL_TO_INTENT
 
@@ -31,5 +31,10 @@ class IntentPlan:
 
 
 class IntentExtractor(Protocol):
-    async def extract(self, message: str, provided_patient_id: str | None = None) -> IntentPlan:
+    async def extract(
+        self,
+        message: str,
+        provided_patient_id: str | None = None,
+        conversation_context: dict[str, Any] | None = None,
+    ) -> IntentPlan:
         ...

@@ -16,6 +16,9 @@ class ConversationContext(BaseModel):
     last_resource_type: str | None = None
     last_resource_id: str | None = None
     recent_messages: list[RecentMessage] = Field(default_factory=list)
+    # Tổng số message của session TRƯỚC khi lưu message hiện tại (Spring đếm).
+    # None => Spring cũ chưa gửi => không kích hoạt rolling summary.
+    total_message_count: int | None = None
 
 
 class ChatRequest(BaseModel):

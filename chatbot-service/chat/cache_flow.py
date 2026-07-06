@@ -43,6 +43,8 @@ async def get_cached_chat_payload(
         patient_id=patient_id_for_cache,
         source="strict_cache",
     )
+    # Cache hit không gọi rolling summary (summary rỗng → Spring giữ summary cũ):
+    # mục tiêu của cache là trả lời với chi phí ~0.
     memory_update = _build_memory_update(payload, mock_plan)
     if memory_update:
         payload["memory_update"] = memory_update

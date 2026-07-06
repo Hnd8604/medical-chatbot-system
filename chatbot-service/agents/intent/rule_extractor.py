@@ -31,7 +31,12 @@ from agents.intent.vocabulary import (
 
 
 class RuleBasedIntentExtractor:
-    async def extract(self, message: str, provided_patient_id: str | None = None) -> IntentPlan:
+    async def extract(
+        self,
+        message: str,
+        provided_patient_id: str | None = None,
+        conversation_context: dict | None = None,  # rule-based không dùng ngữ cảnh hội thoại
+    ) -> IntentPlan:
         patient_id = resolve_patient_id_for_request(message, provided_patient_id)
         text = normalize_text(message)
         search_criteria = extract_patient_search_criteria(message)

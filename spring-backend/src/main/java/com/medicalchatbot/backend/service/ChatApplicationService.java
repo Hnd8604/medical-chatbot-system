@@ -82,7 +82,14 @@ public class ChatApplicationService {
                 userId,
                 RECENT_CONTEXT_MESSAGE_LIMIT
         );
-        ConversationContext conversationContext = conversationContext(scopedSessionMemory, recentMessages);
+        // Đếm TRƯỚC khi lưu user message hiện tại (cùng thời điểm với recentMessages)
+        // để chatbot-service quyết định trigger rolling summary nhất quán.
+        int totalMessageCount = (int) chatMessageRepository.countBySession_Id(sessionId);
+        ConversationContext conversationContext = conversationContext(
+                scopedSessionMemory,
+                recentMessages,
+                totalMessageCount
+        );
 
         chatMessageRepository.save(session, ChatMessageRole.USER, request.message(), userMessageMetadata(
                 request,
@@ -343,6 +350,9 @@ public class ChatApplicationService {
         metadata.put("llm_provider", textOrNull(chatbotResponse, "llm_provider"));
         metadata.put("llm_model", textOrNull(chatbotResponse, "llm_model"));
         metadata.set("usage", chatbotResponse.path("usage"));
+        // Chi phí riêng của rolling summary — cho phép dashboard tách phần token
+        // context compression khỏi usage tổng.
+        metadata.set("summary_usage", chatbotResponse.path("summary_usage"));
         metadata.set("memory_update", chatbotResponse.path("memory_update"));
         if (chatbotResponse.has("needs_patient_selection")) {
             metadata.put("needs_patient_selection", chatbotResponse.path("needs_patient_selection").asBoolean(false));
@@ -360,7 +370,8 @@ public class ChatApplicationService {
 
     private ConversationContext conversationContext(
             ChatSessionMemory sessionMemory,
-            List<ChatContextMessage> recentMessages
+            List<ChatContextMessage> recentMessages,
+            int totalMessageCount
     ) {
         return new ConversationContext(
                 sessionMemory.memorySummary(),
@@ -369,7 +380,8 @@ public class ChatApplicationService {
                 sessionMemory.lastToolName(),
                 sessionMemory.lastResourceType(),
                 sessionMemory.lastResourceId(),
-                recentMessages
+                recentMessages,
+                totalMessageCount
         );
     }
 

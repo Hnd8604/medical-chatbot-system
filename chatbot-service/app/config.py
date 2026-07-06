@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = Field(default=20)
     enable_llm_answer: bool = Field(default=True)
 
+    # Rolling summary hội thoại (LangGraph). Chỉ gọi LLM khi tổng số message của
+    # session >= summary_trigger_message_count (khớp RECENT_CONTEXT_MESSAGE_LIMIT bên Spring).
+    enable_llm_summary: bool = Field(default=True)
+    model_summary: str = Field(default="gpt-4o-mini")
+    summary_trigger_message_count: int = Field(default=6)
+    summary_max_output_tokens: int = Field(default=256)
+
 
     litellm_base_url: str = Field(default="http://localhost:4000")
     litellm_master_key: str | None = Field(default=None)
@@ -55,6 +62,10 @@ class Settings(BaseSettings):
     @property
     def use_llm_answer(self) -> bool:
         return self.enable_llm_answer and self.use_llm
+
+    @property
+    def use_llm_summary(self) -> bool:
+        return self.enable_llm_summary and self.use_llm
 
 
 @lru_cache

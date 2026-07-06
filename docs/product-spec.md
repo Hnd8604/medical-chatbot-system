@@ -1,6 +1,6 @@
 # Product Spec — Medical Chatbot
 
-> Đây là spec sản phẩm đầy đủ + quy tắc FHIR/RAG/usage/cache. `CLAUDE.md` gốc import file này.
+> Đây là spec sản phẩm đầy đủ + quy tắc FHIR/usage/cache. `CLAUDE.md` gốc import file này.
 > (Trước đây là `AGENTS.md` gốc — đổi tên theo chuẩn Claude Code.)
 
 ## 1. Tổng quan dự án
@@ -14,7 +14,7 @@ Mục tiêu chính:
 - Cho phép người dùng đặt câu hỏi bằng ngôn ngữ tự nhiên về bệnh nhân, lượt khám, chỉ số, chẩn đoán, và yêu cầu thuốc.
 - Truy xuất dữ liệu y tế có cấu trúc từ một **HAPI FHIR Server**.
 - Lưu trữ dữ liệu FHIR nội bộ thông qua **PostgreSQL**, do HAPI FHIR JPA quản lý.
-- Dùng LLM để hiểu intent, lập kế hoạch truy vấn, sinh câu trả lời, và giải thích dựa trên tài liệu (tùy chọn).
+- Dùng LLM để hiểu intent, lập kế hoạch truy vấn, và sinh câu trả lời.
 - Theo dõi mức sử dụng, quota, lượng token tiêu thụ, và chi phí AI ước tính.
 - Áp dụng các kỹ thuật tối ưu cơ bản như caching, giảm ngữ cảnh (context reduction), và gọi tool an toàn.
 
@@ -44,24 +44,9 @@ HAPI FHIR JPA Server
 PostgreSQL
 ```
 
-Luồng truy xuất tài liệu (tùy chọn):
-
-```text
-User Question
-  ↓
-LLM Orchestrator
-  ↓
-RAG Service
-  ↓
-Vector Database / Document Store
-  ↓
-Medical guideline / explanation documents
-```
-
-Hệ thống nên dùng **hướng tiếp cận lai (hybrid)**:
+Nguyên tắc chính:
 
 - FHIR API cho dữ liệu bệnh nhân có cấu trúc.
-- RAG cho tài liệu phi cấu trúc, giải thích y khoa, hướng dẫn, và ghi chú dài.
 - Quản lý mức sử dụng cho số lượng request, số token, và ước tính chi phí.
 
 ---
@@ -140,7 +125,6 @@ Trách nhiệm:
 - Lưu lịch sử hội thoại.
 - Gọi LLM orchestrator.
 - Gọi các tool truy xuất FHIR.
-- Gọi các tool RAG khi cần.
 - Theo dõi usage và quota.
 - Trả câu trả lời cuối cùng về cho frontend.
 
@@ -247,44 +231,9 @@ Không trộn logic ứng dụng với các bảng nội bộ của HAPI.
 
 ---
 
-### 4.7 RAG Service
-
-Dùng RAG cho kiến thức phi cấu trúc hoặc bán cấu trúc, ví dụ:
-
-- Tài liệu giải thích y khoa.
-- Quy định bệnh viện.
-- Hướng dẫn sử dụng thuốc.
-- Các PDF hướng dẫn lâm sàng.
-- Ghi chú dài của bác sĩ.
-- Giải thích chung về kết quả xét nghiệm.
-
-Không dùng RAG làm phương pháp chính cho dữ liệu bệnh nhân có cấu trúc chính xác.
-
-Dùng RAG hợp lý:
-
-```text
-"Giá trị glucose cao có nghĩa là gì?"
-"Giải thích chẩn đoán này bằng ngôn ngữ đơn giản."
-"Các nguyên nhân thường gặp của tăng huyết áp là gì?"
-```
-
-Dùng RAG không hợp lý:
-
-```text
-"Kết quả glucose mới nhất của Patient/123 là gì?"
-"Patient/123 đang dùng những thuốc nào?"
-"Chẩn đoán gần nhất là gì?"
-```
-
-Những câu đó nên dùng truy vấn FHIR.
-
----
-
 ## 5. Chiến lược truy xuất dữ liệu
 
-### 5.1 Dữ liệu y tế có cấu trúc
-
-Dùng FHIR API.
+Dữ liệu y tế có cấu trúc: dùng FHIR API.
 
 Ví dụ:
 
@@ -308,46 +257,6 @@ GET /fhir/MedicationRequest?patient=Patient/123
 
 LLM:
 Chỉ tóm tắt dữ liệu MedicationRequest được trả về.
-```
-
----
-
-### 5.2 Kiến thức phi cấu trúc
-
-Dùng RAG.
-
-Ví dụ luồng:
-
-```text
-Người dùng hỏi:
-"Giá trị glucose này có nghĩa là gì?"
-
-Backend:
-1. Truy xuất Observation glucose từ FHIR.
-2. Truy xuất tài liệu giải thích qua RAG.
-3. Yêu cầu LLM giải thích dựa trên cả hai nguồn.
-```
-
----
-
-### 5.3 Câu hỏi hỗn hợp
-
-Một số câu hỏi cần cả FHIR lẫn RAG.
-
-Ví dụ:
-
-```text
-Người dùng hỏi:
-"Patient/123 bị cao huyết áp. Giải thích điều đó nghĩa là gì."
-```
-
-Quy trình khuyến nghị:
-
-```text
-1. Dùng FHIR để truy xuất các observation huyết áp.
-2. Dùng RAG để truy xuất giải thích về các ngưỡng huyết áp.
-3. Sinh câu trả lời cẩn trọng.
-4. Tránh đưa ra chẩn đoán trừ khi dữ liệu hỗ trợ rõ ràng.
 ```
 
 ---
@@ -440,19 +349,6 @@ Lấy các yêu cầu thuốc của một bệnh nhân.
 }
 ```
 
-### retrieve_documents
-
-Lấy các đoạn văn bản liên quan từ tài liệu y khoa.
-
-```json
-{
-  "name": "retrieve_documents",
-  "parameters": {
-    "query": "meaning of high glucose level"
-  }
-}
-```
-
 ---
 
 ## 7. Quản lý Usage, Chi phí, và Quota
@@ -515,7 +411,6 @@ Cache hit nghĩa là hệ thống tìm thấy một kết quả trước đó ch
 ### 8.2 Ứng viên Cache tốt
 
 - Giải thích y khoa chung.
-- Kết quả truy xuất RAG cho các khái niệm phổ biến.
 - Metadata FHIR.
 - Các ánh xạ mã như ánh xạ LOINC/SNOMED.
 - Dữ liệu tổng hợp không nhạy cảm.
@@ -584,7 +479,6 @@ src/
   api/         chat_routes.py, health_routes.py
   agents/      orchestrator.py, prompts.py, tool_registry.py
   fhir/        client.py, patient_service.py, observation_service.py, ..., normalizer.py
-  rag/         retriever.py, vector_store.py, document_loader.py
   usage/       usage_tracker.py, quota_service.py, cost_estimator.py
   cache/       cache_service.py, cache_keys.py
   db/          models.py, session.py, migrations/
@@ -602,7 +496,7 @@ Các dịch vụ khuyến nghị: `chatbot-backend`, `frontend`, `hapi-fhir`, `p
 
 Tối thiểu cho demo FHIR: `chatbot-backend`, `hapi-fhir`, `postgres`.
 
-Tùy chọn: `redis` (cache/rate limit), `qdrant` (vector DB cho RAG), `pgvector` (vector search trong PostgreSQL).
+Tùy chọn: `redis` (cache/rate limit), `qdrant` (vector DB cho semantic cache).
 
 ---
 
@@ -665,14 +559,7 @@ Không commit API key hoặc mật khẩu thật.
 - LLM nên gọi tool thay vì trả lời trực tiếp câu hỏi dữ liệu từ trí nhớ.
 - LLM nên được cung cấp dữ liệu gọn, đã normalize thay vì bundle FHIR thô khổng lồ.
 
-### 14.4 RAG
-
-- Chia tài liệu theo các phần ngữ nghĩa, không phải các mảnh nhỏ tùy tiện.
-- Lưu metadata nguồn.
-- Trả về trích dẫn hoặc tên nguồn khi có thể.
-- Không trộn tài liệu cũ/đã lỗi thời với tài liệu hiện hành mà không đánh dấu.
-
-### 14.5 Kiểm thử
+### 14.4 Kiểm thử
 
 Test tối thiểu: tìm kiếm bệnh nhân; truy xuất observation; lượt khám gần nhất; condition; MedicationRequest; FHIR Server không khả dụng; kết quả FHIR rỗng; nhiều bệnh nhân khớp; vượt quota; cache hit/miss; parse lệnh gọi tool của LLM.
 
@@ -720,8 +607,7 @@ Theo dữ liệu FHIR hiện có, Patient/123 có ba bản ghi observation huy�
 5. Các tool truy xuất FHIR.
 6. Theo dõi usage đơn giản: số request, số token, chi phí ước tính.
 7. Cache cơ bản cho các truy vấn giải thích chung lặp lại.
-8. RAG tùy chọn cho tài liệu giải thích y khoa.
-9. Giao diện chat frontend đơn giản.
+8. Giao diện chat frontend đơn giản.
 ```
 
 Không xây microservice quá mức trừ khi nhóm có đủ thời gian.
@@ -738,7 +624,6 @@ Tránh: tích hợp bệnh viện thật; dữ liệu bệnh nhân thật; hỗ 
 
 ```text
 Dùng FHIR API cho dữ liệu y tế có cấu trúc chính xác.
-Dùng RAG cho giải thích và tài liệu.
 Dùng LLM cho suy luận, điều phối, và sinh câu trả lời.
 Không để LLM truy vấn trực tiếp cơ sở dữ liệu PostgreSQL của HAPI.
 ```

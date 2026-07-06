@@ -2,6 +2,8 @@
 
 Mô tả chức năng + luồng chương trình + luồng trong code cho từng module (M*), bám theo `module_nghiep_vu_chatbot_y_te_moscow_chi_tiet.md` và mã nguồn thực tế (`spring-backend`, `chatbot-service`, `frontend-react`, `infra`).
 
+> **Mô tả đề tài & hướng chuyên sâu:** [mo-ta-de-tai.md](mo-ta-de-tai.md) — nội dung sản phẩm, các phân hệ, và hướng tối ưu vận hành (token/quota/cache/routing).
+
 ## Kiến trúc tổng quan
 
 ```

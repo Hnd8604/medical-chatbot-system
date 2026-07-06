@@ -5,7 +5,7 @@ description: Triển khai milestone tiếp theo theo quy ước repo và cập n
 Triển khai một milestone theo đúng nhịp làm việc hiện tại của repo.
 
 1. Đọc `MILESTONES.md`, mục **"Next Recommended Milestones"**. Nếu `$ARGUMENTS`
-   nêu rõ milestone (vd `M1 Authentication`, `RAG`), làm milestone đó; nếu không,
+   nêu rõ milestone (vd `M1 Authentication`, `M14 Cache Management`), làm milestone đó; nếu không,
    chọn mục đầu tiên trong "Next Recommended" và xác nhận lại với tôi trước khi code.
 2. Lập kế hoạch ngắn: service nào bị ảnh hưởng, file nào sửa, có cần Flyway
    migration mới không. Tuân thủ quy ước trong `CLAUDE.md` (FHIR REST, Flyway sở

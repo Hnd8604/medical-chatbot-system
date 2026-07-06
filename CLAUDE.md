@@ -44,7 +44,7 @@ Luồng: Frontend → Spring `/api/chat` → chatbot-service `/chat` → FHIR �
 
 ## Tài liệu sâu hơn (import khi cần)
 
-- @docs/product-spec.md — spec sản phẩm + quy tắc FHIR/RAG/usage/cache đầy đủ.
+- @docs/product-spec.md — spec sản phẩm + quy tắc FHIR/usage/cache đầy đủ.
 - @docs/optimization-direction.md — hướng chuyên sâu: tối ưu token/quota/cache/routing/gateway + chỉ số đánh giá.
 - `docs/` — thiết kế từng module (vd `docs/M2-conversation-management.md`).
 

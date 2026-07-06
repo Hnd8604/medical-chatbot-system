@@ -301,7 +301,7 @@ routing model rẻ…) xem `docs/optimization-direction.md`.
 
 ## Tài liệu
 
-- `docs/product-spec.md` — spec sản phẩm + quy tắc FHIR/RAG/usage/cache đầy đủ.
+- `docs/product-spec.md` — spec sản phẩm + quy tắc FHIR/usage/cache đầy đủ.
 - `docs/optimization-direction.md` — hướng tối ưu token/quota/cache/routing/gateway + chỉ số đánh giá.
 - `docs/M-*.md` — thiết kế từng milestone (LiteLLM gateway, model routing, rolling summary…).
 - `MILESTONES.md` — tiến độ chi tiết.

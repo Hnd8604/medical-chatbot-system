@@ -114,5 +114,5 @@ M22 feedback:
 | Config chatbot-service | `chatbot-service/app/config.py` |
 | Quota/pricing admin (Spring) | `spring-backend/.../service/{QuotaPolicyAdminService,ModelPricingAdminService}.java` |
 | Feedback service | `spring-backend/.../service/FeedbackService.java` |
-| Feedback entity/migration | `spring-backend/.../entity/MessageFeedback.java`, `db/migration/V9__add_feedback_table.sql` |
+| Feedback entity/migration | `spring-backend/.../entity/MessageFeedback.java`, `db/migration/V1__baseline_schema_and_seed.sql` (bảng `message_feedback`) |
 | Feedback UI | `frontend-react/src/routes/ChatPage.tsx` |

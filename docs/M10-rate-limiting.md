@@ -69,4 +69,4 @@ RateLimitInterceptor.preHandle()   (trước controller / business logic)
 | Đăng ký interceptor | `spring-backend/.../config/WebConfig.java` |
 | Limit theo user | `spring-backend/.../service/QuotaService.java` (`getRateLimitForUser`) |
 | Exception + 429 | `spring-backend/.../exception/RateLimitExceededException.java`, `ApiExceptionHandler.java` |
-| Migration rate limit | `db/migration/V6__add_rate_limit_to_quota.sql` |
+| Migration rate limit | `db/migration/V1__baseline_schema_and_seed.sql` (cột `rate_limit_per_minute` trên `quota_policies`) |

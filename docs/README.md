@@ -59,4 +59,4 @@ frontend-react (React)  ──HTTP──►  spring-backend (Spring Boot)  ─�
 | [M21 / M23 / M25 — Search / Export / Notification](M21-M23-M25-utilities.md) | Tìm kiếm, xuất hội thoại, thông báo |
 | [M24 / M26 — Advanced Analytics & Backup/Restore](M24-M26-analytics-backup.md) | Phân tích nâng cao + sao lưu/phục hồi |
 
-> Thư mục `docs/` nằm trong `.gitignore` (tài liệu nội bộ, không track bởi git).
+> Thư mục `docs/` được track trong git — tài liệu kỹ thuật (kiến trúc, thiết kế DB, API, hướng dẫn triển khai) là một phần deliverable của đề tài.

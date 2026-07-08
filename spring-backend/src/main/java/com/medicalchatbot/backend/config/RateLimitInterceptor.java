@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -26,14 +27,19 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     private final QuotaService quotaService;
     private final CurrentUserService currentUserService;
+    // X-Forwarded-For do client tự đặt được nên chỉ tin khi app chạy sau reverse
+    // proxy tin cậy (bật qua cấu hình); mặc định dùng remote address trực tiếp.
+    private final boolean trustProxyHeaders;
 
     public RateLimitInterceptor(
             StringRedisTemplate redisTemplate,
             QuotaService quotaService,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            @Value("${app.rate-limit.trust-proxy-headers:false}") boolean trustProxyHeaders) {
         this.redisTemplate = redisTemplate;
         this.quotaService = quotaService;
         this.currentUserService = currentUserService;
+        this.trustProxyHeaders = trustProxyHeaders;
      
         String script = "local current = redis.call('INCR', KEYS[1]) " +
                 "if current == 1 then " +
@@ -80,6 +86,9 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
 
     private String getClientIp(HttpServletRequest request) {
+        if (!trustProxyHeaders) {
+            return request.getRemoteAddr();
+        }
         String ip = request.getHeader("X-Forwarded-For");
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
             // Lấy IP trực tiếp nếu không qua Proxy

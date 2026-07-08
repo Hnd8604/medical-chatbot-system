@@ -83,4 +83,4 @@ Xem chi phí:
 | Admin cost API | `spring-backend/.../controller/AdminCostController.java` |
 | Pricing entity/admin | `spring-backend/.../entity/ModelPricing.java`, `.../service/ModelPricingAdminService.java` |
 | Usage & Cost UI | `frontend-react/src/routes/AdminUsageCostPage.tsx` |
-| Migration giá | `db/migration/V5__add_model_pricing_and_cost_backfill.sql`, `V13__add_llama_3_1_8b_instant_pricing.sql` |
+| Migration giá | `db/migration/V1__baseline_schema_and_seed.sql` (bảng `model_pricing` + seed giá) |

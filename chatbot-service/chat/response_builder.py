@@ -120,7 +120,9 @@ async def _finalize_chat_response(
                 intent=plan.intent,
                 question=question,
                 answer=answer_result.answer,
-                usage=total_usage
+                usage=total_usage,
+                llm_provider=payload.get("llm_provider"),
+                llm_model=payload.get("llm_model"),
             )
         except Exception:
             log.exception("Cache save error")
@@ -135,6 +137,10 @@ async def _finalize_chat_response(
     if summary_result.source == "error" and summary_result.reason:
         payload["summary_reason"] = summary_result.reason
 
+    # Lưu ý: usage tổng gộp token của cả router/summary (chạy trên model rẻ) lẫn
+    # intent/answer; Spring ước tính cost theo model của answer nên phần token
+    # router/summary bị tính giá answer model — lệch nhẹ theo hướng ước tính dư,
+    # chấp nhận cho phạm vi hiện tại (cost thật lấy từ spend của LiteLLM gateway).
     payload["usage"] = combine_usage(plan.usage, answer_result.usage, router_usage, summary_result.usage)
     memory_update = _build_memory_update(payload, plan, summary=summary_result.summary)
     if memory_update:

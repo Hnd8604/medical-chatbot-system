@@ -96,6 +96,6 @@ Mỗi lượt /api/chat (ChatApplicationService.chat):
 | Entity + trường memory | `spring-backend/.../entity/ChatSession.java` |
 | DTO memory | `spring-backend/.../dto/response/ChatSessionMemory.java` |
 | DTO context gửi đi | `spring-backend/.../dto/request/ConversationContext.java` |
-| Migration thêm session memory | `spring-backend/.../db/migration/V4__add_session_memory.sql` |
+| Migration session memory | `spring-backend/.../db/migration/V1__baseline_schema_and_seed.sql` (memory fields trên `chat_sessions`) |
 | Sinh summary + memory_update | `chatbot-service/chat/response_builder.py` |
 | Áp context suy luận bệnh nhân | `chatbot-service/chat/context_memory.py`, `chatbot-service/api/chat_routes.py` |

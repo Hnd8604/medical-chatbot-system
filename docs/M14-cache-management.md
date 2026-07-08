@@ -81,5 +81,5 @@ Khi dữ liệu bệnh nhân đổi: invalidate_patient_cache(patient_id)
 | Cache flow (đọc đầu pipeline) | `chatbot-service/chat/cache_flow.py` |
 | Config cache | `chatbot-service/app/config.py` |
 | Observability metrics | `spring-backend/.../service/MetricsService.java`, `.../controller/MetricsController.java` |
-| Saved usage + migration | `spring-backend/.../service/ChatApplicationService.java`, `db/migration/V7__add_cache_observability_fields.sql` |
-| Cache entries (key-value) | `spring-backend/.../entity/CacheEntry.java`, `db/migration/V1` |
+| Saved usage + migration | `spring-backend/.../service/ChatApplicationService.java`, `db/migration/V1__baseline_schema_and_seed.sql` (cột `answer_source`/`saved_tokens`/`saved_cost_usd`) |
+| Cache entries (key-value) | `spring-backend/.../entity/CacheEntry.java`, `db/migration/V1__baseline_schema_and_seed.sql` |

@@ -1,8 +1,13 @@
 # M12 — Database Design / ERD
 
 Tài liệu này mô tả sơ đồ quan hệ thực thể (ERD) của database ứng dụng (PostgreSQL),
-được reverse từ 17 file Flyway migration trong
-[`src/main/resources/db/migration/`](../src/main/resources/db/migration/).
+được reverse từ 2 file Flyway migration trong
+[`src/main/resources/db/migration/`](../src/main/resources/db/migration/):
+
+- `V1__baseline_schema_and_seed.sql` — baseline gộp (squash) từ 17 migration cũ
+  (V1→V17): 12 bảng + index + seed data (quota policy, demo user, model pricing,
+  liên kết user ↔ FHIR Patient).
+- `V2__llm_virtual_keys.sql` — bảng `llm_virtual_keys` cho AI Gateway (LiteLLM).
 
 > **Phạm vi**: Đây là DB *ứng dụng*. Dữ liệu lâm sàng của bệnh nhân (Patient,
 > Observation, Condition...) **không** lưu ở đây mà nằm trên **HAPI FHIR server**
@@ -26,6 +31,7 @@ erDiagram
     chat_messages    ||--o{ message_feedback        : "được đánh giá"
     app_users        ||--o{ message_feedback        : "gửi"
     app_users        ||--o{ app_user_patient_links  : "liên kết FHIR"
+    app_users        ||--o| llm_virtual_keys        : "có virtual key"
 
     quota_policies {
         uuid        id PK
@@ -134,6 +140,16 @@ erDiagram
         timestamptz updated_at
     }
 
+    llm_virtual_keys {
+        uuid        user_id "PK, FK"
+        varchar     key_alias
+        varchar     virtual_key
+        numeric     max_budget_usd
+        varchar     budget_duration
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     model_pricing {
         uuid        id PK
         varchar     provider
@@ -189,7 +205,7 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     daily_cost_limit_usd  numeric    [not null]
     rate_limit_per_minute integer    [default: 20]
     created_at            timestamptz [not null, default: `now()`]
-    Note: "3 tier seed sẵn (V16/V17): free (30 req · 50k token · $0.5 · 10 rpm), pro (200 · 500k · $5 · 30), enterprise (2000 · 5M · $50 · 120)"
+    Note: "3 tier seed sẵn ở V1 baseline: free (30 req · 50k token · $0.5 · 10 rpm), pro (200 · 500k · $5 · 30), enterprise (2000 · 5M · $50 · 120)"
   }
 
   Table app_users {
@@ -306,7 +322,7 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     Indexes {
       message_id [name: "idx_message_feedback_message_id"]
     }
-    Note: "V15 đã bỏ unique (message_id, user_id); chống trùng nay do FeedbackService đảm nhiệm ở tầng ứng dụng"
+    Note: "Không có unique (message_id, user_id); chống trùng do FeedbackService đảm nhiệm ở tầng ứng dụng"
   }
 
   Table app_user_patient_links {
@@ -369,6 +385,17 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
       (alert_type, status, created_at)
     }
   }
+
+  Table llm_virtual_keys {
+    user_id         uuid        [pk, ref: > app_users.id] // ON DELETE CASCADE
+    key_alias       varchar     [not null]
+    virtual_key     varchar     [not null]
+    max_budget_usd  numeric     [not null]
+    budget_duration varchar     [not null, default: '1d']
+    created_at      timestamptz [not null, default: `now()`]
+    updated_at      timestamptz [not null, default: `now()`]
+    Note: "V2 — AI Gateway (LiteLLM) DB-backed: ánh xạ app_user → virtual key; gateway là nguồn chặn budget token/cost, bảng này chỉ lưu mapping + budget"
+  }
 ```
 
 ---
@@ -389,12 +416,14 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
 | 10 | `model_pricing` | M8 Cost, M16 Routing | Bảng giá token theo provider/model |
 | 11 | `cache_entries` | M14 Cache | Cache key–value (JSONB) + TTL |
 | 12 | `alerts` | M19 Alert | Cảnh báo sự cố hệ thống + trạng thái xử lý |
+| 13 | `llm_virtual_keys` | AI Gateway (LiteLLM) | Ánh xạ user ↔ virtual key + budget trên gateway |
 
 ---
 
 ## 4. Quy ước thiết kế (rút ra từ schema)
 
-- **Khóa chính**: `uuid` + `gen_random_uuid()` cho mọi bảng.
+- **Khóa chính**: `uuid` + `gen_random_uuid()` cho mọi bảng
+  (ngoại lệ: `llm_virtual_keys` dùng thẳng `user_id` làm PK — quan hệ 1–1 với `app_users`).
 - **Thời gian**: `timestamptz` + `default now()`.
 - **Xóa dữ liệu**:
   - Quan hệ sở hữu (con không tồn tại độc lập) → `ON DELETE CASCADE`

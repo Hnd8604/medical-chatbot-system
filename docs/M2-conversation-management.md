@@ -244,6 +244,6 @@ Endpoint `POST /chat` trong `chat_routes.py` ([chat_routes.py:164-324](chatbot-s
 | Entity message | `spring-backend/src/main/java/com/medicalchatbot/backend/entity/ChatMessage.java` |
 | Repository session | `spring-backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java` |
 | Repository message | `spring-backend/src/main/java/com/medicalchatbot/backend/repository/ChatMessageRepository.java` |
-| Session memory | `spring-backend/src/main/resources/db/migration/V4__add_session_memory.sql` |
+| Session memory | `spring-backend/src/main/resources/db/migration/V1__baseline_schema_and_seed.sql` (memory fields trên `chat_sessions`) |
 | Frontend chat page | `frontend-react/src/routes/ChatPage.tsx` |
 | Frontend history sidebar | `frontend-react/src/components/chat/HistorySidebar.tsx` |

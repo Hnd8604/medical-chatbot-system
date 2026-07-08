@@ -98,7 +98,7 @@ Chat (USER): UserPatientScopeService.resolve → chặn patient_id ngoài hồ s
 | Scope hồ sơ USER | `service/UserPatientScopeService.java`, `repository/UserPatientLinkRepository.java` |
 | Entity/enum | `entity/User.java`, `entity/UserPatientLink.java`, `enums/UserRole.java`, `enums/UserStatus.java` |
 | DTO | `dto/request/AuthLoginRequest.java`, `AuthRegisterRequest.java`, `AuthLinkPatientRequest.java`; `dto/response/AuthLoginResponse.java`, `AuthRegisterResponse.java`, `AuthLinkPatientResponse.java`, `AuthUserResponse.java` |
-| Migration | `V11` (auth fields), `V12` (user_patient_links), `V14` (unique username/email + self-link) |
+| Migration | `V1__baseline_schema_and_seed.sql` (auth fields trên `app_users`, bảng `app_user_patient_links`, unique username/email) |
 | Frontend | `routes/LoginPage.tsx`, `routes/RegisterPage.tsx`, `routes/OnboardingPage.tsx`, `lib/auth.tsx` |
 
 ## Trạng thái

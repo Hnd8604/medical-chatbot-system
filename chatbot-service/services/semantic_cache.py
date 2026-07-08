@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 import logging
 import time
@@ -46,24 +47,32 @@ class SemanticCacheService:
         except Exception as e:
             log.error(f"Failed to connect to Qdrant during startup initialization: {e}")
 
-    def _get_embedding(self, text: str) -> list[float]:
-        """Generates a dense vector embedding for the text query."""
+    def _embed_sync(self, text: str) -> list[float]:
         vectors = list(self.embedding_model.embed([text]))
         return vectors[0].tolist()
 
+    async def _get_embedding(self, text: str) -> list[float]:
+        """Generates a dense vector embedding for the text query.
+
+        Embedding là CPU-bound và sync; chạy trong thread pool để không block
+        event loop khi có nhiều request /chat đồng thời.
+        """
+        return await asyncio.to_thread(self._embed_sync, text)
+
     async def get_cached_answer(
-        self, 
-        user_id: str, 
-        patient_id: str, 
-        question: str, 
-    ) -> Optional[tuple[str, str, dict]]:
+        self,
+        user_id: str,
+        patient_id: str,
+        question: str,
+    ) -> Optional[tuple[str, str, dict, Optional[str], Optional[str]]]:
         """
         Retrieves a cached answer using strict semantic similarity without intent filtering.
-        Returns a tuple of (answer, intent) if a match is found.
+        Returns (answer, intent, original_usage, llm_provider, llm_model) if a match is found;
+        provider/model là của lượt đã sinh câu trả lời gốc (entry cũ có thể thiếu → None).
         """
         # Lấy threshold từ tham số truyền vào, nếu không có thì lấy từ config
         threshold =self.settings.cache_similarity_threshold
-        query_vector = self._get_embedding(question)
+        query_vector = await self._get_embedding(question)
         
         expiration_threshold = (
             time.time() - self.settings.cache_ttl_seconds
@@ -104,13 +113,29 @@ class SemanticCacheService:
         return (
             payload.get("answer"),
             payload.get("intent"),
-            payload.get("original_usage", {})
+            payload.get("original_usage", {}),
+            payload.get("llm_provider"),
+            payload.get("llm_model"),
         )
-    
-    async def save_to_cache(self, user_id: str, patient_id: str, intent: str, question: str, answer: str, usage: dict) -> None:
-        """Stores the newly generated LLM answer into the vector cache database."""
-        vector = self._get_embedding(question)
-        
+
+    async def save_to_cache(
+        self,
+        user_id: str,
+        patient_id: str,
+        intent: str,
+        question: str,
+        answer: str,
+        usage: dict,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
+    ) -> None:
+        """Stores the newly generated LLM answer into the vector cache database.
+
+        ``llm_provider``/``llm_model`` là model đã sinh câu trả lời gốc — khi cache
+        hit, Spring dùng chúng để tính saved_cost đúng theo bảng model_pricing.
+        """
+        vector = await self._get_embedding(question)
+
         await self.client.upsert(
             collection_name=self.collection_name,
             points=[
@@ -120,10 +145,12 @@ class SemanticCacheService:
                     payload={
                         "user_id": user_id,
                         "patient_id": patient_id,
-                        "intent": intent, 
+                        "intent": intent,
                         "question": question,
                         "answer": answer,
-                        "original_usage": usage, 
+                        "original_usage": usage,
+                        "llm_provider": llm_provider,
+                        "llm_model": llm_model,
                         "created_at": time.time()
                     }
                 )

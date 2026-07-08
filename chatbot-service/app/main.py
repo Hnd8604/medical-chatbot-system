@@ -7,6 +7,7 @@ from api.exceptions import register_exception_handlers
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
+from api.cache_routes import router as cache_router
 from api.chat_routes import router as chat_router
 from api.fhir_routes import router as fhir_router
 from api.health_routes import router as health_router
@@ -52,3 +53,4 @@ register_exception_handlers(app)
 app.include_router(health_router)
 app.include_router(fhir_router)
 app.include_router(chat_router)
+app.include_router(cache_router)

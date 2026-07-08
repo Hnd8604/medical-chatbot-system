@@ -20,6 +20,7 @@ import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
 import com.medicalchatbot.backend.dto.response.ChatSessionRenameResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
+import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
@@ -57,8 +58,8 @@ public class ChatApplicationService {
     public ChatResponse chat(ChatRequest request) {
         User user = currentUserService.requireCurrentUser();
         UUID userId = user.getId();
-        quotaService.assertQuotaAvailable(userId);
-        double quotaUsedRatio = quotaService.currentUsedRatio(userId);
+        QuotaStatusResponse quotaStatus = quotaService.assertQuotaAvailable(userId);
+        double quotaUsedRatio = quotaService.usedRatio(quotaStatus);
         ChatSession session = null;
         ChatSessionMemory sessionMemory = null;
         if (request.sessionId() != null) {

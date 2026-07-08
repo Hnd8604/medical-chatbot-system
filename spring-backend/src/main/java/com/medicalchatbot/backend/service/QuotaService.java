@@ -132,10 +132,14 @@ public class QuotaService {
         return quotaPolicyRepository.findAll();
     }
 
-    public void assertQuotaAvailable(UUID userId) {
+    /**
+     * Chặn 429 khi vượt quota; trả về status vừa tính để caller dùng lại
+     * (vd tính used ratio) thay vì tính quota lần thứ hai trong cùng request.
+     */
+    public QuotaStatusResponse assertQuotaAvailable(UUID userId) {
         QuotaStatusResponse status = statusForUser(userId, null);
         if (status.allowed()) {
-            return;
+            return status;
         }
 
         alertService.triggerAlert(
@@ -149,10 +153,12 @@ public class QuotaService {
     }
 
     /**
-     * Tỷ lệ quota đã dùng trong ngày
+     * Tỷ lệ quota đã dùng trong ngày, tính từ status có sẵn.
      */
-    public double currentUsedRatio(UUID userId) {
-        QuotaStatusResponse status = statusForUser(userId, null);
+    public double usedRatio(QuotaStatusResponse status) {
+        if (status == null) {
+            return 0;
+        }
         double requestRatio = ratio(status.usedRequests(), status.dailyRequestLimit());
         double tokenRatio = ratio(status.usedTokens(), status.dailyTokenLimit());
         double costRatio = ratio(status.usedCostUsd(), status.dailyCostLimitUsd());

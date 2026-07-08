@@ -21,7 +21,7 @@ async def get_cached_chat_payload(
     if not strict_cache_result:
         return None
 
-    cached_answer, cached_intent, original_usage = strict_cache_result
+    cached_answer, cached_intent, original_usage, cached_provider, cached_model = strict_cache_result
     payload = {
         "answer": cached_answer,
         "intent": cached_intent,
@@ -35,8 +35,10 @@ async def get_cached_chat_payload(
         },
         "tool_name": "cache_hit",
         "intent_source": "strict_cache",
-        "llm_provider": cache_service.settings.llm_provider,
-        "llm_model": cache_service.settings.model_simple,
+        # Model của lượt đã sinh câu trả lời gốc (lưu kèm cache entry) để Spring
+        # tính saved_cost đúng model; entry cũ chưa có trường này → fallback config.
+        "llm_provider": cached_provider or cache_service.settings.llm_provider,
+        "llm_model": cached_model or cache_service.settings.model_simple,
     }
     mock_plan = IntentPlan(
         tool_name="cache_hit",

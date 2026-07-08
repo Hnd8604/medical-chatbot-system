@@ -49,7 +49,7 @@ function PatientLinkCell({ user }: { user: AdminUserItem }) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-start gap-2">
       {links.map((link, index) => (
         <Badge key={`${link.fhir_patient_id || index}`} tone={link.is_primary ? "blue" : "slate"}>
           {link.fhir_patient_id || "Patient"}

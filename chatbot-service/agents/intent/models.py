@@ -10,6 +10,8 @@ from agents.intent.constants import TOOL_TO_INTENT
 class IntentPlan:
     tool_name: str
     patient_id: str | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
     search_name: str | None = None
     search_phone: str | None = None
     search_birth_date: str | None = None

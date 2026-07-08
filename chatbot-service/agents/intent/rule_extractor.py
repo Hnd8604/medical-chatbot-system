@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import re
+
 from agents.intent.constants import (
+    TOOL_FHIR_STATUS,
     TOOL_GET_PATIENT,
+    TOOL_GET_RESOURCE,
     TOOL_SEARCH_PATIENTS,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_ENCOUNTERS,
@@ -30,6 +34,32 @@ from agents.intent.vocabulary import (
 )
 
 
+# Tham chiếu resource FHIR cụ thể (không tính Patient — Patient/... đã là
+# patient_id hint cho các tool theo bệnh nhân).
+_RESOURCE_REFERENCE_PATTERN = re.compile(
+    r"\b(Encounter|Observation|Condition|MedicationRequest)/([A-Za-z0-9][A-Za-z0-9\-\.]*)",
+    re.IGNORECASE,
+)
+_CANONICAL_RESOURCE_TYPES = {
+    name.lower(): name
+    for name in ("Patient", "Encounter", "Observation", "Condition", "MedicationRequest")
+}
+
+FHIR_STATUS_KEYWORDS = ["status", "trang thai", "hoat dong", "ket noi", "san sang", "health"]
+
+
+def extract_resource_reference(message: str) -> tuple[str, str] | None:
+    match = _RESOURCE_REFERENCE_PATTERN.search(message or "")
+    if not match:
+        return None
+    return _CANONICAL_RESOURCE_TYPES[match.group(1).lower()], match.group(2)
+
+
+def is_fhir_status_request(message: str) -> bool:
+    text = normalize_text(message)
+    return "fhir" in text and contains_any(text, FHIR_STATUS_KEYWORDS)
+
+
 class RuleBasedIntentExtractor:
     async def extract(
         self,
@@ -42,6 +72,18 @@ class RuleBasedIntentExtractor:
         search_criteria = extract_patient_search_criteria(message)
         has_criteria = bool(search_criteria)
         all_patient_scope = is_patient_list_request(message) and not resolve_explicit_patient_id(message)
+
+        if is_fhir_status_request(message):
+            return IntentPlan(tool_name=TOOL_FHIR_STATUS)
+
+        resource_reference = extract_resource_reference(message)
+        if resource_reference:
+            return IntentPlan(
+                tool_name=TOOL_GET_RESOURCE,
+                patient_id=patient_id,
+                resource_type=resource_reference[0],
+                resource_id=resource_reference[1],
+            )
 
         if is_self_patient_reference(message):
             return IntentPlan(

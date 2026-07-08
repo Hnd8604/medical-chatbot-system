@@ -10,11 +10,13 @@ from agents.model_router import ModelRouter, get_model_router
 from agents.summary_generator import SummaryGenerator, get_summary_generator
 from agents.intent_extractor import (
     FHIR_PROTECTED_TOOLS,
+    TOOL_FHIR_STATUS,
     TOOL_GET_CONDITIONS,
     TOOL_GET_ENCOUNTERS,
     TOOL_GET_MEDICATIONS,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_PATIENT,
+    TOOL_GET_RESOURCE,
     TOOL_SEARCH_PATIENTS,
     IntentExtractor,
     get_intent_extractor,
@@ -32,10 +34,12 @@ from chat.resource_answerers import (
     _answer_all_patient_observations,
     _answer_conditions,
     _answer_encounters,
+    _answer_fhir_status,
     _answer_medications,
     _answer_observations,
     _answer_patient,
     _answer_patients,
+    _answer_resource_by_id,
     _resolve_patient_id_for_tool,
 )
 from chat.response_builder import _finalize_chat_response, current_user_context
@@ -48,7 +52,9 @@ log = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 
-USER_ALLOWED_FHIR_TOOLS = FHIR_PROTECTED_TOOLS - {TOOL_SEARCH_PATIENTS}
+# USER không được tìm kiếm bệnh nhân khác và không được tra cứu resource FHIR
+# tuỳ ý (không kiểm chứng được resource thuộc về chính họ trước khi truy xuất).
+USER_ALLOWED_FHIR_TOOLS = FHIR_PROTECTED_TOOLS - {TOOL_SEARCH_PATIENTS, TOOL_GET_RESOURCE}
 
 
 def _budget_exceeded_http() -> HTTPException:
@@ -86,6 +92,9 @@ def _apply_user_patient_scope(request: ChatRequest, plan):
 
     if plan.all_patients:
         _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
+
+    if plan.tool_name == TOOL_GET_RESOURCE:
+        _user_scope_error("Tai khoan USER khong duoc tra cuu resource FHIR truc tiep theo ma resource.")
 
     if is_self_patient_reference(request.message) and plan.tool_name == TOOL_SEARCH_PATIENTS:
         scoped_patient_id = _patient_id_hint(request) or allowed_patient_ids[0]
@@ -130,6 +139,8 @@ def _ensure_role_can_access_plan(request: ChatRequest, plan) -> None:
         return
     if plan.tool_name not in FHIR_PROTECTED_TOOLS:
         return
+    if plan.tool_name == TOOL_GET_RESOURCE:
+        _user_scope_error("Tai khoan USER khong duoc tra cuu resource FHIR truc tiep theo ma resource.")
     if plan.tool_name == TOOL_SEARCH_PATIENTS or plan.all_patients:
         _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
     patient_id = normalize_patient_id(plan.patient_id)
@@ -221,6 +232,22 @@ async def chat(
     )
 
     try:
+        if plan.tool_name == TOOL_FHIR_STATUS:
+            return await _finalize_chat_response(
+                await _answer_fhir_status(client),
+                request.message,
+                plan,
+                answer_generator,
+                **finalize_kwargs,
+            )
+        if plan.tool_name == TOOL_GET_RESOURCE:
+            return await _finalize_chat_response(
+                await _answer_resource_by_id(client, plan),
+                request.message,
+                plan,
+                answer_generator,
+                **finalize_kwargs,
+            )
         if plan.tool_name == TOOL_SEARCH_PATIENTS:
             return await _finalize_chat_response(
                 await _answer_patients(client, plan),

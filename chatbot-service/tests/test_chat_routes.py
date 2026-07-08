@@ -14,11 +14,15 @@ from agents.answer_generator import AnswerResult
 from agents.summary_generator import SummaryResult
 from agents.intent_extractor import (
     IntentPlan,
+    TOOL_FHIR_STATUS,
     TOOL_GET_CONDITIONS,
     TOOL_GET_ENCOUNTERS,
     TOOL_GET_MEDICATIONS,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_PATIENT,
+    TOOL_GET_RESOURCE,
+    TOOL_GET_ALL_MEDICATIONS,
+    TOOL_GET_ALL_OBSERVATIONS,
     TOOL_SEARCH_PATIENTS,
     RuleBasedIntentExtractor,
     apply_all_patient_scope,
@@ -110,6 +114,27 @@ class FakePatientSearchClient:
                 ]
             }
         return {"entry": []}
+
+
+class FakeResourceClient:
+    async def get_metadata(self):
+        return {
+            "resourceType": "CapabilityStatement",
+            "fhirVersion": "4.0.1",
+            "software": {"name": "HAPI FHIR Server"},
+            "status": "active",
+            "date": "2026-01-01",
+        }
+
+    async def get_resource(self, resource_type: str, resource_id: str):
+        return {
+            "resourceType": "Observation",
+            "id": resource_id,
+            "status": "final",
+            "code": {"text": "HbA1c"},
+            "valueQuantity": {"value": 7.2, "unit": "%"},
+            "subject": {"reference": "Patient/BN2026-00001"},
+        }
 
 
 class FakeIntentExtractor:
@@ -669,6 +694,158 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(routed.tool_name, TOOL_GET_MEDICATIONS)
         self.assertEqual(routed.search_name, "Thi B Tran")
         self.assertEqual(routed.source, "llm_guardrail")
+
+    async def test_fhir_status_chat_flow(self) -> None:
+        request = make_request(user_role="DOCTOR", message="FHIR server co hoat dong khong?")
+        plan = IntentPlan(tool_name=TOOL_FHIR_STATUS, source="rules")
+
+        payload = await chat(
+            request=request,
+            client=FakeResourceClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        self.assertEqual(payload["intent"], "fhir_status")
+        self.assertEqual(payload["tool_name"], TOOL_FHIR_STATUS)
+        self.assertEqual(payload["evidence"][0]["resource_type"], "CapabilityStatement")
+        self.assertEqual(payload["evidence"][0]["data"]["fhir_version"], "4.0.1")
+
+    async def test_get_resource_by_id_chat_flow(self) -> None:
+        request = make_request(user_role="DOCTOR", message="chi tiet Observation/OBS-2026-00002")
+        plan = IntentPlan(
+            tool_name=TOOL_GET_RESOURCE,
+            resource_type="Observation",
+            resource_id="OBS-2026-00002",
+            source="rules",
+        )
+
+        payload = await chat(
+            request=request,
+            client=FakeResourceClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        self.assertEqual(payload["intent"], "resource")
+        self.assertEqual(payload["tool_name"], TOOL_GET_RESOURCE)
+        self.assertEqual(payload["evidence"][0]["resource_type"], "Observation")
+        self.assertEqual(payload["evidence"][0]["id"], "OBS-2026-00002")
+
+    async def test_get_resource_by_id_rejects_unsupported_resource_type(self) -> None:
+        request = make_request(user_role="DOCTOR", message="chi tiet AuditEvent/AE-1")
+        plan = IntentPlan(
+            tool_name=TOOL_GET_RESOURCE,
+            resource_type="AuditEvent",
+            resource_id="AE-1",
+            source="llm",
+        )
+
+        payload = await chat(
+            request=request,
+            client=FakeResourceClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        self.assertEqual(payload["evidence"], [])
+
+    async def test_user_role_is_blocked_for_get_resource_by_id(self) -> None:
+        request = make_request(
+            user_role="USER",
+            patient_id="BN2026-00001",
+            allowed_patient_ids=["BN2026-00001"],
+            patient_scope="SELF",
+            message="chi tiet Observation/OBS-2026-00002",
+        )
+        plan = IntentPlan(
+            tool_name=TOOL_GET_RESOURCE,
+            resource_type="Observation",
+            resource_id="OBS-2026-00002",
+            source="rules",
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            await chat(
+                request=request,
+                client=FakeResourceClient(),
+                intent_extractor=FakeIntentExtractor(plan),
+                answer_generator=FakeAnswerGenerator(),
+                cache_service=FakeCacheService(),
+            )
+
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_user_role_is_blocked_for_all_patient_tool_plan(self) -> None:
+        request = make_request(
+            user_role="USER",
+            patient_id="BN2026-00001",
+            allowed_patient_ids=["BN2026-00001"],
+            patient_scope="SELF",
+            message="thuoc cua tat ca benh nhan",
+        )
+        plan = plan_from_tool_call(
+            tool_name=TOOL_GET_ALL_MEDICATIONS,
+            arguments={},
+            provided_patient_id=None,
+            usage={"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0},
+            source="llm",
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            await chat(
+                request=request,
+                client=FakePatientSearchClient(),
+                intent_extractor=FakeIntentExtractor(plan),
+                answer_generator=FakeAnswerGenerator(),
+                cache_service=FakeCacheService(),
+            )
+
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_plan_from_tool_call_maps_all_patient_medications_to_base_tool(self) -> None:
+        plan = plan_from_tool_call(
+            tool_name=TOOL_GET_ALL_MEDICATIONS,
+            arguments={"limit": 10},
+            provided_patient_id=None,
+            usage={"input_tokens": 5, "output_tokens": 2, "estimated_cost_usd": 0},
+            source="llm",
+        )
+
+        self.assertEqual(plan.tool_name, TOOL_GET_MEDICATIONS)
+        self.assertTrue(plan.all_patients)
+        self.assertEqual(plan.limit, 10)
+        self.assertEqual(plan.intent, "medications")
+
+    def test_plan_from_tool_call_maps_all_patient_observations_with_type(self) -> None:
+        plan = plan_from_tool_call(
+            tool_name=TOOL_GET_ALL_OBSERVATIONS,
+            arguments={"observation_type": "blood_pressure"},
+            provided_patient_id=None,
+            usage={"input_tokens": 5, "output_tokens": 2, "estimated_cost_usd": 0},
+            source="llm",
+        )
+
+        self.assertEqual(plan.tool_name, TOOL_GET_OBSERVATIONS)
+        self.assertTrue(plan.all_patients)
+        self.assertEqual(plan.observation_type, "blood_pressure")
+
+    def test_plan_from_tool_call_parses_resource_reference_arguments(self) -> None:
+        plan = plan_from_tool_call(
+            tool_name=TOOL_GET_RESOURCE,
+            arguments={"resource_type": "Encounter", "resource_id": "ENC-2026-00004"},
+            provided_patient_id=None,
+            usage={"input_tokens": 5, "output_tokens": 2, "estimated_cost_usd": 0},
+            source="llm",
+        )
+
+        self.assertEqual(plan.tool_name, TOOL_GET_RESOURCE)
+        self.assertEqual(plan.resource_type, "Encounter")
+        self.assertEqual(plan.resource_id, "ENC-2026-00004")
+        self.assertEqual(plan.intent, "resource")
 
     def test_plan_from_tool_call_prefers_provided_patient_id(self) -> None:
         plan = plan_from_tool_call(

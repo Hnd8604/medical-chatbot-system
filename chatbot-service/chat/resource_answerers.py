@@ -11,15 +11,111 @@ from chat.formatters import (
 )
 from chat.response_builder import _zero_usage
 from chat.text_helpers import _contains_any, _display_vi, _gender_vi, _value_or_unknown
-from fhir.client import FhirClient
+from fhir.client import FhirClient, FhirClientError, FhirNotFoundError
 from fhir.normalizer import (
+    normalize_capability_statement,
+    normalize_condition,
     normalize_condition_bundle,
+    normalize_encounter,
     normalize_encounter_bundle,
+    normalize_medication_request,
     normalize_medication_request_bundle,
+    normalize_observation,
     normalize_observation_bundle,
     normalize_patient,
     normalize_patient_bundle,
 )
+
+# Các resource type mà get_resource_by_id được phép truy xuất; chặn các
+# resource ngoài phạm vi sản phẩm (vd AuditEvent, Practitioner nội bộ).
+SUPPORTED_RESOURCE_NORMALIZERS = {
+    "Patient": normalize_patient,
+    "Encounter": normalize_encounter,
+    "Observation": normalize_observation,
+    "Condition": normalize_condition,
+    "MedicationRequest": normalize_medication_request,
+}
+
+
+async def _answer_fhir_status(client: FhirClient) -> dict[str, Any]:
+    try:
+        status_info = normalize_capability_statement(await client.get_metadata())
+    except FhirClientError as exc:
+        return {
+            "answer": f"HAPI FHIR Server hiện không khả dụng: {exc.user_message}",
+            "intent": "fhir_status",
+            "patient_id": None,
+            "evidence": [],
+            "usage": _zero_usage(),
+        }
+    software = _value_or_unknown(status_info.get("software"))
+    fhir_version = _value_or_unknown(status_info.get("fhir_version"))
+    answer = (
+        "HAPI FHIR Server đang hoạt động bình thường. "
+        f"Phần mềm: {software}; phiên bản FHIR: {fhir_version}."
+    )
+    return {
+        "answer": answer,
+        "intent": "fhir_status",
+        "patient_id": None,
+        "evidence": [
+            _evidence("CapabilityStatement", None, "Trạng thái HAPI FHIR Server", status_info)
+        ],
+        "usage": _zero_usage(),
+    }
+
+
+async def _answer_resource_by_id(client: FhirClient, plan: IntentPlan) -> dict[str, Any]:
+    canonical_types = {name.lower(): name for name in SUPPORTED_RESOURCE_NORMALIZERS}
+    resource_type = canonical_types.get((plan.resource_type or "").strip().lower())
+    resource_id = (plan.resource_id or "").strip()
+    if not resource_type or not resource_id:
+        supported = ", ".join(SUPPORTED_RESOURCE_NORMALIZERS)
+        return {
+            "answer": (
+                "Vui lòng cung cấp loại resource và mã resource cần tra cứu. "
+                f"Các loại được hỗ trợ: {supported}."
+            ),
+            "intent": "resource",
+            "patient_id": plan.patient_id,
+            "evidence": [],
+            "usage": _zero_usage(),
+        }
+
+    try:
+        resource = SUPPORTED_RESOURCE_NORMALIZERS[resource_type](
+            await client.get_resource(resource_type, resource_id)
+        )
+    except FhirNotFoundError:
+        return {
+            "answer": f"Không tìm thấy {resource_type}/{resource_id} trong FHIR Server.",
+            "intent": "resource",
+            "patient_id": plan.patient_id,
+            "evidence": [],
+            "usage": _zero_usage(),
+        }
+
+    summary = _resource_summary(resource_type, resource)
+    answer = f"Theo dữ liệu FHIR hiện có, {resource_type}/{resource_id}: {summary}."
+    return {
+        "answer": answer,
+        "intent": "resource",
+        "patient_id": plan.patient_id,
+        "evidence": [_evidence(resource_type, resource.get("id") or resource_id, summary, resource)],
+        "usage": _zero_usage(),
+    }
+
+
+def _resource_summary(resource_type: str, resource: dict[str, Any]) -> str:
+    if resource_type == "Patient":
+        return _format_patient_summary(resource)
+    if resource_type == "Encounter":
+        return _format_encounter(resource)
+    if resource_type == "Observation":
+        return _format_observation(resource)
+    if resource_type == "Condition":
+        return _display_vi(resource.get("code") or resource.get("id"))
+    return _display_vi(resource.get("medication") or resource.get("id"))
 
 
 async def _answer_patients(client: FhirClient, plan: IntentPlan) -> dict[str, Any]:

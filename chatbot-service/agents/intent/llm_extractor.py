@@ -17,8 +17,11 @@ from agents.intent.fhir_tools import FHIR_TOOL_DEFINITIONS
 from agents.intent.rule_extractor import RuleBasedIntentExtractor
 from agents.intent.text_utils import normalize_text
 from agents.intent.constants import (
+    ALL_PATIENT_TOOL_TO_BASE,
     TOOL_TO_INTENT,
     TOOL_UNSUPPORTED,
+    TOOL_FHIR_STATUS,
+    TOOL_GET_RESOURCE,
     TOOL_GET_MEDICATIONS,
     TOOL_GET_CONDITIONS,
     TOOL_GET_OBSERVATIONS,
@@ -56,7 +59,10 @@ class LLMIntentExtractor:
             "Only provide patient_id when the user supplied a clear patient id or the caller already provided one. "
             "If patient identity is still ambiguous, omit patient_id and keep any available patient search criteria instead. "
             "Vietnamese 'benh nhan' means patient, not condition. "
-            "Questions about all patients, patient list, 'tat ca benh nhan', or 'danh sach benh nhan' must use search_patients. "
+            "Questions about the FHIR server itself such as 'trang thai FHIR', 'FHIR server co hoat dong khong', or FHIR connection health must use fhir_status. "
+            "When the user references a concrete non-Patient FHIR resource id such as Observation/OBS-2026-00002, Encounter/ENC-2026-00004, Condition/..., or MedicationRequest/..., use get_resource_by_id with resource_type and resource_id. "
+            "Questions asking for one data type across all patients, such as 'thuoc cua tat ca benh nhan' or 'chi so cua cac benh nhan', must use the matching get_all_patient_* tool (get_all_patient_observations, get_all_patient_encounters, get_all_patient_conditions, get_all_patient_medication_requests). "
+            "Questions about all patients, patient list, 'tat ca benh nhan', or 'danh sach benh nhan' without a specific data type must use search_patients. "
             "Questions that identify a patient by name, phone, birth date, or identifier must use search_patients unless a clear FHIR patient id is provided. "
             "Self-profile questions such as 'my profile', 'my personal information', 'thong tin cua toi', 'thong tin ca nhan cua toi', 'ho so cua toi', 'toi la ai', 'so dien thoai cua toi', or 'ngay sinh cua toi' must use get_patient_by_id with provided_patient_id when available; do not use search_patients for self-profile questions. "
             "Questions about phone, contact, 'so dien thoai', or 'dien thoai' must use get_patient_by_id only when a patient id is provided; otherwise use search_patients with name or phone criteria. "
@@ -129,6 +135,10 @@ class LLMIntentExtractor:
             usage=usage,
             source="llm",
         )
+        if plan.tool_name in (TOOL_FHIR_STATUS, TOOL_GET_RESOURCE):
+            # Hai tool này không gắn với một bệnh nhân cụ thể — guardrails
+            # patient/contact/list không áp dụng và có thể reroute sai.
+            return plan
         plan = enforce_patient_list_routing(message, plan)
         plan = apply_all_patient_scope(message, plan)
         plan = apply_patient_search_criteria_hint(message, plan)
@@ -157,6 +167,12 @@ def _plan_from_tool_call(
 ) -> IntentPlan:
     patient_id = normalize_patient_id(provided_patient_id) or normalize_patient_id(arguments.get("patient_id"))
 
+    # Tool get_all_patient_* chuẩn hoá về tool gốc + all_patients=True để đi qua
+    # cùng dispatch/policy với luồng "tất cả bệnh nhân" hiện có.
+    all_patients = tool_name in ALL_PATIENT_TOOL_TO_BASE
+    if all_patients:
+        tool_name = ALL_PATIENT_TOOL_TO_BASE[tool_name]
+
     limit = arguments.get("limit", 5)
     if not isinstance(limit, int):
         limit = 5
@@ -178,13 +194,15 @@ def _plan_from_tool_call(
     return IntentPlan(
         tool_name=tool_name,
         patient_id=patient_id,
+        resource_type=string_or_none(arguments.get("resource_type")),
+        resource_id=string_or_none(arguments.get("resource_id")),
         search_name=string_or_none(arguments.get("name")),
         search_phone=normalize_phone(string_or_none(arguments.get("phone"))),
         search_birth_date=normalize_birth_date(string_or_none(arguments.get("birth_date"))),
         search_identifier=string_or_none(arguments.get("identifier")),
         observation_type=string_or_none(arguments.get("observation_type")),
         limit=limit,
-        all_patients=False,
+        all_patients=all_patients,
         reason=string_or_none(arguments.get("reason")),
         source=source,
         usage=usage,

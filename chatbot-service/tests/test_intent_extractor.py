@@ -39,7 +39,9 @@ from agents.intent.guardrails import (
 )
 from agents.intent.models import IntentPlan
 from agents.intent.constants import (
+    TOOL_FHIR_STATUS,
     TOOL_GET_PATIENT,
+    TOOL_GET_RESOURCE,
     TOOL_SEARCH_PATIENTS,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_ENCOUNTERS,
@@ -47,7 +49,11 @@ from agents.intent.constants import (
     TOOL_GET_MEDICATIONS,
     TOOL_UNSUPPORTED,
 )
-from agents.intent.rule_extractor import RuleBasedIntentExtractor
+from agents.intent.rule_extractor import (
+    RuleBasedIntentExtractor,
+    extract_resource_reference,
+    is_fhir_status_request,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -366,6 +372,47 @@ class RuleBasedExtractorTests(unittest.IsolatedAsyncioTestCase):
     async def test_unsupported_returns_unsupported_tool(self):
         plan = await self.extractor.extract("thoi tiet hom nay the nao")
         self.assertEqual(plan.tool_name, TOOL_UNSUPPORTED)
+
+    async def test_fhir_status_intent_vietnamese(self):
+        plan = await self.extractor.extract("FHIR server co hoat dong khong?")
+        self.assertEqual(plan.tool_name, TOOL_FHIR_STATUS)
+        self.assertEqual(plan.intent, "fhir_status")
+
+    async def test_fhir_status_intent_with_trang_thai(self):
+        plan = await self.extractor.extract("kiem tra trang thai FHIR")
+        self.assertEqual(plan.tool_name, TOOL_FHIR_STATUS)
+
+    async def test_status_without_fhir_keyword_is_not_status_intent(self):
+        plan = await self.extractor.extract("trang thai benh nhan 1 the nao")
+        self.assertNotEqual(plan.tool_name, TOOL_FHIR_STATUS)
+
+    async def test_resource_reference_intent(self):
+        plan = await self.extractor.extract("chi tiet Observation/OBS-2026-00002")
+        self.assertEqual(plan.tool_name, TOOL_GET_RESOURCE)
+        self.assertEqual(plan.resource_type, "Observation")
+        self.assertEqual(plan.resource_id, "OBS-2026-00002")
+
+    async def test_patient_reference_is_not_resource_intent(self):
+        plan = await self.extractor.extract("thuoc cua Patient/BN2026-00001")
+        self.assertEqual(plan.tool_name, TOOL_GET_MEDICATIONS)
+        self.assertEqual(plan.patient_id, "BN2026-00001")
+
+
+class ResourceReferenceHelperTests(unittest.TestCase):
+    def test_extract_resource_reference_encounter(self):
+        result = extract_resource_reference("xem Encounter/ENC-2026-00004 giup toi")
+        self.assertEqual(result, ("Encounter", "ENC-2026-00004"))
+
+    def test_extract_resource_reference_case_insensitive_type(self):
+        result = extract_resource_reference("xem medicationrequest/MR-1")
+        self.assertEqual(result, ("MedicationRequest", "MR-1"))
+
+    def test_extract_resource_reference_ignores_patient(self):
+        self.assertIsNone(extract_resource_reference("Patient/BN2026-00001"))
+
+    def test_is_fhir_status_request_requires_fhir_keyword(self):
+        self.assertTrue(is_fhir_status_request("trạng thái FHIR server"))
+        self.assertFalse(is_fhir_status_request("trạng thái bệnh nhân"))
 
     async def test_all_intents_resolve_supported_tool(self):
         messages = [

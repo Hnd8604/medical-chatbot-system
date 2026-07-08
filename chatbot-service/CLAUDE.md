@@ -68,16 +68,29 @@ message + optional patient_id
 When configured, the OpenAI extractor asks the model to select one of these tools:
 
 ```text
+fhir_status
 get_patient_by_id
+get_resource_by_id
 search_patients
 get_encounters
 get_observations
 get_conditions
 get_medication_requests
+get_all_patient_observations
+get_all_patient_encounters
+get_all_patient_conditions
+get_all_patient_medication_requests
 unsupported_question
 ```
 
-Without `LITELLM_MASTER_KEY`, `RuleBasedIntentExtractor` keeps local demo behavior working.
+Notes:
+
+- `fhir_status` checks HAPI FHIR availability via `GET /fhir/metadata`; if the server is down the chat answer reports it instead of failing.
+- `get_resource_by_id` fetches one resource by `resource_type` + `resource_id` (whitelist: Patient, Encounter, Observation, Condition, MedicationRequest). USER role is always denied for this tool.
+- The four `get_all_patient_*` tools are normalized to their base tool with `all_patients=True` inside `plan_from_tool_call`, so they share the existing multi-patient answerers and role policy (USER role denied).
+
+Without `LITELLM_MASTER_KEY`, `RuleBasedIntentExtractor` keeps local demo behavior working
+(including `fhir_status` keywords and explicit `Encounter|Observation|Condition|MedicationRequest/{id}` references).
 
 ## Answer Generation
 

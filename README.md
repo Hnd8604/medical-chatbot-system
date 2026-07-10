@@ -211,7 +211,7 @@ LITELLM_MASTER_KEY=sk-local-dev
 
 # Rolling summary hội thoại (LangGraph)
 ENABLE_LLM_SUMMARY=true
-SUMMARY_TRIGGER_MESSAGE_COUNT=6
+SUMMARY_TRIGGER_MESSAGE_COUNT=8
 ```
 
 Không có master key → chatbot-service fallback sang rule/template (không gọi LLM thật).

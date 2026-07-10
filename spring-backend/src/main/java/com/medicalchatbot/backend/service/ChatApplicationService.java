@@ -39,7 +39,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class ChatApplicationService {
 
-    private static final int RECENT_CONTEXT_MESSAGE_LIMIT = 6;
+    private static final int RECENT_CONTEXT_MESSAGE_LIMIT = 8;
     private static final int SESSION_SEARCH_QUERY_MAX_LENGTH = 100;
 
     private final ChatSessionRepository chatSessionRepository;

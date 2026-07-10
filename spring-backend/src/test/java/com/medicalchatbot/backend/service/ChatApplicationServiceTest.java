@@ -153,7 +153,7 @@ class ChatApplicationServiceTest {
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
         when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
-        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of(
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of(
                 new ChatContextMessage("user", "huyet ap cua benh nhan nay"),
                 new ChatContextMessage("assistant", "Huyet ap 150/92 mmHg")
         ));
@@ -231,7 +231,7 @@ class ChatApplicationServiceTest {
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
         when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
-        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
         mockAssistantMessageSave();
 
@@ -314,7 +314,7 @@ class ChatApplicationServiceTest {
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("BN2026-00001"));
         when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
-        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
         mockAssistantMessageSave();
 
@@ -356,7 +356,7 @@ class ChatApplicationServiceTest {
 
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
-        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
         when(chatMessageRepository.countBySession_Id(sessionId)).thenReturn(0L);
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
         mockAssistantMessageSave();
@@ -417,7 +417,7 @@ class ChatApplicationServiceTest {
 
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
-        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6)).thenReturn(List.of());
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
         when(costEstimationService.estimateUsd(
                 eq("openai"),

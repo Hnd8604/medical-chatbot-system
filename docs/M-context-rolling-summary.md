@@ -58,8 +58,8 @@ START ──(_should_summarize)──► summarize ──► END
 - Spring gửi `total_message_count` = số message của session **trước khi** lưu
   message hiện tại (đếm cùng thời điểm với `findRecentMessagesForContext`).
 - Chỉ gọi LLM khi `total_message_count >= SUMMARY_TRIGGER_MESSAGE_COUNT` (mặc
-  định 6 = `RECENT_CONTEXT_MESSAGE_LIMIT`). So sánh `>=` (không phải `>`): tại
-  count=6 cửa sổ recent phủ toàn bộ history nên summary đầu tiên không bỏ sót;
+  định 8 = `RECENT_CONTEXT_MESSAGE_LIMIT`). So sánh `>=` (không phải `>`): tại
+  count=8 cửa sổ recent phủ toàn bộ history nên summary đầu tiên không bỏ sót;
   nếu `>` thì message 1–2 vĩnh viễn không được tóm tắt.
 - Dưới ngưỡng: `recent_messages` đã đủ ngữ cảnh, summary rỗng, **0 token**.
 
@@ -90,7 +90,7 @@ START ──(_should_summarize)──► summarize ──► END
 # chatbot-service/.env
 ENABLE_LLM_SUMMARY=true
 MODEL_SUMMARY=gpt-4o-mini
-SUMMARY_TRIGGER_MESSAGE_COUNT=6
+SUMMARY_TRIGGER_MESSAGE_COUNT=8
 ```
 
 ## Chỉ số đo (cho báo cáo)

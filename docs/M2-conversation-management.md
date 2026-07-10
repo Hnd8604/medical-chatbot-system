@@ -192,7 +192,7 @@ PatientScope patientScope = userPatientScopeService.resolve(user, request.patien
 if (session == null) {
     session = chatSessionRepository.create(user, titleFromMessage(request.message()));
 }
-List<ChatContextMessage> recentMessages = chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 6);
+List<ChatContextMessage> recentMessages = chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8);
 ConversationContext conversationContext = conversationContext(scopedSessionMemory, recentMessages);
 chatMessageRepository.save(session, USER, request.message(), ...);   // lưu user message trước
 

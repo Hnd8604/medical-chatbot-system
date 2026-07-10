@@ -18,10 +18,10 @@ class Settings(BaseSettings):
     enable_llm_answer: bool = Field(default=True)
 
     # Rolling summary hội thoại (LangGraph). Chỉ gọi LLM khi tổng số message của
-    # session >= summary_trigger_message_count (khớp RECENT_CONTEXT_MESSAGE_LIMIT bên Spring).
+    # session >= summary_trigger_message_count (khớp RECENT_CONTEXT_MESSAGE_LIMIT=8 bên Spring).
     enable_llm_summary: bool = Field(default=True)
     model_summary: str = Field(default="gpt-4o-mini")
-    summary_trigger_message_count: int = Field(default=6)
+    summary_trigger_message_count: int = Field(default=8)
     summary_max_output_tokens: int = Field(default=256)
 
 

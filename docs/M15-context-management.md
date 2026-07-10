@@ -7,8 +7,8 @@ Quản lý ngữ cảnh hội thoại để chatbot trả lời được các c�
 **Mục tiêu:** Gửi một số message gần nhất để giữ ngữ cảnh ngắn hạn.
 
 **Hành vi:**
-- Limit cố định: `RECENT_CONTEXT_MESSAGE_LIMIT = 6` trong `ChatApplicationService`.
-- `findRecentMessagesForContext()` lấy 6 message mới nhất rồi **sắp xếp lại ASC** (subquery `order by created_at desc limit :limit`, ngoài cùng `order by createdAt asc`) để LLM đọc đúng trình tự thời gian.
+- Limit cố định: `RECENT_CONTEXT_MESSAGE_LIMIT = 8` trong `ChatApplicationService`.
+- `findRecentMessagesForContext()` lấy 8 message mới nhất rồi **sắp xếp lại ASC** (subquery `order by created_at desc limit :limit`, ngoài cùng `order by createdAt asc`) để LLM đọc đúng trình tự thời gian.
 - Không gửi toàn bộ lịch sử — chỉ phần gần nhất, đóng gói vào `ConversationContext.recentMessages`.
 
 **Tiêu chí hoàn thành:** Chatbot hiểu câu hỏi nối tiếp ngắn (vd "còn thuốc thì sao?").
@@ -59,7 +59,7 @@ Mỗi lượt /api/chat (ChatApplicationService.chat):
    │   session.memory() → ChatSessionMemory
    │        active_patient_id, memory_summary, last_intent,
    │        last_tool_name, last_resource_type/id
-   │   findRecentMessagesForContext(sessionId, userId, 6)  (ASC)
+   │   findRecentMessagesForContext(sessionId, userId, 8)  (ASC)
    │        ▼
    │   ConversationContext { memorySummary, activePatientId, lastIntent,
    │                         lastToolName, lastResourceType/Id, recentMessages }

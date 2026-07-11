@@ -457,9 +457,8 @@ export function AdminDashboardPage() {
         </div>
       ) : (
         <div className="grid gap-7">
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Số user" value={formatNumber(usersTotal)} description="Tổng tài khoản trong hệ thống." />
-            <MetricCard label="Số hội thoại" value="–" description="Chưa có endpoint tổng hợp." />
             <MetricCard label="Request 7 ngày" value={requestSummary ? formatNumber(requestSummary.request_count) : "-"} description="Tổng request trong usage logs." />
             <MetricCard
               label="Cache hit rate"

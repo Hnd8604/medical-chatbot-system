@@ -31,6 +31,7 @@ from agents.intent.vocabulary import (
     PATIENT_CONTACT_KEYWORDS,
     CONDITION_KEYWORDS,
     PATIENT_INFO_KEYWORDS,
+    EXPLAIN_KEYWORDS,
 )
 
 
@@ -69,6 +70,7 @@ class RuleBasedIntentExtractor:
     ) -> IntentPlan:
         patient_id = resolve_patient_id_for_request(message, provided_patient_id)
         text = normalize_text(message)
+        explain = contains_any(text, EXPLAIN_KEYWORDS)
         search_criteria = extract_patient_search_criteria(message)
         has_criteria = bool(search_criteria)
         all_patient_scope = is_patient_list_request(message) and not resolve_explicit_patient_id(message)
@@ -83,6 +85,7 @@ class RuleBasedIntentExtractor:
                 patient_id=patient_id,
                 resource_type=resource_reference[0],
                 resource_id=resource_reference[1],
+                explain=explain,
             )
 
         if is_self_patient_reference(message):
@@ -98,6 +101,7 @@ class RuleBasedIntentExtractor:
                 **search_criteria,
                 limit=20,
                 all_patients=all_patient_scope,
+                explain=explain,
             )
         if contains_any(text, OBSERVATION_KEYWORDS):
             return IntentPlan(
@@ -107,6 +111,7 @@ class RuleBasedIntentExtractor:
                 observation_type=infer_observation_type(message),
                 limit=5,
                 all_patients=all_patient_scope,
+                explain=explain,
             )
         if contains_any(text, ENCOUNTER_KEYWORDS):
             return IntentPlan(
@@ -130,6 +135,7 @@ class RuleBasedIntentExtractor:
                 **search_criteria,
                 limit=20,
                 all_patients=all_patient_scope,
+                explain=explain,
             )
         if all_patient_scope or has_criteria:
             return IntentPlan(

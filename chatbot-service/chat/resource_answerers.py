@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from agents.intent_extractor import IntentPlan, has_patient_search_criteria, normalize_text
@@ -25,6 +26,9 @@ from fhir.normalizer import (
     normalize_patient,
     normalize_patient_bundle,
 )
+from terminology.enrichment_service import get_enrichment_service
+
+log = logging.getLogger(__name__)
 
 # Các resource type mà get_resource_by_id được phép truy xuất; chặn các
 # resource ngoài phạm vi sản phẩm (vd AuditEvent, Practitioner nội bộ).
@@ -533,6 +537,90 @@ def _evidence(resource_type: str, resource_id: Any, summary: Any, data: Any | No
         "summary": summary,
         "data": data,
     }
+
+
+LOINC_SYSTEM = "http://loinc.org"
+
+
+async def _answer_explain_concept(plan: IntentPlan) -> dict[str, Any]:
+    """Explain a standalone medical concept (no patient), e.g. "HbA1c là gì".
+
+    Không truy xuất FHIR — dựng evidence tổng hợp từ term/code rồi tra terminology
+    (LOINC/RxNorm/MedlinePlus). Kết quả gắn top-level ``external_knowledge`` để answer
+    generator tóm tắt sang tiếng Việt; ``evidence`` để rỗng (không có dữ liệu bệnh nhân).
+    """
+    term = (plan.term or "").strip()
+    code = (plan.code or "").strip()
+    label = term or code or "khái niệm"
+
+    external_knowledge: list[dict[str, Any]] = []
+    synthetic = _synthetic_concept_evidence(term, code)
+    if synthetic:
+        try:
+            items = await get_enrichment_service().enrich_payload({"evidence": synthetic}, language="en")
+            external_knowledge = [item.as_dict() for item in items]
+        except Exception:
+            log.exception("explain_concept enrichment error")
+
+    if external_knowledge:
+        fallback = f"Dưới đây là thông tin tham khảo về {label} từ nguồn thuật ngữ y khoa."
+    else:
+        fallback = (
+            f"Hiện chưa tra được thông tin thuật ngữ cho \"{label}\". "
+            "Bạn có thể cung cấp mã chuẩn (ví dụ mã LOINC của xét nghiệm) để tra chính xác hơn."
+        )
+
+    payload: dict[str, Any] = {
+        "answer": fallback,
+        "intent": "explain_concept",
+        "patient_id": None,
+        "evidence": [],
+        "usage": _zero_usage(),
+    }
+    if external_knowledge:
+        payload["external_knowledge"] = external_knowledge
+    return payload
+
+
+def _synthetic_concept_evidence(term: str, code: str) -> list[dict[str, Any]]:
+    """Build synthetic evidence so the terminology extractor can resolve a bare concept.
+
+    - Có mã: coi như mã LOINC (phổ biến cho câu hỏi "chỉ số/xét nghiệm") -> Observation.
+    - Có tên: dùng làm medication text để RxNorm tra theo tên (find_rxcui_by_string) +
+      MedlinePlus tra thuốc theo tên. Việc tra LOINC theo tên tự do (\\$expand) là mở rộng sau.
+    """
+    items: list[dict[str, Any]] = []
+    text = term or None
+    if code:
+        items.append(
+            _evidence(
+                "Observation",
+                None,
+                text or code,
+                {
+                    "resource_type": "Observation",
+                    "code": text or code,
+                    "code_detail": {
+                        "text": text,
+                        "coding": [{"system": LOINC_SYSTEM, "code": code, "display": text}],
+                    },
+                },
+            )
+        )
+    if text:
+        items.append(
+            _evidence(
+                "MedicationRequest",
+                None,
+                text,
+                {
+                    "resource_type": "MedicationRequest",
+                    "medication": text,
+                    "medication_detail": {"text": text, "coding": []},
+                },
+            )
+        )
+    return items
 
 def _patient_selection_payload(plan: IntentPlan, patients: list[dict[str, Any]]) -> dict[str, Any]:
     if not has_patient_search_criteria(plan) or len(patients) <= 1:

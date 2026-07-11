@@ -1,24 +1,45 @@
 # M — AI Gateway bằng LiteLLM
 
-**Mục tiêu:** Đặt một lớp trung gian (AI Gateway) giữa `chatbot-service` và các LLM provider (OpenAI, Groq) để tập trung **API key, logging, retry/fallback, multi-provider**, mở đường cho cost-aware routing và đo lường token/cost/latency.
+**Mục tiêu:** Đặt một lớp trung gian (AI Gateway) giữa `chatbot-service` và các LLM provider (OpenAI, Groq) để:
+- ✓ Tập trung **API key quản lý** (provider key chỉ ở gateway)
+- ✓ **Logging 2 lớp**: gateway-native per-call + app-side per-turn
+- ✓ **Cost tracking chính xác**: tính từ actual tokens × custom pricing (config.yaml)
+- ✓ **Per-user budget enforcement**: virtual key per user, rolling 24h budget
+- ✓ **Multi-provider support**: OpenAI + Groq (dễ thêm provider mới)
 
-Bổ trợ cho [M16/M17 (Model Routing & Retry/Fallback)](M16-M17-model-routing-retry-fallback.md) và [M8 (Cost Management)](M8-cost-management.md).
+**Không làm ở gateway:** retry/fallback ← tách ra tầng app (model_router.py).
+
+Bổ trợ cho [M16/M17 (Model Routing)](M16-M17-model-routing-retry-fallback.md) và [M8 (Cost Management)](M8-cost-management.md).
 
 ---
 
 ## Kiến trúc
 
 ```text
-chatbot-service (AsyncOpenAI client)
-  -> LiteLLM proxy  http://localhost:4000   (OpenAI-compatible)
-       -> OpenAI   (gpt-4o-mini, gpt-4.1-mini)
-       -> Groq     (llama-3.1-8b-instant, llama-3.3-70b-versatile)
+Spring Backend (8081)
+  ├─ LiteLLMAdminClient: cấp key, sửa budget, đọc spend
+  │
+  └─ chatbot-service (8000)
+     ├─ App-tier routing: keyword classifier + cost-aware downgrade
+     └─ (AsyncOpenAI client)
+        └─ LiteLLM Gateway Proxy (4000, OpenAI-compatible)
+           ├─ Auth: virtual key per-user
+           ├─ Model alias: gpt-4o-mini → openai/gpt-4o-mini
+           ├─ Pricing: custom từ config.yaml
+           ├─ Cost tracking: actual tokens × pricing → LiteLLM_SpendLogs
+           ├─ Budget enforcement: per-key rolling 24h
+           └─ Forward to providers
+              ├─ OpenAI (gpt-4o-mini, gpt-4.1-mini)
+              └─ Groq (llama-3.1-8b-instant, llama-3.3-70b-versatile)
 ```
 
-- LiteLLM expose API **OpenAI-compatible**, nên client `AsyncOpenAI` chỉ cần đổi `base_url` + `api_key`. Call site `client.chat.completions.create(...)` **giữ nguyên**.
-- **DB-backed** (cập nhật): gateway gắn Postgres (database `litellm` trên instance app-postgres) để bật **virtual key theo user, per-key budget, spend logs, Admin UI** `/ui`. LiteLLM tự chạy Prisma migrate tạo bảng `LiteLLM_*` lúc boot.
-- **Cost là native ở gateway**: mỗi user Spring có 1 virtual key với `max_budget` = `daily_cost_limit_usd` (reset `1d`). Gateway chặn khi vượt budget. `QuotaService` đọc spend/budget cost từ gateway (`/key/info`) làm **source of truth cho cost**; token + request vẫn từ `usage_logs`. `usage_logs` giữ lại làm audit/history/analytics (không dùng làm chuẩn cost để tránh double-count).
-- Tên model trong code (`model_simple`, `model_complex`) được khai làm **alias** trong LiteLLM nên không phải đổi code router.
+**Tính năng:**
+
+- **OpenAI-compatible API**: Client `AsyncOpenAI` chỉ cần `base_url` + `api_key`. Call site `client.chat.completions.create(...)` không đổi.
+- **DB-backed**: Postgres (`database litellm`) bật virtual key per-user, per-key budget, spend logs, Admin UI `/ui`. LiteLLM tự migrate bảng `LiteLLM_*`.
+- **Cost tính chính xác**: Gateway tính từ actual tokens × custom pricing (config.yaml). Virtual key có `max_budget = daily_cost_limit_usd`, rolling 24h. `QuotaService` đọc spend từ `/key/info` làm **source of truth**. Token/request từ `usage_logs`.
+- **Model alias**: Tên code (`gpt-4o-mini`) tách khỏi provider real (`openai/gpt-4o-mini`) → không cần đổi code router.
+- **Pure proxy**: Gateway **không** retry/fallback (loại bỏ để giữ đơn giản). Fallback ở tầng app (fallback_answer, template response).
 
 ### Luồng virtual key theo user
 
@@ -33,18 +54,30 @@ Spring /api/chat
 QuotaService.status  <- LiteLLMSpendService.getSpendForUser  <- /key/info {spend, max_budget}
 ```
 
-## 4 trụ cột của AI Gateway
+## 3 trụ cột của AI Gateway
 
-Gateway hiện thực đủ 4 vai trò của một lớp trung gian AI: **API Key, Logging, Cost Tracking, Routing**.
+Gateway hiện thực 3 trụ cột: **API Key Management, Logging 2-lớp, Cost Tracking**. 
+(Routing ← tách ra tầng app, không ở gateway.)
 
 ```text
-Spring (8081)                 chatbot-service (8000)             LiteLLM Gateway (4000)
-─────────────                 ──────────────────────             ──────────────────────
-cấp virtual key/user ──llm_key──► contextvar per-request ──────►  auth theo virtual key
-đọc spend về quota   ◄──/key/info────────────────────────────────  enforce budget, spend log
-                                                                       │
-                                                                 OpenAI / Groq
-                                                                 (provider key chỉ ở đây)
+Spring (8081)                      chatbot-service (8000)          LiteLLM Gateway (4000)
+─────────────                      ──────────────────────          ──────────────────────
+cấp virtual key/user
+  ──llm_key──────────────────────────► contextvar per-request ──► auth theo virtual key
+                                                                     │
+                                        App-tier routing:           │
+                                        keyword → COMPLEX/SIMPLE    │
+                                        cost-aware downgrade        │
+                                        chọn model                  │
+                                                                     │
+                                        ──model_name───────────────► alias map
+                                                                     │ forward to provider
+đọc spend về quota                                                   │ tính cost
+  ◄───────────────────/key/info◄─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤ ghi spend log
+                                                                     │ enforce budget
+                                                                     │
+                                                              OpenAI / Groq
+                                                          (provider key chỉ ở đây)
 ```
 
 ### 1. API Key — 3 tầng key, provider key không rời gateway
@@ -114,49 +147,256 @@ Lý do chọn **C**: bài toán **đa người dùng có quota/cost per-user** (
 
 Cột estimate **không redundant** với gateway spend (breakdown vs tổng là hai thứ khác nhau). Kịch bản "trim" duy nhất hợp lý là trỏ analytics vào `LiteLLM_SpendLogs` (bảng này có breakdown) để có số *chính xác* thay vì estimate — nhưng đó là **refactor** thêm coupling vào DB nội bộ gateway, ngoài phạm vi hiện tại.
 
-### 3. Cost Tracking — gateway là source of truth, enforce tại nguồn
+### 3. Cost Tracking — gateway tính chính xác, enforce 2 tầng
 
-- **Budget**: mỗi virtual key có `max_budget` = `daily_cost_limit_usd` của quota policy, reset `1d`. Admin sửa policy → `syncBudgetForPolicy` đẩy budget mới xuống gateway cho mọi user thuộc policy.
-- **Enforce**: vượt budget → gateway trả 429 `budget_exceeded` → chatbot-service nhận diện có cấu trúc (`is_budget_error`, đọc `error.type/code` trước, khớp chuỗi làm lớp phụ) → HTTP 429 → Spring passthrough (không 500, không âm thầm fallback template).
-- **Đọc về**: `LiteLLMSpendService` đọc `spend/max_budget` từ `/key/info` (cache 5s) → `QuotaService` dùng làm **cost chính thức** trong quota status; `usage_logs` + `model_pricing` chỉ còn phục vụ analytics/audit (tránh double-count).
+#### 3.1 Gateway tính cost (chính xác, per-call)
 
-### 4. Routing — 2 tầng
-
-- **Tầng app** (chọn model theo độ khó + quota): `agents/model_router.py` — keyword classifier + LLM router lai (M16), cost-aware downgrade khi `quota_used_ratio` cao → chọn `model_simple`/`model_complex`.
-- **Tầng gateway** (độ tin cậy + đa provider): `infra/litellm/config.yaml` — alias model tách tên trong code khỏi provider thật; `num_retries: 2`; `fallbacks` (`gpt-4.1-mini` → `gpt-4o-mini`, `groq-llama-70b` → `gpt-4o-mini`) — model chính lỗi thì gateway tự chuyển, app không cần biết. `response.model` phản ánh model thật đã dùng để log cost đúng.
-
-**Vì sao 2 tầng (không gộp về 1):** hai tầng trả lời **hai câu hỏi khác nhau**, trigger khác nhau, nên vuông góc và bổ sung nhau chứ không trùng.
-
-- **App-tier** = *"câu này nên hỏi model NÀO?"* — quyết định **trước** khi gọi, theo **độ khó + quota** (cost/chất lượng). Downgrade là **cost-driven** (chủ động khi `quota_used_ratio ≥ 0.8`).
-- **Gateway-tier** = *"làm sao GIAO được model đó dù provider trục trặc?"* — xử lý **trong lúc** gọi bằng retry + fallback (độ tin cậy). Fallback là **failure-driven** (phản ứng khi lỗi).
-
-| | App-tier (`model_router.py`) | Gateway-tier (`config.yaml`) |
-|---|---|---|
-| Câu hỏi simple/complex | ✅ | ❌ (chỉ thấy 1 model name) |
-| Quota của user | ✅ | ❌ |
-| Provider key thật | ❌ (không giữ key) | ✅ (key chỉ ở đây) |
-| Provider đang lỗi/outage | ❌ | ✅ |
-
-App-tier **không thể** làm provider failover (không giữ provider key, không nên biết provider nào đang chết); gateway **không thể** routing theo độ khó (không biết câu hỏi là gì hay quota còn bao nhiêu). Trace ráp 2 tầng:
+**LiteLLM** là **single source of truth** cho cost thực tế:
 
 ```text
-App-tier:   keyword "phan tich"+"xu huong" → COMPLEX → chọn "gpt-4.1-mini"
-   │        (quota_used_ratio ≥ 0.8 → hạ xuống "gpt-4o-mini")
-   ▼
-Gateway:    nhận "gpt-4.1-mini" → openai/gpt-4.1-mini
-   │          ├─ OK                    → response.model = "gpt-4.1-mini"
-   │          └─ lỗi (hết 2 retries)   → fallback "gpt-4o-mini"
-   ▼                                     → response.model = "gpt-4o-mini"
-Answer gen: đọc response.model → log cost đúng model thật
+User call LLM
+  ↓
+LiteLLM nhận response từ provider (OpenAI/Groq)
+  ├─ Extract: input_tokens, output_tokens
+  ├─ Tính cost = (input_tokens × input_price_per_1m) / 1M
+  │            + (output_tokens × output_price_per_1m) / 1M
+  │
+  │  Giá lấy từ config.yaml (custom pricing, không phải built-in):
+  │  ├─ gpt-4o-mini:     In: $0.15/1M, Out: $0.60/1M
+  │  ├─ gpt-4.1-mini:    In: $0.40/1M, Out: $1.60/1M
+  │  ├─ groq-llama-8b:   In: $0.05/1M, Out: $0.08/1M
+  │  └─ groq-llama-70b:  In: $0.59/1M, Out: $0.79/1M
+  │
+  └─ Ghi vào LiteLLM_SpendLogs: cost, tokens, model, virtual_key_id, timestamp, user_id
+     Accumulate spend trên virtual key (rolling 24h)
 ```
 
-Chi tiết 3 kỹ thuật app-tier (keyword classifier + LLM router hybrid + cost-aware downgrade) và retry/fallback: xem [M16-M17](M16-M17-model-routing-retry-fallback.md).
+**Ví dụ:**
+```
+Input: 500 tokens, Output: 100 tokens, Model: gpt-4o-mini
+Cost = (500 × $0.15/1M) + (100 × $0.60/1M)
+     = $0.000075 + $0.00006
+     = $0.000135 per call
+     ≈ $0.14 per 1000 calls
+```
+
+#### 3.2 Virtual key budget enforcement (per-user, realtime)
+
+Mỗi user Spring có **1 virtual key** với:
+- `max_budget` = `daily_cost_limit_usd` của quota policy
+- `budget_duration: "1d"` (rolling 24h từ lúc tạo/reset key)
+- `models`: danh sách model được phép gọi
+
+**Enforcement flow:**
+
+```text
+Chatbot-service gọi LLM
+  ├─ Header: Authorization: Bearer <virtual_key>, user: <user_id>
+  ↓
+LiteLLM:
+  ├─ Verify key tồn tại + không bị block
+  ├─ Check: current_spend + call_cost ≤ max_budget ?
+  │   ├─ YES → forward call tới provider
+  │   │         ghi spend log, trả response ✓
+  │   └─ NO  → HTTP 429 "budget_exceeded"
+  ↓
+Chatbot-service:
+  ├─ Catch 429 → is_budget_error()
+  └─ Raise GatewayBudgetExceededError
+     → chat_routes passthrough HTTP 429
+     → Spring API returns 429 to frontend
+```
+
+**Budget không reset** ngay khi thay đổi policy: admin sửa `daily_cost_limit_usd` → Spring trigger `LlmGatewayKeyService.syncBudgetForPolicy` → POST `/key/update` xuống gateway → LiteLLM cập nhật `max_budget` của từng key thuộc policy đó.
+
+#### 3.3 Cost fallback ở Spring (2 tầng)
+
+Khi gateway sập hoặc không trả được spend, Spring fallback tính cost từ `usage_logs`:
+
+```
+QuotaService.effectiveUsedCost(userId):
+  ├─ Try: LiteLLMSpendService.getSpendForUser(userId)
+  │       → Query gateway /key/info
+  │       → Lấy spend (chính xác từ LiteLLM_SpendLogs)
+  │       → Cache 5s (tránh quá tải gateway)
+  │       ✓ Source of truth
+  │
+  └─ Fallback: usage_logs.summarizeSuccessfulUsage(userId)
+              → CostEstimationService.estimateUsd(provider, model, inputTokens, outputTokens, fallbackEstimate)
+                ├─ Try: model_pricing table (nếu có record)
+                │       Cost = (inputTokens × inputPrice/1M) + (outputTokens × outputPrice/1M)
+                │       ✓ Chính xác (nếu pricing config đủ)
+                │
+                └─ Fallback: chatbot-service ước tính (response.usage.estimated_cost_usd)
+                            ✓ Ước tính (~90%)
+```
+
+**Lý do có 3 tầng fallback:**
+
+| Tầng | Khi nào | Chi phí | Độ chính xác |
+|---|---|---|---|
+| **Gateway** | OK | LiteLLM_SpendLogs | 100% (actual tokens × pricing) |
+| **model_pricing table** | Gateway sập | Spring DB | ~99% (nếu config đầy đủ) |
+| **Chatbot-service ước tính** | Không có pricing | response.usage | ~90% (ước tính, không từ provider) |
+
+**Không double-count:** cost chỉ được tính **một lần** cho enforcement. QuotaService ưu tiên gateway (realtime) và khi enforce quota status. `usage_logs.estimated_cost` chỉ dùng làm:
+1. **Analytics breakdown** — dashboard admin (gateway `/key/info` chỉ trả tổng/key, không breakdown theo model/ngày)
+2. **Fallback enforcement** — khi gateway down
+
+#### 3.4 Phân vai cost vs token
+
+| Chỉ số | Gateway tính | Spring fallback | Reset | Enforcement |
+|---|---|---|---|---|
+| **Cost** | ✓ chính xác (LiteLLM_SpendLogs) | Usage_logs (model_pricing → ước tính) | Rolling 24h | Per-key budget + daily policy limit |
+| **Token** | ✗ không | ✓ usage_logs (từ chatbot-service) | Calendar day | Daily token limit |
+| **Request** | ✗ không | ✓ usage_logs (request_count) | Calendar day | Daily request limit |
+
+**Tại sao khác nhau?** Gateway chỉ biết cost → enforce budget. Spring biết token/request → enforce khác — tránh single-point-of-failure cho cả 3 chỉ số.
+
+### 4. Routing — App-tier chọn model, gateway chỉ proxy
+
+**Refactoring:** Gateway loại bỏ retry/fallback để giữ vai trò đơn giản: **pure proxy** + key auth. Model routing logic hoàn toàn ở tầng app.
+
+#### 4.1 App-tier routing (model selection)
+
+`agents/model_router.py` quyết định **trước** khi gọi LLM:
+
+```text
+Input: question, quota_used_ratio
+  ↓
+Classifier: keyword ("phân tích"+"xu hướng"?) → COMPLEX | SIMPLE
+  ↓
+Cost-aware downgrade:
+  ├─ quota_used_ratio ≥ 0.8 → chọn model_simple (rẻ, nhanh)
+  └─ else → chọn model theo độ khó
+  ↓
+Router output: "gpt-4.1-mini" hoặc "gpt-4o-mini"
+```
+
+Kỹ thuật:
+- **Keyword classifier**: nhanh, không gọi LLM
+- **LLM router (optional)**: gọi model rẻ để confirm câu SIMPLE (tăng độ chính xác)
+- **Cost-aware downgrade**: khi quota gần hết → chọn model rẻ tự động
+
+Chi tiết: [M16-M17](M16-M17-model-routing-retry-fallback.md).
+
+#### 4.2 Gateway-tier (pure proxy, không routing)
+
+LiteLLM config:
+```yaml
+model_list:
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: $OPENAI_API_KEY
+  # ... còn lại
+```
+
+**Gateway chỉ:**
+- ✓ Alias map: `gpt-4o-mini` (tên code) → `openai/gpt-4o-mini` (tên provider)
+- ✓ Forward call → provider
+- ✓ Ghi spend log
+- ✗ **Không retry** (loại bỏ `num_retries`)
+- ✗ **Không fallback** (loại bỏ `fallbacks`)
+
+**Lý do loại bỏ gateway retry/fallback:**
+- App-tier quyết định model rồi → gateway chỉ execute
+- Retry phức tạp hóa gateway, tách coupling với app logic
+- Nếu provider lỗi → app layer (fallback_answer, template response) xử lý
+
+#### 4.3 Phân vai App vs Gateway
+
+| Trách nhiệm | App-tier | Gateway |
+|---|---|---|
+| Chọn model (simple/complex) | ✅ | ❌ |
+| Biết quota user | ✅ | ❌ |
+| Downgrade khi quota gần hết | ✅ | ❌ |
+| Proxy LLM call | ❌ | ✅ |
+| Giữ provider key | ❌ | ✅ |
+| Ghi spend log | ❌ | ✅ |
+| Enforce per-key budget | ❌ | ✅ |
+| Retry khi lỗi | ❌ (để cho app/fallback xử lý) | ❌ (giữ đơn giản) |
+
+**Trace flow:**
+
+```text
+Chatbot-service:
+  ├─ Tính độ khó câu hỏi → COMPLEX
+  ├─ Check quota: 75% dùng → downgrade → "gpt-4o-mini"
+  └─ Call LLM: request_body.model = "gpt-4o-mini"
+       ↓
+Gateway (pure proxy):
+  ├─ Map alias: "gpt-4o-mini" → openai/gpt-4o-mini
+  ├─ Check budget: spend + cost ≤ max_budget? ✓
+  ├─ Forward to OpenAI
+  ├─ Receive response + tokens
+  ├─ Tính cost, ghi spend log
+  └─ Return response.model = "gpt-4o-mini"
+       ↓
+Chatbot-service:
+  ├─ Nhận response
+  ├─ Answer generator dùng response.model để log cost
+  └─ Return answer
+```
+
+**Nếu provider lỗi:**
+- Gateway không retry → trả error
+- Chatbot-service nhận lỗi
+- Chat route sử dụng `fallback_answer` (template, rule-based)
+- Trả user response bình thường (không 500)
+
+### 3.5 Virtual key lifecycle
+
+```
+Lần đầu user chat:
+  Spring POST /api/chat
+    ├─ Check virtual key trong DB
+    ├─ Không có → LlmGatewayKeyService.provisionKeyForUser()
+    │            → LiteLLMAdminClient.generateKey()
+    │            → POST /key/generate {user_id, max_budget, models}
+    │            → Nhận: {key: "sk-...", hash: "..."}
+    │            → Lưu vào llm_virtual_keys table
+    └─ Có → dùng key cũ
+  
+  Chatbot-service chat:
+    ├─ Set contextvar: gateway_context.set_gateway_context(key, user_id)
+    ├─ Call LLM 3 lần: extra headers Authorization + user param
+    │  ├─ Intent extraction
+    │  ├─ Model routing
+    │  └─ Answer generation
+    └─ Gateway auth key → ghi spend log
+  
+Admin thay đổi policy:
+  Spring admin API /api/admin/policies/{id}
+    ├─ Update daily_cost_limit_usd
+    └─ LlmGatewayKeyService.syncBudgetForPolicy()
+       → Tìm mọi user thuộc policy
+       → LiteLLMAdminClient.updateKeyBudget()
+       → PUT /key/update {key_id, max_budget}
+       → Ngay lập tức enforce ở gateway
+  
+User vượt budget:
+  Gateway spend + call_cost ≥ max_budget
+    ├─ HTTP 429 "budget_exceeded"
+    └─ Spring 429 → frontend: "Hết hạn mức chi phí"
+
+User bị khóa / Admin thu hồi key:
+  LiteLLMAdminClient.blockKey() / deleteKey()
+    ├─ DELETE /key/{key_id}
+    ├─ Hoặc PUT /key/block
+    └─ User sau đó không gọi được LLM (fallback template)
+```
+
+**Lưu ý:**
+- Virtual key **mã hóa** trong LiteLLM DB bằng `LITELLM_SALT_KEY` → không thể đọc plaintext
+- `llm_virtual_keys` table Spring chỉ lưu mapping `user_id → key_alias`, key thật không được lưu
+- `LITELLM_SALT_KEY` **không được đổi** sau khi đã tạo key (sẽ không decrypt được)
 
 ## Thành phần
 
 | File | Vai trò |
 |---|---|
-| `infra/litellm/config.yaml` | `model_list` (alias→provider), `num_retries`, `request_timeout`, `fallbacks`, `master_key`, `database_url`, `store_model_in_db` |
+| `infra/litellm/config.yaml` | `model_list` (alias→provider), `request_timeout`, model pricing (`input_cost_per_token`, `output_cost_per_token`), `master_key`, `database_url`, `store_model_in_db` |
 | `infra/litellm/docker-compose.yml` | Service `litellm` port `4000`, `DATABASE_URL`/`LITELLM_SALT_KEY`/`UI_*`, healthcheck `/health/liveliness` |
 | `infra/litellm/.env.example` | `OPENAI_API_KEY`, `GROQ_API_KEY`, `LITELLM_MASTER_KEY`, `DATABASE_URL`, `LITELLM_SALT_KEY`, `LITELLM_UI_USERNAME/PASSWORD` (tạo `.env` thật, **không commit**) |
 | `run-dev.ps1` | Tạo database `litellm` (idempotent) rồi khởi động/stop LiteLLM (khi `infra/litellm/.env` tồn tại) |
@@ -237,15 +477,26 @@ copy infra\litellm\.env.example infra\litellm\.env   # điền OPENAI/GROQ key +
 - Provisioning: chat lần đầu → có row `llm_virtual_keys`; `GET /key/info` trả `max_budget` đúng theo quota policy; spend log ở `LiteLLM_SpendLogs` gắn đúng `user_id`.
 - Budget: hạ `max_budget` key của user (qua `/key/update`) → chat vài lần → gateway chặn, Spring trả **429** (không 500).
 - Quota status: `GET /api/quota/status` → `used_cost_usd` khớp spend trên Admin UI (trễ tối đa ~5s cache).
-- Degradation: `docker stop medical-litellm` → chat vẫn trả lời bằng rule-based/template, không 500.
-- Fallback model: cố tình để key sai cho `gpt-4.1-mini` → câu phức tạp vẫn trả lời nhờ fallback `gpt-4o-mini`.
+- Degradation: `docker stop medical-litellm` → chat vẫn trả lời bằng rule-based/template (fallback_answer), không 500.
+- Cost calculation: query Admin UI `/ui` → tab "Logs" xem spend log chi tiết (model, tokens, cost); so sánh với Spring usage_logs (estimated_cost) để verify fallback logic.
 
 ## Ghi chú / mở rộng
 
-- Proxy thêm 1 hop mạng → đo overhead latency khi smoke.
-- Spend log ghi **bất đồng bộ** (flush theo lô sau vài giây) → `LiteLLMSpendService` cache ngắn + eventual consistency; `/key/info` có thể trễ vài giây so với call vừa xong.
-- **Cửa sổ budget lệch với quota ngày lịch**: `budget_duration: "1d"` của LiteLLM là cửa sổ **rolling 24h** (tính từ lúc tạo/reset key), còn token/request trong `QuotaService` reset theo **ngày lịch** (`quotaZone`). Cost hiển thị/chặn có thể lệch vài giờ so với token/request — chấp nhận cho phạm vi hiện tại; nếu cần đồng bộ tuyệt đối, chuyển việc chặn cost về theo ngày lịch từ `usage_logs` hoặc reset key theo mốc ngày.
-- `LITELLM_SALT_KEY` **không được đổi** sau khi đã sinh virtual key (sẽ không giải mã được key cũ).
+### Hiệu năng & Consistency
+
+- **Proxy latency**: Thêm 1 hop mạng → đo overhead khi smoke test. Typically <50ms overhead.
+- **Spend log async**: LiteLLM flush spend log theo lô (vài giây) → `LiteLLMSpendService` cache 5s + eventual consistency. `/key/info` có thể trễ vài giây so với call vừa xong. Chấp nhận cho phạm vi hiện tại.
+- **Cửa sổ budget lệch với quota ngày lịch**: Gateway `budget_duration: "1d"` là **rolling 24h** (tính từ lúc tạo key), Spring quota reset theo **ngày lịch** (`quotaZone`). Cost hiển thị/chặn có thể lệch vài giờ — chấp nhận hiện tại; nếu cần đồng bộ tuyệt đối, chuyển việc chặn cost về `usage_logs` (ngày lịch) hoặc reset key theo mốc ngày.
+
+### Vận hành
+
+- `LITELLM_SALT_KEY` **không được đổi** sau khi đã tạo virtual key (mã hóa không thể giải).
 - `DATABASE_URL` dùng `host.docker.internal:5433` (Docker Desktop/Windows). Linux thuần cần chung network hoặc `--add-host`.
-- Team keys / RBAC nâng cao và Admin UI quản model (`store_model_in_db`) đã sẵn ở gateway, có thể mở rộng sau.
-- Cost-aware multi-provider routing (chọn `groq-llama-8b` cho câu đơn giản) là milestone riêng, build trên gateway này.
+- **Model pricing config**: Chỉnh sửa `infra/litellm/config.yaml` → thay đổi `input_cost_per_token`, `output_cost_per_token` cho mỗi model → LiteLLM reload lúc boot (không runtime). Nếu cần update runtime → dùng Admin UI `/ui` hoặc `/config` endpoint.
+
+### Mở rộng
+
+- **Team keys / RBAC nâng cao**: Admin UI quản model (`store_model_in_db`) đã sẵn ở gateway, có thể mở rộng sau.
+- **Semantic cache**: Xây dựng trên spend log này (vector cache theo spend, user, model).
+- **Cost-aware multi-provider routing**: Chọn `groq-llama-8b` cho câu đơn giản (refactor phần này thành M18+).
+- **Real-time cost dashboard**: Pipe `LiteLLM_SpendLogs` → frontend dashboard (chứ không chỉ Admin UI `/ui`).

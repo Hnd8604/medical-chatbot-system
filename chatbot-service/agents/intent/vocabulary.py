@@ -98,3 +98,19 @@ CONDITION_KEYWORDS = [
 ]
 
 PATIENT_INFO_KEYWORDS = ["patient", "information", "info", "thong tin", "benh nhan"]
+
+# Câu hỏi mang ý "giải thích/ý nghĩa/công dụng" -> bật terminology enrichment (explain=True).
+EXPLAIN_KEYWORDS = [
+    "la gi",
+    "nghia la gi",
+    "y nghia",
+    "giai thich",
+    "dung de lam gi",
+    "cong dung",
+    "tac dung",
+    "noi len dieu gi",
+    "meaning",
+    "explain",
+    "what is",
+    "what does",
+]

@@ -9,6 +9,8 @@ from app.config import get_settings
 
 MAX_EVIDENCE_ITEMS = 20
 MAX_EVIDENCE_JSON_CHARS = 12000
+MAX_EXTERNAL_KNOWLEDGE_ITEMS = 8
+MAX_EXTERNAL_SUMMARY_CHARS = 600
 
 ZERO_USAGE = {
     "input_tokens": 0,
@@ -38,6 +40,7 @@ class AnswerGenerator(Protocol):
         fallback_answer: str,
         model: str | None = None,
         conversation_context: dict[str, Any] | None = None,
+        external_knowledge: list[dict[str, Any]] | None = None,
     ) -> AnswerResult:
         ...
 
@@ -54,6 +57,7 @@ class TemplateAnswerGenerator:
         fallback_answer: str,
         model: str | None = None,
         conversation_context: dict[str, Any] | None = None,
+        external_knowledge: list[dict[str, Any]] | None = None,
     ) -> AnswerResult:
         return AnswerResult(answer=fallback_answer, source="template")
 
@@ -77,9 +81,11 @@ class LLMAnswerGenerator:
         fallback_answer: str,
         model: str | None = None,
         conversation_context: dict[str, Any] | None = None,
+        external_knowledge: list[dict[str, Any]] | None = None,
     ) -> AnswerResult:
         compact_evidence = compact_evidence_for_llm(evidence)
-        if not compact_evidence:
+        compact_knowledge = compact_external_knowledge_for_llm(external_knowledge)
+        if not compact_evidence and not compact_knowledge:
             return AnswerResult(
                 answer=fallback_answer, # không có evidence → sử dụng câu trả lời fallback
                 source="template_no_evidence",
@@ -97,6 +103,10 @@ class LLMAnswerGenerator:
             "Ưu tiên nêu giá trị, đơn vị, thời điểm, diễn giải/reference range nếu có. "
             "Có thể dùng phần conversation (tóm tắt + tin nhắn gần đây) để hiểu câu hỏi nối tiếp, "
             "nhưng mọi dữ kiện y tế trong câu trả lời vẫn phải lấy từ evidence. "
+            "Nếu payload có external_knowledge (metadata/định nghĩa từ LOINC, RxNorm, MedlinePlus), "
+            "hãy dùng để giải thích ngắn gọn ý nghĩa của xét nghiệm/chỉ số/thuốc/chẩn đoán bằng tiếng Việt; "
+            "đây là kiến thức y khoa chung (thường bằng tiếng Anh), không phải dữ liệu riêng của bệnh nhân, "
+            "hãy tóm tắt/diễn giải sang tiếng Việt và không bịa thêm ngoài nội dung được cung cấp. "
             "Kết thúc bằng một câu nhắc rằng câu trả lời chỉ dựa trên dữ liệu hiện có nếu câu hỏi có tính y khoa."
         )
         user_payload = {
@@ -107,6 +117,8 @@ class LLMAnswerGenerator:
             "evidence": compact_evidence,
             "fallback_answer": fallback_answer,
         }
+        if compact_knowledge:
+            user_payload["external_knowledge"] = compact_knowledge
         if conversation_context:
             user_payload["conversation"] = conversation_context
 
@@ -155,6 +167,30 @@ def get_answer_generator() -> AnswerGenerator:
             base_url=settings.llm_base_url,
         )
     return TemplateAnswerGenerator()
+
+
+def compact_external_knowledge_for_llm(
+    items: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Trim terminology enrichment items for the LLM prompt (cap count + summary length)."""
+    compact: list[dict[str, Any]] = []
+    for item in (items or [])[:MAX_EXTERNAL_KNOWLEDGE_ITEMS]:
+        if not isinstance(item, dict):
+            continue
+        summary = item.get("summary")
+        if isinstance(summary, str) and len(summary) > MAX_EXTERNAL_SUMMARY_CHARS:
+            summary = summary[:MAX_EXTERNAL_SUMMARY_CHARS] + "…"
+        compact.append(
+            {
+                "source": item.get("source"),
+                "type": item.get("type"),
+                "code": item.get("code"),
+                "display": item.get("display"),
+                "summary": summary,
+                "url": item.get("url"),
+            }
+        )
+    return compact
 
 
 def compact_evidence_for_llm(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:

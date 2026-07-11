@@ -11,6 +11,7 @@ from agents.intent.constants import (
     TOOL_GET_ALL_ENCOUNTERS,
     TOOL_GET_ALL_CONDITIONS,
     TOOL_GET_ALL_MEDICATIONS,
+    TOOL_EXPLAIN_CONCEPT,
     TOOL_UNSUPPORTED,
 )
 
@@ -268,6 +269,34 @@ FHIR_TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": TOOL_EXPLAIN_CONCEPT,
+            "description": (
+                "Explain a medical CONCEPT that is not tied to a specific patient, e.g. "
+                "'HbA1c la gi', 'xet nghiem creatinine la gi', 'thuoc Metformin dung de lam gi', "
+                "'benh tieu duong type 2 la gi'. Use this only for general concept/definition "
+                "questions with no patient data involved. For explaining a specific patient's "
+                "retrieved value/medication/diagnosis, use the matching data tool with explain=true instead."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "term": {
+                        "type": "string",
+                        "description": "The lab test, medication, or condition name to explain, from the user question.",
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "Optional standard code (e.g. LOINC 4548-4) when the user gives one explicitly.",
+                    },
+                },
+                "required": [],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": TOOL_UNSUPPORTED,
             "description": "Use when the question is not a supported structured FHIR retrieval request.",
             "parameters": {
@@ -282,3 +311,28 @@ FHIR_TOOL_DEFINITIONS = [
         },
     },
 ]
+
+
+# Cờ explain: bật terminology enrichment khi user hỏi ý nghĩa/giải thích dữ liệu đã lấy.
+# Chèn vào các tool truy xuất dữ liệu y khoa (có mã LOINC/RxNorm/SNOMED để tra).
+_EXPLAIN_ELIGIBLE_TOOLS = {
+    TOOL_GET_RESOURCE,
+    TOOL_GET_OBSERVATIONS,
+    TOOL_GET_CONDITIONS,
+    TOOL_GET_MEDICATIONS,
+    TOOL_GET_ALL_OBSERVATIONS,
+    TOOL_GET_ALL_CONDITIONS,
+    TOOL_GET_ALL_MEDICATIONS,
+}
+_EXPLAIN_PROPERTY = {
+    "type": "boolean",
+    "description": (
+        "Set true ONLY when the user asks for the meaning, explanation, definition, or purpose "
+        "of the medical data, e.g. 'chi so nay nghia la gi', 'HbA1c noi len dieu gi', "
+        "'thuoc do dung de lam gi', 'chan doan do la gi'. Set false when the user only asks for "
+        "the value, date, list, or dose."
+    ),
+}
+for _tool in FHIR_TOOL_DEFINITIONS:
+    if _tool["function"]["name"] in _EXPLAIN_ELIGIBLE_TOOLS:
+        _tool["function"]["parameters"]["properties"]["explain"] = _EXPLAIN_PROPERTY

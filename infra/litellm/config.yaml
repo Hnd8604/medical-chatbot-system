@@ -18,12 +18,8 @@ model_list:
       api_key: os.environ/GROQ_API_KEY
 
 litellm_settings:
-  num_retries: 2
   request_timeout: 30
   drop_params: true
-  fallbacks:
-    - { "gpt-4.1-mini": ["gpt-4o-mini"] }
-    - { "groq-llama-70b": ["gpt-4o-mini"] }
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

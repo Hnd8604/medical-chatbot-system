@@ -8,6 +8,7 @@ from agents.intent_extractor import IntentPlan, has_patient_search_criteria
 from agents.summary_generator import SummaryResult
 from app.config import get_settings
 from services.semantic_cache import get_semantic_cache
+from terminology.enrichment_service import get_enrichment_service
 
 
 log = logging.getLogger(__name__)
@@ -74,6 +75,14 @@ async def _finalize_chat_response(
         return payload
 
     template_answer = payload.get("answer") or "" # lấy câu trả lời đã xây dựng từ trước
+    # Terminology enrichment CHỈ khi câu hỏi mang ý "giải thích" (plan.explain) — câu hỏi
+    # dữ liệu thuần không gọi API ngoài. Kết quả gắn top-level external_knowledge.
+    # explain_concept answerer tự set external_knowledge (không có FHIR evidence);
+    # còn lại thì enrich từ evidence khi plan.explain.
+    external_knowledge = payload.get("external_knowledge") or await _maybe_enrich_terminology(payload, plan)
+    if external_knowledge:
+        payload["external_knowledge"] = external_knowledge
+
     answer_result = await answer_generator.generate(
         question=question,
         intent=payload.get("intent") or plan.intent,
@@ -83,6 +92,7 @@ async def _finalize_chat_response(
         fallback_answer=template_answer,  # fallback khi không thể call đc LLM hoặc LLM trả về empty answer
         model=model,
         conversation_context=conversation_context,
+        external_knowledge=external_knowledge,
     )
     payload["answer"] = answer_result.answer
     payload["answer_source"] = answer_result.source
@@ -146,6 +156,32 @@ async def _finalize_chat_response(
     if memory_update:
         payload["memory_update"] = memory_update
     return payload
+
+async def _maybe_enrich_terminology(
+    payload: dict[str, Any],
+    plan: IntentPlan,
+) -> list[dict[str, Any]]:
+    """Fetch terminology enrichment only for explanation-type questions.
+
+    Trả về list external_knowledge (đã as_dict) khi ``plan.explain`` và có evidence;
+    câu hỏi dữ liệu thuần trả [] (không gọi API ngoài). Mọi lỗi được nuốt để không
+    chặn câu trả lời chính.
+    """
+    if not getattr(plan, "explain", False):
+        return []
+    evidence = payload.get("evidence") or []
+    if not evidence:
+        return []
+    try:
+        items = await get_enrichment_service().enrich_payload(
+            {"evidence": evidence},
+            language="en",
+        )
+    except Exception:
+        log.exception("Terminology enrichment error")
+        return []
+    return [item.as_dict() for item in items]
+
 
 def _build_memory_update(
     payload: dict[str, Any],

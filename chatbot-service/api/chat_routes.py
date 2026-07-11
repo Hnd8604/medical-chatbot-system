@@ -18,6 +18,7 @@ from agents.intent_extractor import (
     TOOL_GET_PATIENT,
     TOOL_GET_RESOURCE,
     TOOL_SEARCH_PATIENTS,
+    TOOL_EXPLAIN_CONCEPT,
     IntentExtractor,
     get_intent_extractor,
     is_self_patient_reference,
@@ -36,6 +37,7 @@ from chat.resource_answerers import (
     _answer_encounters,
     _answer_fhir_status,
     _answer_medications,
+    _answer_explain_concept,
     _answer_observations,
     _answer_patient,
     _answer_patients,
@@ -243,6 +245,15 @@ async def chat(
         if plan.tool_name == TOOL_GET_RESOURCE:
             return await _finalize_chat_response(
                 await _answer_resource_by_id(client, plan),
+                request.message,
+                plan,
+                answer_generator,
+                **finalize_kwargs,
+            )
+        if plan.tool_name == TOOL_EXPLAIN_CONCEPT:
+            # Câu hỏi khái niệm thuần (không gắn bệnh nhân) — chỉ tra terminology.
+            return await _finalize_chat_response(
+                await _answer_explain_concept(plan),
                 request.message,
                 plan,
                 answer_generator,

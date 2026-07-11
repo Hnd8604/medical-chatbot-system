@@ -10,6 +10,8 @@ TOOL_GET_ALL_OBSERVATIONS = "get_all_patient_observations"
 TOOL_GET_ALL_ENCOUNTERS = "get_all_patient_encounters"
 TOOL_GET_ALL_CONDITIONS = "get_all_patient_conditions"
 TOOL_GET_ALL_MEDICATIONS = "get_all_patient_medication_requests"
+# Câu hỏi khái niệm thuần (không gắn bệnh nhân): "HbA1c là gì", "Metformin dùng để làm gì".
+TOOL_EXPLAIN_CONCEPT = "explain_concept"
 TOOL_UNSUPPORTED = "unsupported_question"
 
 # Các tool get_all_patient_* được chuẩn hoá về tool gốc + all_patients=True
@@ -45,5 +47,6 @@ TOOL_TO_INTENT = {
     TOOL_GET_ALL_ENCOUNTERS: "encounters",
     TOOL_GET_ALL_CONDITIONS: "conditions",
     TOOL_GET_ALL_MEDICATIONS: "medications",
+    TOOL_EXPLAIN_CONCEPT: "explain_concept",
     TOOL_UNSUPPORTED: "unknown",
 }

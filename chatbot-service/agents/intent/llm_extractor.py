@@ -26,6 +26,7 @@ from agents.intent.constants import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_ENCOUNTERS,
+    TOOL_EXPLAIN_CONCEPT,
 )
 from agents.intent.text_utils import string_or_none, clamp
 from agents.intent.patient_utils import normalize_patient_id
@@ -70,6 +71,8 @@ class LLMIntentExtractor:
             "Questions about medications, medicines, prescriptions, 'thuoc', 'don thuoc', 'dang dung thuoc gi', 'medication', 'current medications' must use get_medication_requests. "
             "Use conversation.memory_summary and conversation.recent_messages to resolve follow-up references such as 'cai do', 'thuoc do', 'chi so do', 'lan kham do', 'benh nhan do', 'no', or 'vua roi' to the concrete tool, resource type, and patient. "
             "Prefer provided_patient_id over patients that are only mentioned in older conversation messages. "
+            "When the user asks for the MEANING, explanation, definition, or purpose of a specific patient's data (e.g. 'chi so nay nghia la gi', 'HbA1c noi len dieu gi', 'thuoc do dung de lam gi', 'chan doan do la gi'), select the matching data tool (get_observations, get_conditions, get_medication_requests, or get_resource_by_id) AND set explain=true; when they only ask for the value, date, list, or dose, set explain=false. "
+            "When the user asks about a general medical CONCEPT with no patient involved (e.g. 'HbA1c la gi', 'xet nghiem creatinine la gi', 'thuoc Metformin dung de lam gi', 'benh tieu duong type 2 la gi'), use explain_concept with the term (and code when explicitly given). "
         )
         user_prompt = {
             "message": message,
@@ -135,8 +138,8 @@ class LLMIntentExtractor:
             usage=usage,
             source="llm",
         )
-        if plan.tool_name in (TOOL_FHIR_STATUS, TOOL_GET_RESOURCE):
-            # Hai tool này không gắn với một bệnh nhân cụ thể — guardrails
+        if plan.tool_name in (TOOL_FHIR_STATUS, TOOL_GET_RESOURCE, TOOL_EXPLAIN_CONCEPT):
+            # Các tool này không gắn với một bệnh nhân cụ thể — guardrails
             # patient/contact/list không áp dụng và có thể reroute sai.
             return plan
         plan = enforce_patient_list_routing(message, plan)
@@ -191,6 +194,9 @@ def _plan_from_tool_call(
     if tool_name not in TOOL_TO_INTENT:
         tool_name = TOOL_UNSUPPORTED
 
+    # explain_concept là câu hỏi giải thích khái niệm -> luôn explain=True.
+    explain = tool_name == TOOL_EXPLAIN_CONCEPT or bool(arguments.get("explain"))
+
     return IntentPlan(
         tool_name=tool_name,
         patient_id=patient_id,
@@ -203,6 +209,9 @@ def _plan_from_tool_call(
         observation_type=string_or_none(arguments.get("observation_type")),
         limit=limit,
         all_patients=all_patients,
+        explain=explain,
+        term=string_or_none(arguments.get("term")),
+        code=string_or_none(arguments.get("code")),
         reason=string_or_none(arguments.get("reason")),
         source=source,
         usage=usage,

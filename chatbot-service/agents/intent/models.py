@@ -19,6 +19,11 @@ class IntentPlan:
     observation_type: str | None = None
     limit: int = 5
     all_patients: bool = False
+    # explain=True khi câu hỏi mang ý "giải thích/ý nghĩa/công dụng" của dữ liệu y khoa
+    # -> bật terminology enrichment. term/code cho intent explain_concept (khái niệm thuần).
+    explain: bool = False
+    term: str | None = None
+    code: str | None = None
     reason: str | None = None
     source: str = "rules"
     usage: dict[str, int | float] = field(default_factory=lambda: {

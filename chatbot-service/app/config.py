@@ -28,6 +28,19 @@ class Settings(BaseSettings):
     litellm_base_url: str = Field(default="http://localhost:4000")
     litellm_master_key: str | None = Field(default=None)
 
+    # Terminology enrichment (giải thích mã y khoa). Chỉ chạy khi câu hỏi mang ý
+    # "giải thích/ý nghĩa" (explain). RxNorm/MedlinePlus là API công khai, không cần key;
+    # LOINC cần tài khoản loinc.org (thiếu creds -> nhánh LOINC tự bỏ qua).
+    loinc_enabled: bool = Field(default=True)
+    rxnorm_enabled: bool = Field(default=True)
+    medlineplus_enabled: bool = Field(default=True)
+    loinc_username: str | None = Field(default=None)
+    loinc_password: str | None = Field(default=None)
+    terminology_timeout_seconds: float = Field(default=5)
+    terminology_cache_ttl_seconds: int = Field(default=43200)
+    rxnorm_cache_ttl_seconds: int = Field(default=86400)
+    loinc_cache_ttl_seconds: int = Field(default=2592000)
+
     # Semantic Cache Config (Qdrant)
     qdrant_url: str = Field(default="http://localhost:6333")
     cache_collection_name: str = Field(default="medical_chat_cache")

@@ -3,14 +3,14 @@ import unittest
 from types import SimpleNamespace
 
 from agents.summary_generator import (
-    LangGraphSummaryGenerator,
+    LlmSummaryGenerator,
     NoopSummaryGenerator,
     SummaryResult,
 )
 
 
-def _make_generator(trigger: int = 6) -> LangGraphSummaryGenerator:
-    return LangGraphSummaryGenerator(
+def _make_generator(trigger: int = 6) -> LlmSummaryGenerator:
+    return LlmSummaryGenerator(
         api_key="sk-test",
         model="gpt-4o-mini",
         timeout_seconds=5,
@@ -43,7 +43,7 @@ class FakeBudgetError(Exception):
         self.body = {"error": {"type": "budget_exceeded", "message": "ExceededBudget"}}
 
 
-def _attach_fake_client(generator: LangGraphSummaryGenerator, completions: FakeCompletions) -> None:
+def _attach_fake_client(generator: LlmSummaryGenerator, completions: FakeCompletions) -> None:
     generator.client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
 
 

@@ -68,7 +68,7 @@ class QuotaServiceTest {
         when(user.getUsername()).thenReturn("user_demo");
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
-                "free",
+                "user_standard",
                 30,
                 1000,
                 new BigDecimal("0.50")
@@ -87,7 +87,7 @@ class QuotaServiceTest {
         var status = service.currentUserStatus();
 
         assertEquals("user_demo", status.user());
-        assertEquals("free", status.policy());
+        assertEquals("user_standard", status.policy());
         assertEquals(12, status.usedRequests());
         assertEquals(150, status.usedTokens());
         assertEquals(18, status.remainingRequests());
@@ -102,7 +102,7 @@ class QuotaServiceTest {
         QuotaService service = newService();
 
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
-                "free",
+                "user_standard",
                 1,
                 1000,
                 new BigDecimal("0.50")
@@ -150,7 +150,7 @@ class QuotaServiceTest {
         QuotaService service = newService();
 
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
-                "free",
+                "user_standard",
                 30,
                 50000,
                 new BigDecimal("0.01")
@@ -191,7 +191,7 @@ class QuotaServiceTest {
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         // Request/token con thap, chi cost cham nguong 85% -> van phai canh bao.
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
-                "free",
+                "user_standard",
                 30,
                 50000,
                 new BigDecimal("1.00")

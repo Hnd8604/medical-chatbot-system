@@ -147,7 +147,7 @@ async def _answer_patients(client: FhirClient, plan: IntentPlan) -> dict[str, An
             )
     return {
         "answer": answer,
-        "intent": "patients",
+        "intent": "list_patients",
         "patient_id": None,
         "evidence": [
             _evidence("Patient", patient.get("id"), _format_patient_summary(patient), patient)
@@ -502,7 +502,7 @@ async def _resolve_patient_id_for_tool(client: FhirClient, plan: IntentPlan) -> 
 
     return {
         "answer": answer,
-        "intent": "patients",
+        "intent": "list_patients",
         "patient_id": None,
         "evidence": [
             _evidence("Patient", patient.get("id"), _format_patient_summary(patient), patient)

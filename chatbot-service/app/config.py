@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = Field(default=20)
     enable_llm_answer: bool = Field(default=True)
 
-    # Rolling summary hội thoại (LangGraph). Chỉ gọi LLM khi tổng số message của
+    # Rolling summary hội thoại. Chỉ gọi LLM khi tổng số message của
     # session >= summary_trigger_message_count (khớp RECENT_CONTEXT_MESSAGE_LIMIT=8 bên Spring).
     enable_llm_summary: bool = Field(default=True)
     model_summary: str = Field(default="gpt-4o-mini")

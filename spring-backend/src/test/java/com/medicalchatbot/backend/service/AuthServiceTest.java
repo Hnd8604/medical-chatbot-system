@@ -203,11 +203,11 @@ class AuthServiceTest {
         }
 
         @Test
-        void registerCreatesActiveUserWithFreeDemoQuota() {
+        void registerCreatesActiveUserWithUserDemoQuota() {
                 UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000305");
                 when(userRepository.existsByUsernameIgnoreCase("new_user")).thenReturn(false);
                 when(userRepository.existsByEmailIgnoreCase("new@example.com")).thenReturn(false);
-                when(quotaPolicyRepository.findByName("free")).thenReturn(Optional.of(quotaPolicy()));
+                when(quotaPolicyRepository.findByName("user_standard")).thenReturn(Optional.of(quotaPolicy()));
                 when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
                         User saved = invocation.getArgument(0);
                         ReflectionTestUtils.setField(saved, "id", userId);
@@ -439,7 +439,7 @@ class AuthServiceTest {
         }
 
         private QuotaPolicy quotaPolicy() {
-                return new QuotaPolicy("free", 30, 50000, new BigDecimal("0.50"), 10);
+                return new QuotaPolicy("user_standard", 30, 50000, new BigDecimal("0.50"), 10);
         }
 
         private User user(

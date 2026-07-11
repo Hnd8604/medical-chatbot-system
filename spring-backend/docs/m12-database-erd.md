@@ -205,7 +205,7 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     daily_cost_limit_usd  numeric    [not null]
     rate_limit_per_minute integer    [default: 20]
     created_at            timestamptz [not null, default: `now()`]
-    Note: "3 tier seed sẵn ở V1 baseline: free (30 req · 50k token · $0.5 · 10 rpm), pro (200 · 500k · $5 · 30), enterprise (2000 · 5M · $50 · 120)"
+    Note: "3 tier seed theo role (V1 baseline, đổi tên ở V3): user_standard (30 req · 50k token · $0.5 · 10 rpm), doctor_standard (200 · 500k · $5 · 30), admin (2000 · 5M · $50 · 120)"
   }
 
   Table app_users {

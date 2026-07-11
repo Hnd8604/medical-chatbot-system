@@ -61,7 +61,7 @@ class LlmGatewayKeyServiceTest {
     void provisionsNewKeyWithBudgetFromQuotaPolicy() {
         when(virtualKeyRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(
-                new QuotaPolicyInfo("free", 30, 1000, new BigDecimal("0.50"))));
+                new QuotaPolicyInfo("user_standard", 30, 1000, new BigDecimal("0.50"))));
         when(adminClient.generateKey(eq(userId.toString()), any(), eq(new BigDecimal("0.50")), eq("USER")))
                 .thenReturn("sk-new-key");
 
@@ -103,7 +103,7 @@ class LlmGatewayKeyServiceTest {
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(winner));
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(
-                new QuotaPolicyInfo("free", 30, 1000, new BigDecimal("0.50"))));
+                new QuotaPolicyInfo("user_standard", 30, 1000, new BigDecimal("0.50"))));
         when(adminClient.generateKey(any(), any(), any(), any())).thenReturn("sk-loser");
         when(virtualKeyRepository.save(any(LlmVirtualKey.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
@@ -118,7 +118,7 @@ class LlmGatewayKeyServiceTest {
     void fallsBackToNullWhenGatewayCallFails() {
         when(virtualKeyRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(
-                new QuotaPolicyInfo("free", 30, 1000, new BigDecimal("0.50"))));
+                new QuotaPolicyInfo("user_standard", 30, 1000, new BigDecimal("0.50"))));
         when(adminClient.generateKey(any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("gateway down"));
 

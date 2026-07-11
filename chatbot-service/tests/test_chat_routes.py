@@ -581,7 +581,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         plan = await RuleBasedIntentExtractor().extract("danh sach benh nhan hien co")
 
         self.assertEqual(plan.tool_name, TOOL_SEARCH_PATIENTS)
-        self.assertEqual(plan.intent, "patients")
+        self.assertEqual(plan.intent, "list_patients")
         self.assertEqual(plan.limit, 20)
 
     async def test_rule_based_extractor_routes_patient_name_search(self) -> None:
@@ -654,7 +654,7 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
         routed = enforce_patient_list_routing("liet ke tat ca benh nhan", plan)
 
         self.assertEqual(routed.tool_name, TOOL_SEARCH_PATIENTS)
-        self.assertEqual(routed.intent, "patients")
+        self.assertEqual(routed.intent, "list_patients")
         self.assertEqual(routed.source, "llm_guardrail")
 
     def test_all_patient_scope_changes_patient_list_to_medications(self) -> None:

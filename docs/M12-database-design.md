@@ -51,8 +51,9 @@ Thiết kế schema database ứng dụng (tách hoàn toàn khỏi HAPI FHIR da
 
 | Version | Nội dung |
 |---|---|
-| V1 | **Baseline** (gộp V1→V17 cũ): toàn bộ 12 bảng + index + seed — 3 quota policy (`free`/`pro`/`enterprise`), 13 demo user (USER/DOCTOR/ADMIN, mật khẩu bcrypt), bảng giá 4 model (openai + groq), liên kết user ↔ FHIR Patient (SELF/CAREGIVER) |
+| V1 | **Baseline** (gộp V1→V17 cũ): toàn bộ 12 bảng + index + seed — 3 quota policy, 13 demo user (USER/DOCTOR/ADMIN, mật khẩu bcrypt), bảng giá 4 model (openai + groq), liên kết user ↔ FHIR Patient (SELF/CAREGIVER) |
 | V2 | `llm_virtual_keys` — mapping user → LiteLLM virtual key + budget |
+| V3 | Đổi tên 3 quota policy theo role (`free`→`user_standard`, `pro`→`doctor_standard`, `enterprise`→`admin`) và gán mỗi user về gói khớp role |
 
 > Baseline áp dụng trên database rỗng; các bước backfill cost lịch sử của
 > migration cũ được bỏ qua vì `usage_logs` khởi tạo rỗng.

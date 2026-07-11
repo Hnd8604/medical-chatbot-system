@@ -14,7 +14,7 @@ quota, cache và model routing** — xem `docs/optimization-direction.md`.
   `Patient`, `Encounter`, `Observation`, `Condition`, `MedicationRequest`.
 - Auth JWT (access + refresh token rotation qua Redis), 3 role `USER` /
   `DOCTOR` / `ADMIN`, liên kết tài khoản ↔ FHIR Patient, quên/đổi mật khẩu (OTP email).
-- Lịch sử hội thoại, session memory + **rolling summary** (LangGraph) để nén ngữ cảnh.
+- Lịch sử hội thoại, session memory + **rolling summary** (LLM) để nén ngữ cảnh.
 - **Quota** theo ngày (request / token / cost) + rate limit theo phút; chặn và audit khi vượt.
 - **Semantic cache** (Qdrant + embedding đa ngôn ngữ) và exact cache cho câu trả lời.
 - **Model routing** (M16): câu đơn giản → model rẻ, phức tạp → model mạnh;
@@ -209,7 +209,7 @@ ENABLE_LLM_ROUTER=false            # bật LLM Router lai (M16)
 LITELLM_BASE_URL=http://localhost:4000
 LITELLM_MASTER_KEY=sk-local-dev
 
-# Rolling summary hội thoại (LangGraph)
+# Rolling summary hội thoại
 ENABLE_LLM_SUMMARY=true
 SUMMARY_TRIGGER_MESSAGE_COUNT=8
 ```

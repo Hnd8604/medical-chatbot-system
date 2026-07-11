@@ -36,7 +36,7 @@ TOOL_TO_INTENT = {
     TOOL_FHIR_STATUS: "fhir_status",
     TOOL_GET_PATIENT: "patient",
     TOOL_GET_RESOURCE: "resource",
-    TOOL_SEARCH_PATIENTS: "patients",
+    TOOL_SEARCH_PATIENTS: "list_patients",
     TOOL_GET_OBSERVATIONS: "observations",
     TOOL_GET_ENCOUNTERS: "encounters",
     TOOL_GET_CONDITIONS: "conditions",

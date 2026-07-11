@@ -210,7 +210,7 @@ class ChatbotControllerTest {
     void chatReturnsTooManyRequestsWhenQuotaExceeded() throws Exception {
         QuotaStatusResponse quotaStatus = new QuotaStatusResponse(
                 "demo_user",
-                "free",
+                "user_standard",
                 1,
                 100000,
                 BigDecimal.ONE,
@@ -385,7 +385,7 @@ class ChatbotControllerTest {
     void quotaStatusReturnsDemoUserQuota() throws Exception {
         when(quotaService.currentUserStatus()).thenReturn(new QuotaStatusResponse(
                 "demo_user",
-                "free",
+                "user_standard",
                 50,
                 100000,
                 new BigDecimal("1.00"),
@@ -404,7 +404,7 @@ class ChatbotControllerTest {
         mockMvc.perform(get("/api/quota/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user").value("demo_user"))
-                .andExpect(jsonPath("$.policy").value("free"))
+                .andExpect(jsonPath("$.policy").value("user_standard"))
                 .andExpect(jsonPath("$.daily_request_limit").value(50))
                 .andExpect(jsonPath("$.used_requests").value(12))
                 .andExpect(jsonPath("$.remaining_requests").value(38))

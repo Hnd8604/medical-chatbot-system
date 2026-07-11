@@ -207,13 +207,13 @@ class ChatApplicationServiceTest {
         JsonNode response = new ObjectMapper().readTree("""
                 {
                   "answer": "Danh sach benh nhan...",
-                  "intent": "patients",
+                  "intent": "list_patients",
                   "tool_name": "search_patients",
                   "all_patients": true,
                   "patient_id": null,
                   "evidence": [],
                   "memory_update": {
-                    "last_intent": "patients",
+                    "last_intent": "list_patients",
                     "last_tool_name": "search_patients",
                     "summary": "Da xem danh sach benh nhan."
                   },
@@ -251,7 +251,7 @@ class ChatApplicationServiceTest {
         ChatApplicationService service = newService();
         QuotaStatusResponse quotaStatus = new QuotaStatusResponse(
                 null,
-                "free",
+                "user_standard",
                 1,
                 100000,
                 BigDecimal.ONE,
@@ -342,7 +342,7 @@ class ChatApplicationServiceTest {
         JsonNode response = new ObjectMapper().readTree("""
                 {
                   "answer": "Danh sach benh nhan...",
-                  "intent": "patients",
+                  "intent": "list_patients",
                   "tool_name": "search_patients",
                   "evidence": [],
                   "memory_update": {},
@@ -401,7 +401,7 @@ class ChatApplicationServiceTest {
         JsonNode response = new ObjectMapper().readTree("""
                 {
                   "answer": "Theo du lieu FHIR...",
-                  "intent": "patients",
+                  "intent": "list_patients",
                   "tool_name": "search_patients",
                   "llm_provider": "openai",
                   "llm_model": "gpt-4.1-mini",

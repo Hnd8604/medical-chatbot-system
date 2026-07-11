@@ -1,4 +1,4 @@
-# Context Compression — Rolling Summary bằng LangGraph
+# Context Compression — Rolling Summary (LLM)
 
 > Nâng cấp M15.3 từ V1 (template rule-based) lên V2 (LLM rolling summary).
 > Thay toàn bộ cơ chế memory rule-based cũ: summary do LLM sinh, câu follow-up
@@ -34,20 +34,23 @@ chatbot-service POST /chat
 Spring merge memory_update → chat_sessions.memory_summary (firstNonBlank)
 ```
 
-### LangGraph StateGraph
+### LlmSummaryGenerator (async thuần)
 
-`agents/summary_generator.py` — `LangGraphSummaryGenerator`:
+`agents/summary_generator.py` — `LlmSummaryGenerator`:
 
 ```text
-START ──(_should_summarize)──► summarize ──► END
-         │
-         └─ "skip" ──► END        (dưới ngưỡng trigger / không có recent_messages)
+summarize(context, question, patient_id, total_message_count)
+  ├─ _should_summarize(...) == False  ──► SummaryResult(source="skipped")   (0 token)
+  └─ _should_summarize(...) == True   ──► 1 lệnh gọi LLM ──► SummaryResult(source="llm")
 ```
 
-- Node `summarize` là async function gọi `AsyncOpenAI` qua **LiteLLM gateway**
-  với `gateway_call_kwargs()` (virtual key + end-user per request — giống 3 call
-  site LLM còn lại). Không dùng `langchain-openai` để giữ nguyên pattern contextvar.
-- **Không dùng checkpointer** — persist là việc của Spring (`chat_sessions.memory_summary`).
+- Đây là một quyết định trigger + đúng một lệnh gọi LLM, nên viết bằng `async`
+  thuần — không cần graph engine. (Trước đây bọc trong LangGraph StateGraph 1 node;
+  đã gỡ vì không dùng checkpointer/multi-node/cycle nào — chỉ là một câu `if`.)
+- Gọi `AsyncOpenAI` qua **LiteLLM gateway** với `gateway_call_kwargs()` (virtual
+  key + end-user per request — giống 3 call site LLM còn lại).
+- **Persist là việc của Spring** (`chat_sessions.memory_summary`); module này không
+  giữ state giữa các lượt.
 - Input: `previous_summary + recent_messages + latest_question` (KHÔNG có answer
   của lượt hiện tại vì summary chạy song song với answer generation — "trễ một
   lượt", không mất thông tin vì lượt mới nhất luôn nằm trong recent_messages của
@@ -105,7 +108,7 @@ SUMMARY_TRIGGER_MESSAGE_COUNT=8
 
 ## File liên quan
 
-- `chatbot-service/agents/summary_generator.py` — LangGraph StateGraph + factory.
+- `chatbot-service/agents/summary_generator.py` — `LlmSummaryGenerator` (async thuần) + factory.
 - `chatbot-service/agents/context_payload.py` — nén conversation cho prompt.
 - `chatbot-service/chat/response_builder.py` — await summary task, `summary_usage`, `memory_update.summary`.
 - `chatbot-service/api/chat_routes.py` — tạo summary task song song, inject context vào intent extractor.

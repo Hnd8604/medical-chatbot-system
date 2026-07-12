@@ -327,7 +327,6 @@ export function AdminConfigPage() {
     <DashboardLayout
       eyebrow="Admin Config"
       title="Cấu hình hệ thống"
-      description="Quản lý chính sách quota và bảng giá model dùng để giới hạn sử dụng và ước tính chi phí."
       actions={
         <Button type="button" variant="secondary" onClick={() => void loadAll()} disabled={loading}>
           {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}

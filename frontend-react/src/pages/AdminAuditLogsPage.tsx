@@ -196,7 +196,6 @@ export function AdminAuditLogsPage() {
     <DashboardLayout
       eyebrow="Audit Log"
       title="Audit log"
-      description="Theo dõi thao tác hệ thống, truy cập FHIR, đăng nhập, cache và thay đổi cấu hình."
       actions={
         <Button type="button" variant="secondary" onClick={() => void loadAll()} disabled={loading}>
           {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}

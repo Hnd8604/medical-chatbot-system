@@ -51,6 +51,15 @@ interface PatientProfileData {
   medications: FhirResource[];
 }
 
+interface SelfPatientProfileResponse {
+  patientId: string | null;
+  patient: FhirResource | null;
+  encounters: unknown;
+  observations: unknown;
+  conditions: unknown;
+  medications: unknown;
+}
+
 const emptyProfile: PatientProfileData = {
   patient: null,
   encounters: [],
@@ -141,19 +150,28 @@ export function ChatPage() {
     [logout],
   );
 
-  const loadSessions = useCallback(async () => {
-    setSessionsLoading(true);
-    try {
-      const data = await apiGet<ChatSessionListResponse>(
-        `/api/chat/sessions${toQuery({ query: sessionQuery.trim() || null, limit: 30 })}`,
-      );
-      setSessions(data.sessions);
-    } catch (error) {
-      await handleError(error, "Không thể tải lịch sử hội thoại.");
-    } finally {
-      setSessionsLoading(false);
-    }
-  }, [handleError, sessionQuery]);
+  const loadSessions = useCallback(
+    // background=true: refresh im lặng (sau khi chat) — không bật spinner để
+    // sidebar không nhấp nháy "Đang tải..." mỗi lần chatbot trả lời.
+    async (options: { background?: boolean } = {}) => {
+      if (!options.background) {
+        setSessionsLoading(true);
+      }
+      try {
+        const data = await apiGet<ChatSessionListResponse>(
+          `/api/chat/sessions${toQuery({ query: sessionQuery.trim() || null, limit: 30 })}`,
+        );
+        setSessions(data.sessions);
+      } catch (error) {
+        await handleError(error, "Không thể tải lịch sử hội thoại.");
+      } finally {
+        if (!options.background) {
+          setSessionsLoading(false);
+        }
+      }
+    },
+    [handleError, sessionQuery],
+  );
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -184,9 +202,43 @@ export function ChatPage() {
     return () => window.clearTimeout(timer);
   }, [loadSessions]);
 
+  // Hồ sơ FHIR của chính người dùng (SELF) — chỉ hồ sơ đã liên kết với tài khoản.
+  // Endpoint /api/me không nhận patient id, nên không thể xem hồ sơ bệnh nhân khác.
+  const loadSelfProfile = useCallback(async () => {
+    if (isStaff) {
+      return;
+    }
+    setPatientLoading(true);
+    try {
+      const data = await apiGet<SelfPatientProfileResponse>("/api/me/patient/profile");
+      setSelectedPatient(data.patient ?? null);
+      setPatientProfile({
+        patient: data.patient ?? null,
+        encounters: resourceList(data.encounters, "encounters"),
+        observations: resourceList(data.observations, "observations"),
+        conditions: resourceList(data.conditions, "conditions"),
+        medications: resourceList(data.medications, "medications"),
+      });
+    } catch (error) {
+      // Chưa liên kết hồ sơ (404): để panel trống thay vì báo lỗi.
+      if (error instanceof ApiError && error.status === 404) {
+        setSelectedPatient(null);
+        setPatientProfile(emptyProfile);
+      } else {
+        await handleError(error, "Không thể tải hồ sơ của bạn.");
+      }
+    } finally {
+      setPatientLoading(false);
+    }
+  }, [handleError, isStaff]);
+
   useEffect(() => {
     void loadUsage();
   }, [loadUsage]);
+
+  useEffect(() => {
+    void loadSelfProfile();
+  }, [loadSelfProfile]);
 
   // Thông báo realtime qua SSE thay cho polling định kỳ.
   // - "connected": kết nối/kết nối lại → load đầy đủ để resync (bắt kịp phần lỡ).
@@ -239,6 +291,7 @@ export function ChatPage() {
         apiGet(`/api/patients/${encodeURIComponent(id)}/medications?limit=20`),
       ]);
       setSelectedPatient(patient);
+      setPatientResults([]);
       setPatientProfile({
         patient,
         encounters: resourceList(encounters, "encounters"),
@@ -250,6 +303,13 @@ export function ChatPage() {
       await handleError(error, "Không thể tải hồ sơ bệnh nhân.");
     } finally {
       setPatientLoading(false);
+    }
+  }
+
+  function handlePatientSearchTermChange(value: string) {
+    setPatientSearchTerm(value);
+    if (value.trim() === "") {
+      setPatientResults([]);
     }
   }
 
@@ -376,8 +436,10 @@ export function ChatPage() {
       );
       if (isStaff && response.patient_id) {
         await loadPatientProfile(response.patient_id);
+      } else if (!isStaff) {
+        await loadSelfProfile();
       }
-      await Promise.all([loadSessions(), loadUsage(), loadNotifications()]);
+      await Promise.all([loadSessions({ background: true }), loadUsage(), loadNotifications()]);
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Không thể gửi câu hỏi.";
       setMessages((current) =>
@@ -531,7 +593,7 @@ export function ChatPage() {
               lastResponse={lastResponse}
               loadingProfile={patientLoading}
               searchingPatients={patientSearching}
-              onSearchTermChange={setPatientSearchTerm}
+              onSearchTermChange={handlePatientSearchTermChange}
               onSearchPatients={() => void searchPatients()}
               onSelectPatient={(patient) => void loadPatientProfile(patient.id || "")}
               className="fixed inset-y-0 right-0 z-30 h-full w-[var(--right-panel-fixed-width)]"
@@ -633,7 +695,7 @@ export function ChatPage() {
               lastResponse={lastResponse}
               loadingProfile={patientLoading}
               searchingPatients={patientSearching}
-              onSearchTermChange={setPatientSearchTerm}
+              onSearchTermChange={handlePatientSearchTermChange}
               onSearchPatients={() => void searchPatients()}
               onSelectPatient={(patient) => void loadPatientProfile(patient.id || "")}
               mobile

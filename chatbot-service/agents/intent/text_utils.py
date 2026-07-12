@@ -129,7 +129,12 @@ def clean_name_candidate(candidate: str) -> str | None:
     lowered_value = normalize_text(value)
     if lowered_value.startswith(("sdt", "so dien thoai", "ngay sinh", "sinh ngay", "phone")):
         return None
-    if lowered_value in {"ai", "nao", "hien co", "tat ca", "danh sach", "benh nhan"}:
+    if lowered_value in {
+        "ai", "nao", "hien co", "tat ca", "danh sach", "benh nhan",
+        # Đại từ chỉ định thuần (không phải tên): "này", "kia", "ấy", "nó", "hiện tại".
+        # ("đó" -> "do" bị loại để tránh trùng họ "Đỗ".)
+        "nay", "kia", "ay", "no", "hien tai",
+    }:
         return None
     if re.fullmatch(r"\d+", value):
         return None

@@ -240,6 +240,8 @@ export function HistorySidebar({
     "focus-ring flex min-h-9 w-full items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground";
   const navActiveClass =
     "focus-ring flex min-h-9 w-full items-center gap-2.5 rounded-lg bg-accent/10 px-3 text-sm font-semibold text-accent transition";
+  const newChatClass =
+    "focus-ring flex min-h-9 w-full items-center gap-2.5 rounded-lg bg-muted px-3 text-sm font-semibold text-foreground transition hover:bg-muted/70";
   const isAdmin = user.role === "ADMIN";
 
   return (
@@ -252,7 +254,7 @@ export function HistorySidebar({
       </header>
 
       <nav className="space-y-0.5 px-2 pb-1 pt-2" aria-label="Điều hướng">
-        <button type="button" onClick={onNewChat} className={navActiveClass}>
+        <button type="button" onClick={onNewChat} className={newChatClass}>
           <MessageSquarePlus className="h-4 w-4 shrink-0" />
           {TEXT.newChat}
         </button>

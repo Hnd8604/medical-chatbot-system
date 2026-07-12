@@ -67,7 +67,7 @@ export const TEXT = {
 
 export const USER_QUICK_PROMPTS = [
   "Thông tin cá nhân của tôi là gì?",
-  "Số điện thoại của tôi là gì?",
+  "Thông tin chẩn đoán tôi mắc bệnh gì?",
   "Thông tin lần khám gần nhất của tôi",
   "Thuốc của tôi là gì?",
   "Chỉ số gần đây của tôi",

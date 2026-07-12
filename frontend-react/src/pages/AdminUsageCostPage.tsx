@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, Gauge, RefreshCw, Search, ShieldCheck, WalletCards } from "lucide-react";
 import { apiGet, todayIso, toQuery } from "../services/api";
-import { useAuth } from "../hooks/useAuth";
 import type {
-  AdminUserItem,
   AdminUserListResponse,
   CostByDay,
   CostByModel,
   CostSummaryResponse,
   ModelPricingInfo,
-  ModelPricingListResponse,
-  QuotaPolicy,
   QuotaStatusResponse,
 } from "../lib/types";
-import { formatDate, formatNumber, formatUsd, numericValue, roleLabel } from "../lib/formatters";
+import { formatDate, formatNumber, formatUsd, numericValue } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";
 import { EmptyState } from "../components/dashboard/EmptyState";
 import { MetricCard } from "../components/dashboard/MetricCard";
@@ -61,19 +57,16 @@ function MiniBar({ value, max, tone = "blue" }: { value: number; max: number; to
 }
 
 export function AdminUsageCostPage() {
-  const { user } = useAuth();
-  const [username, setUsername] = useState(user?.username || "admin_demo");
+  const [username, setUsername] = useState("");
   const [from, setFrom] = useState(sevenDaysAgoIso);
   const [to, setTo] = useState(todayIso);
   const [quota, setQuota] = useState<QuotaStatusResponse | null>(null);
   const [cost, setCost] = useState<CostSummaryResponse | null>(null);
-  const [users, setUsers] = useState<AdminUserItem[]>([]);
-  const [userQuery, setUserQuery] = useState("");
-  const [policies, setPolicies] = useState<QuotaPolicy[]>([]);
-  const [pricing, setPricing] = useState<ModelPricingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<AdminUserListResponse["users"]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const requestPct = percent(quota?.used_requests, quota?.daily_request_limit);
   const tokenPct = percent(quota?.used_tokens, quota?.daily_token_limit);
@@ -89,32 +82,6 @@ export function AdminUsageCostPage() {
     () => [...(cost?.days || [])].sort((left, right) => right.date.localeCompare(left.date)),
     [cost?.days],
   );
-  const visibleUsers = useMemo(() => {
-    const normalized = userQuery.trim().toLowerCase();
-    const source = normalized
-      ? users.filter((item) =>
-          [item.username, item.email, item.display_name].some((value) => value?.toLowerCase().includes(normalized)),
-        )
-      : users;
-    return source.slice(0, 8);
-  }, [users, userQuery]);
-
-  async function loadReferenceData() {
-    const [policyData, pricingData, userData] = await Promise.all([
-      apiGet<QuotaPolicy[]>("/api/admin/quotas/policies"),
-      apiGet<ModelPricingListResponse>("/api/admin/costs/pricing"),
-      apiGet<AdminUserListResponse>("/api/admin/users?page=0&size=100"),
-    ]);
-    setPolicies(policyData || []);
-    setPricing(pricingData.pricing || []);
-    setUsers(userData.users || []);
-  }
-
-  function selectUser(nextUsername: string) {
-    setUsername(nextUsername);
-    void loadUserDashboard(nextUsername);
-  }
-
   async function loadUserDashboard(targetUsername = username) {
     if (!targetUsername.trim()) return;
     setLookupLoading(true);
@@ -139,7 +106,6 @@ export function AdminUsageCostPage() {
     setLoading(true);
     setError(null);
     try {
-      await loadReferenceData();
       await loadUserDashboard(username);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Không thể tải dashboard.");
@@ -152,11 +118,74 @@ export function AdminUsageCostPage() {
     void loadAll();
   }, []);
 
+  useEffect(() => {
+    const term = username.trim();
+    if (!showSuggestions || term.length < 1) {
+      setSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const data = await apiGet<AdminUserListResponse>(
+          `/api/admin/users${toQuery({ search: term, size: 8 })}`,
+        );
+        if (!cancelled) setSuggestions(data.users);
+      } catch {
+        if (!cancelled) setSuggestions([]);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [username, showSuggestions]);
+
+  function selectUser(picked: string) {
+    setUsername(picked);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    void loadUserDashboard(picked);
+  }
+
+  async function resolveUsername(term: string): Promise<string | null> {
+    const trimmed = term.trim();
+    if (!trimmed) return null;
+    try {
+      const data = await apiGet<AdminUserListResponse>(
+        `/api/admin/users${toQuery({ search: trimmed, size: 8 })}`,
+      );
+      const list = data.users || [];
+      if (list.length === 0) return null;
+      const lower = trimmed.toLowerCase();
+      const exact = list.find(
+        (item) =>
+          item.username.toLowerCase() === lower ||
+          item.email?.toLowerCase() === lower ||
+          item.display_name?.toLowerCase() === lower,
+      );
+      return (exact || list[0]).username;
+    } catch {
+      return null;
+    }
+  }
+
+  async function applyLookup() {
+    setShowSuggestions(false);
+    if (!username.trim()) return;
+    const resolved = await resolveUsername(username);
+    if (!resolved) {
+      setError("Không tìm thấy người dùng phù hợp với từ khóa.");
+      return;
+    }
+    if (resolved !== username) setUsername(resolved);
+    await loadUserDashboard(resolved);
+  }
+
   return (
     <DashboardLayout
       eyebrow="Quota & Cost"
       title="Quota, usage, cost"
-      description="Dashboard admin theo user, policy và bảng giá model."
       actions={
         <Button type="button" variant="secondary" onClick={() => void loadAll()} disabled={loading || lookupLoading}>
           {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
@@ -170,17 +199,48 @@ export function AdminUsageCostPage() {
         <section className="rounded-lg border border-border bg-white p-4">
           <div className="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_auto] lg:items-end">
             <label className="grid gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Username</span>
+              <span className="text-xs font-medium text-muted-foreground">Người dùng</span>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   className={inputClass("pl-10")}
                   value={username}
-                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="Nhập tên đăng nhập, email hoặc tên hiển thị"
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setUsername(event.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") void loadUserDashboard();
+                    if (event.key === "Enter") {
+                      void applyLookup();
+                    }
                   }}
                 />
+                {showSuggestions && suggestions.length > 0 ? (
+                  <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-border bg-white py-1 shadow-lg">
+                    {suggestions.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-muted/60"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            selectUser(item.username);
+                          }}
+                        >
+                          <span className="text-sm font-medium text-foreground">{item.username}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {item.display_name}
+                            {item.email ? ` · ${item.email}` : ""}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             </label>
             <label className="grid gap-1">
@@ -191,47 +251,10 @@ export function AdminUsageCostPage() {
               <span className="text-xs font-medium text-muted-foreground">Đến ngày</span>
               <input className={inputClass()} type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} />
             </label>
-            <Button type="button" variant="primary" onClick={() => void loadUserDashboard()} disabled={lookupLoading || !username.trim() || from > to}>
+            <Button type="button" variant="primary" onClick={() => void applyLookup()} disabled={lookupLoading || !username.trim() || from > to}>
               {lookupLoading ? <Spinner /> : <Gauge className="h-4 w-4" />}
               Áp dụng
             </Button>
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-border bg-white p-4">
-          <div className="grid gap-3 lg:grid-cols-[16rem_1fr]">
-            <label className="relative self-start">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                className={inputClass("pl-10")}
-                value={userQuery}
-                placeholder="Lọc user"
-                onChange={(event) => setUserQuery(event.target.value)}
-              />
-            </label>
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              {visibleUsers.map((item) => {
-                const active = item.username === username;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={
-                      active
-                        ? "focus-ring rounded-lg border border-accent/30 bg-accent/5 p-3 text-left"
-                        : "focus-ring rounded-lg border border-border bg-white p-3 text-left transition-colors hover:bg-muted"
-                    }
-                    onClick={() => selectUser(item.username)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="line-clamp-1 font-semibold text-foreground">{item.username}</span>
-                      <Badge tone={item.status === "ACTIVE" ? "green" : "amber"}>{item.status}</Badge>
-                    </div>
-                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{roleLabel(item.role)}</p>
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </section>
 
@@ -251,8 +274,6 @@ export function AdminUsageCostPage() {
           <MetricCard
             label="Cost/ngày"
             value={formatUsd(quota?.used_cost_usd)}
-            trend={quota?.allowed ? "OK" : "BLOCK"}
-            trendTone={quota?.allowed ? "up" : "down"}
             progress={costPct}
             progressTone={progressTone(costPct)}
           />
@@ -269,9 +290,24 @@ export function AdminUsageCostPage() {
               <ShieldCheck className={quota?.allowed ? "h-6 w-6 text-success" : "h-6 w-6 text-danger"} />
             </div>
             <div className="mt-6 grid gap-5">
-              <ProgressBar label="Request" value={requestPct} tone={progressTone(requestPct)} />
-              <ProgressBar label="Token" value={tokenPct} tone={progressTone(tokenPct)} />
-              <ProgressBar label="Cost" value={costPct} tone={progressTone(costPct)} />
+              <ProgressBar
+                label="Request"
+                value={requestPct}
+                tone={progressTone(requestPct)}
+                hint={`${formatNumber(quota?.used_requests)}/${formatNumber(quota?.daily_request_limit)} · ${Math.round(requestPct)}%`}
+              />
+              <ProgressBar
+                label="Token"
+                value={tokenPct}
+                tone={progressTone(tokenPct)}
+                hint={`${formatNumber(quota?.used_tokens)}/${formatNumber(quota?.daily_token_limit)} · ${Math.round(tokenPct)}%`}
+              />
+              <ProgressBar
+                label="Cost"
+                value={costPct}
+                tone={progressTone(costPct)}
+                hint={`${formatUsd(quota?.used_cost_usd)}/${formatUsd(quota?.daily_cost_limit_usd)} · ${Math.round(costPct)}%`}
+              />
             </div>
           </div>
 
@@ -301,44 +337,6 @@ export function AdminUsageCostPage() {
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-2">
-          <div className="rounded-lg border border-border bg-white p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <SectionLabel>Policies</SectionLabel>
-              <Badge tone="blue">{formatNumber(policies.length)}</Badge>
-            </div>
-            <div className="grid gap-3">
-              {policies.map((policy) => (
-                <div key={policy.id} className="grid gap-3 rounded-lg border border-border bg-white p-3 md:grid-cols-[1fr_1fr_1fr_1fr]">
-                  <strong className="text-foreground">{policy.name}</strong>
-                  <span className="font-mono text-sm">{formatNumber(policy.dailyRequestLimit)} req</span>
-                  <span className="font-mono text-sm">{formatNumber(policy.dailyTokenLimit)} tok</span>
-                  <span className="font-mono text-sm">{formatUsd(policy.dailyCostLimitUsd)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-border bg-white p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <SectionLabel>Pricing</SectionLabel>
-              <Badge tone="blue">{formatNumber(pricing.length)}</Badge>
-            </div>
-            <div className="grid gap-3">
-              {pricing.slice(0, 6).map((item) => (
-                <div key={`${item.provider}-${item.model}`} className="grid gap-3 rounded-lg border border-border bg-muted/40 p-3 md:grid-cols-[1fr_auto_auto] md:items-center">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{item.model}</p>
-                    <p className="text-xs text-muted-foreground">{item.provider} · {item.currency}</p>
-                  </div>
-                  <Badge tone="slate">In {formatUsd(item.input_price_per_1m_tokens)}</Badge>
-                  <Badge tone="slate">Out {formatUsd(item.output_price_per_1m_tokens)}</Badge>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         <section className="rounded-lg border border-border bg-white p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <SectionLabel>Usage days</SectionLabel>
@@ -352,10 +350,22 @@ export function AdminUsageCostPage() {
                 <article key={day.date} className="rounded-lg border border-border bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold text-foreground">{formatDate(day.date)}</span>
-                    <span className="font-mono text-sm text-accent">{formatNumber(day.request_count)}</span>
+                    <span className="font-mono text-sm text-accent">{formatNumber(day.request_count)} req</span>
                   </div>
                   <p className="mt-2 text-lg font-semibold text-foreground">{formatUsd(day.estimated_cost_usd)}</p>
                   <MiniBar value={numericValue(day.request_count)} max={dayMaxRequests} />
+                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Token</dt>
+                      <dd className="font-mono font-semibold tabular-nums text-foreground">{formatNumber(day.total_tokens)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">In / Out</dt>
+                      <dd className="font-mono font-semibold tabular-nums text-foreground">
+                        {formatNumber(day.input_tokens)}/{formatNumber(day.output_tokens)}
+                      </dd>
+                    </div>
+                  </dl>
                 </article>
               ))}
             </div>

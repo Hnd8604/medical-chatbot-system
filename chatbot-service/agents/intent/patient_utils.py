@@ -23,9 +23,29 @@ SELF_PATIENT_REFERENCE_PHRASES = [
     "ngay sinh cua toi",
 ]
 
+# Tham chiếu ngữ cảnh tới bệnh nhân đang chọn ("bệnh nhân này/đó", "hồ sơ này"...).
+# Đây KHÔNG phải tiêu chí tìm kiếm: nếu để nguyên, extract_patient_name sẽ bắt nhầm
+# "này"/"đó" thành tên -> tìm kiếm rỗng dù đã có patient_id đang chọn.
+CONTEXTUAL_PATIENT_REFERENCE_PHRASES = [
+    "benh nhan nay",
+    "benh nhan do",
+    "benh nhan kia",
+    "benh nhan hien tai",
+    "benh nhan dang chon",
+    "benh nhan da chon",
+    "nguoi benh nay",
+    "nguoi benh do",
+    "ho so nay",
+    "ho so benh nhan nay",
+]
+
 
 def is_self_patient_reference(message: str) -> bool:
     return contains_any(normalize_text(message), SELF_PATIENT_REFERENCE_PHRASES)
+
+
+def is_contextual_patient_reference(message: str) -> bool:
+    return contains_any(normalize_text(message), CONTEXTUAL_PATIENT_REFERENCE_PHRASES)
 
 
 def is_patient_list_request(message: str) -> bool:
@@ -42,7 +62,12 @@ def has_patient_search_criteria(plan: object) -> bool:
 
 
 def extract_patient_search_criteria(message: str) -> dict[str, str]:
-    if resolve_explicit_patient_id(message) or is_patient_list_request(message) or is_self_patient_reference(message):
+    if (
+        resolve_explicit_patient_id(message)
+        or is_patient_list_request(message)
+        or is_self_patient_reference(message)
+        or is_contextual_patient_reference(message)
+    ):
         return {}
 
     criteria: dict[str, str] = {}

@@ -27,8 +27,15 @@ Implemented:
 
 Not implemented yet:
 
-- Real cost estimation from token usage.
 - Authentication/access control.
+
+Cost estimation: `usage.estimated_cost_usd` in the chat response is now filled by
+`agents/pricing.py` (mirrors Spring's `model_pricing` seed; same token×price formula
+over combined tokens at the answer model), so response/logs match what Spring stores in
+`usage_logs`. Spring's `CostEstimationService` remains the source of truth and recomputes
+from the admin-editable `model_pricing` table on save — keep `agents/pricing.py` in sync
+when prices change. Cache hits report `usage` cost 0 (a hit costs ~0) with saved tokens in
+`saved_usage`.
 
 ## Main Rule
 

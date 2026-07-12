@@ -187,29 +187,25 @@ export function PatientInsightPanel({
       ) : null}
 
       <DetailSection title={isStaff ? "Hồ sơ bệnh nhân" : "Hồ sơ của tôi"}>
-        {loadingProfile ? <EmptyText>Đang tải hồ sơ...</EmptyText> : <PatientSummary patient={isStaff ? selectedPatient || profile.patient : selfPatient} />}
+        {loadingProfile ? (
+          <EmptyText>Đang tải hồ sơ...</EmptyText>
+        ) : (
+          <PatientSummary patient={isStaff ? selectedPatient || profile.patient : profile.patient || selfPatient} />
+        )}
       </DetailSection>
 
-      {isStaff ? (
-        <>
-          <DetailSection title="Lần khám gần đây">
-            <ResourceList items={profile.encounters} type="encounter" />
-          </DetailSection>
-          <DetailSection title="Chỉ số gần đây">
-            <ResourceList items={profile.observations} type="observation" />
-          </DetailSection>
-          <DetailSection title="Chẩn đoán">
-            <ResourceList items={profile.conditions} type="condition" />
-          </DetailSection>
-          <DetailSection title="Thuốc">
-            <ResourceList items={profile.medications} type="medication" />
-          </DetailSection>
-        </>
-      ) : (
-        <DetailSection title="Gợi ý truy vấn">
-          <EmptyText>Panel sẽ cập nhật sau khi bạn hỏi chatbot về hồ sơ FHIR đã liên kết.</EmptyText>
-        </DetailSection>
-      )}
+      <DetailSection title="Lần khám gần đây">
+        <ResourceList items={profile.encounters} type="encounter" />
+      </DetailSection>
+      <DetailSection title="Chỉ số gần đây">
+        <ResourceList items={profile.observations} type="observation" />
+      </DetailSection>
+      <DetailSection title="Chẩn đoán">
+        <ResourceList items={profile.conditions} type="condition" />
+      </DetailSection>
+      <DetailSection title="Thuốc">
+        <ResourceList items={profile.medications} type="medication" />
+      </DetailSection>
 
     </aside>
   );

@@ -63,6 +63,7 @@ public class SecurityConfig {
                                 "/api/auth/logout",
                                 "/api/auth/change-password",
                                 "/api/auth/link-patient",
+                                "/api/me/**",
                                 "/api/chat/**",
                                 "/api/quota/status",
                                 "/api/usage/cost-summary",

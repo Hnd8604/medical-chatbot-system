@@ -12,7 +12,6 @@ export function UsagePage() {
     <DashboardLayout
       eyebrow="Usage / Quota"
       title="Theo dõi mức sử dụng"
-      description="Tổng hợp số request, token, chi phí ước tính và giới hạn trong ngày của tài khoản hiện tại."
       actions={
         <Button type="button" variant="secondary" onClick={() => void reload()} disabled={loading}>
           {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}

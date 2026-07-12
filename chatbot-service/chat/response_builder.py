@@ -5,6 +5,7 @@ from typing import Any
 
 from agents.answer_generator import AnswerGenerator, combine_usage
 from agents.intent_extractor import IntentPlan, has_patient_search_criteria
+from agents.pricing import estimate_cost_usd
 from agents.summary_generator import SummaryResult
 from app.config import get_settings
 from services.semantic_cache import get_semantic_cache
@@ -48,6 +49,24 @@ def _zero_usage() -> dict[str, int | float]:
         "estimated_cost_usd": 0,
     }
 
+
+def _apply_estimated_cost(payload: dict[str, Any]) -> None:
+    """Ghi cost ước tính vào ``payload['usage']`` theo model/provider của lượt này.
+
+    Dùng cùng công thức + bảng giá với Spring (xem agents/pricing.py) và tính trên
+    **tổng** token đã gộp cùng model của answer — nên giá trị này khớp với cost mà
+    Spring lưu vào ``usage_logs``. Model không có trong bảng giá → giữ 0.
+    """
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        return
+    usage["estimated_cost_usd"] = estimate_cost_usd(
+        payload.get("llm_provider"),
+        payload.get("llm_model"),
+        int(usage.get("input_tokens") or 0),
+        int(usage.get("output_tokens") or 0),
+    )
+
 async def _finalize_chat_response(
     payload: dict[str, Any],
     question: str,
@@ -67,6 +86,7 @@ async def _finalize_chat_response(
         payload["answer_usage"] = _zero_usage()
         payload["summary_usage"] = _zero_usage()
         payload["usage"] = combine_usage(plan.usage, router_usage)
+        _apply_estimated_cost(payload)
         payload.setdefault("patient_id", None)
         payload["pending_question"] = question
         # Chưa chốt được bệnh nhân → không cập nhật memory, hủy summary đang chạy nền.
@@ -152,6 +172,7 @@ async def _finalize_chat_response(
     # router/summary bị tính giá answer model — lệch nhẹ theo hướng ước tính dư,
     # chấp nhận cho phạm vi hiện tại (cost thật lấy từ spend của LiteLLM gateway).
     payload["usage"] = combine_usage(plan.usage, answer_result.usage, router_usage, summary_result.usage)
+    _apply_estimated_cost(payload)
     memory_update = _build_memory_update(payload, plan, summary=summary_result.summary)
     if memory_update:
         payload["memory_update"] = memory_update

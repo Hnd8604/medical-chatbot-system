@@ -93,14 +93,14 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["resourceType"], "Bundle")
 
-    async def test_search_patients_flexible_falls_back_to_name_token(self) -> None:
+    async def test_search_patients_flexible_falls_back_to_n_minus_one_subset(self) -> None:
         seen_names = []
 
         def handler(request: httpx.Request) -> httpx.Response:
             names = tuple(request.url.params.get_list("name"))
             seen_names.append(names)
-            # Chỉ khớp khi tìm đúng một token "Tran" (mô phỏng AND đủ token ra rỗng).
-            if names == ("Tran",):
+            # Chỉ khớp khi bỏ token đệm "Quang": subset ("Hoang", "Phong").
+            if names == ("Hoang", "Phong"):
                 return httpx.Response(200, json={
                     "resourceType": "Bundle",
                     "entry": [{"resource": {"resourceType": "Patient", "id": "BN2026-00002"}}],
@@ -112,12 +112,42 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
             transport=httpx.MockTransport(handler),
         )
 
-        result = await client.search_patients_flexible(count=5, name="Thi B Tran")
+        result = await client.search_patients_flexible(count=5, name="Hoang Quang Phong")
 
-        # Lần 1: AND đủ token; rỗng -> fallback thử token cuối "Tran" trước.
-        self.assertEqual(seen_names, [("Thi", "B", "Tran"), ("Tran",)])
+        # AND đủ token rỗng -> thử các subset n-1 token (bỏ đúng 1), KHÔNG tụt xuống 1 token.
+        self.assertEqual(
+            seen_names,
+            [("Hoang", "Quang", "Phong"), ("Quang", "Phong"), ("Hoang", "Phong")],
+        )
         self.assertTrue(result.get("entry"))
         self.assertEqual(result["entry"][0]["resource"]["id"], "BN2026-00002")
+
+    async def test_search_patients_flexible_does_not_match_single_token(self) -> None:
+        # Regression: "Nguyen Van An" không được khớp nhầm bệnh nhân chỉ trùng token "An".
+        seen_names = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            names = tuple(request.url.params.get_list("name"))
+            seen_names.append(names)
+            # DB chỉ có người khớp đúng một token "An" (vd Phan Bá An).
+            if names == ("An",):
+                return httpx.Response(200, json={
+                    "resourceType": "Bundle",
+                    "entry": [{"resource": {"resourceType": "Patient", "id": "BN2026-00001"}}],
+                })
+            return httpx.Response(200, json={"resourceType": "Bundle", "entry": []})
+
+        client = FhirClient(
+            base_url="http://fhir.test",
+            transport=httpx.MockTransport(handler),
+        )
+
+        result = await client.search_patients_flexible(count=5, name="Nguyen Van An")
+
+        # Không được trả về bệnh nhân nào (không tự đoán theo 1 token đơn).
+        self.assertFalse(result.get("entry"))
+        # Và không bao giờ thử tìm với chỉ 1 token.
+        self.assertNotIn(("An",), seen_names)
 
 
 if __name__ == "__main__":

@@ -496,6 +496,64 @@ class ChatApplicationServiceTest {
         verify(chatSessionRepository, never()).findRecentSessionsForUser(any(), anyInt());
     }
 
+    @Test
+    void explainConceptResponseRecordsKnowledgeRefsInAuditMetadata() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000611");
+        ChatSession session = new ChatSession(sessionId);
+        ChatApplicationService service = newService();
+        JsonNode response = new ObjectMapper().readTree("""
+                {
+                  "answer": "Levothyroxin la thuoc hormone tuyen giap...",
+                  "intent": "explain_concept",
+                  "tool_name": "explain_concept",
+                  "patient_id": null,
+                  "answer_source": "llm",
+                  "evidence": [],
+                  "memory_update": null,
+                  "external_knowledge": [
+                    {
+                      "source": "MedlinePlus",
+                      "type": "medication",
+                      "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                      "code": "10582",
+                      "display": "Levothyroxine",
+                      "summary": "Levothyroxine is used to treat hypothyroidism...",
+                      "url": "https://medlineplus.gov/druginfo/meds/a682461.html",
+                      "fields": {}
+                    }
+                  ],
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "estimated_cost_usd": 0
+                  }
+                }
+                """);
+
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
+        when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
+        when(chatMessageRepository.countBySession_Id(sessionId)).thenReturn(0L);
+        when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
+        mockAssistantMessageSave();
+
+        service.chat(new ChatRequest(sessionId, null, "Levothyroxin la gi"));
+
+        ArgumentCaptor<JsonNode> metadataCaptor = ArgumentCaptor.forClass(JsonNode.class);
+        verify(auditLogRepository).save(any(), any(), any(), any(), any(), metadataCaptor.capture());
+        JsonNode knowledgeRefs = metadataCaptor.getValue().path("knowledge_refs");
+        assertEquals(1, knowledgeRefs.size());
+        JsonNode ref = knowledgeRefs.get(0);
+        assertEquals("MedlinePlus", ref.path("source").asText());
+        assertEquals("10582", ref.path("code").asText());
+        assertEquals("https://medlineplus.gov/druginfo/meds/a682461.html", ref.path("url").asText());
+    }
+
     private ChatApplicationService newService() {
         return new ChatApplicationService(
                 chatSessionRepository,

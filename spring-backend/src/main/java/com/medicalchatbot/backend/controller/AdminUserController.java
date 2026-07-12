@@ -30,9 +30,10 @@ public class AdminUserController {
     @GetMapping
     public AdminUserListResponse listUsers(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(required = false) String search
     ) {
-        return adminUserService.listUsers(page, size);
+        return adminUserService.listUsers(page, size, search);
     }
 
     @PatchMapping("/{userId}/status")

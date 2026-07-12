@@ -62,9 +62,7 @@ public class AlertService {
         alertRepository.save(alert);
         log.warn("[SYSTEM ALERT - {}] {}: {}", severity, alertType, message);
 
-        if (severity == AlertSeverity.CRITICAL || severity == AlertSeverity.WARNING) {
-            sendTelegramNotification(alertType, severity, message);
-        }
+        sendTelegramNotification(alertType, severity, message);
 
     }
 
@@ -106,8 +104,12 @@ public class AlertService {
             return;
         }
 
-        String emoji = severity == AlertSeverity.CRITICAL ? "🆘" : "⚠️";
-        String text = String.format("%s *[MEDICAL SYSTEM]*\n*Mức độ:* %s\n*Loại:* %s\n*Chi tiết:* %s",
+        String emoji = switch (severity) {
+            case CRITICAL -> "🆘";
+            case WARNING -> "⚠️";
+            case INFO -> "ℹ️";
+        };
+        String text = String.format("%s [MEDICAL SYSTEM]\nMức độ: %s\nLoại: %s\nChi tiết: %s",
                 emoji, severity.name(), type, message);
 
         String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
@@ -115,7 +117,7 @@ public class AlertService {
             try {
                 restClient.post()
                         .uri(url)
-                        .body(java.util.Map.of("chat_id", chatId, "text", text, "parse_mode", "Markdown"))
+                        .body(java.util.Map.of("chat_id", chatId, "text", text))
                         .retrieve()
                         .toBodilessEntity();
             } catch (Exception e) {

@@ -36,9 +36,17 @@ public class AdminUserService {
 
     @Transactional(readOnly = true)
     public AdminUserListResponse listUsers(int page, int size) {
-        Page<User> users = userRepository.findAllByOrderByCreatedAtDesc(
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
-        );
+        return listUsers(page, size, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminUserListResponse listUsers(int page, int size, String search) {
+        String query = search == null ? "" : search.trim();
+        Page<User> users = query.isEmpty()
+                ? userRepository.findAllByOrderByCreatedAtDesc(
+                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
+                : userRepository.searchByUsernameOrEmail(
+                        query, PageRequest.of(page, size));
         List<User> content = users.getContent();
         Map<UUID, List<UserPatientLink>> linksByUserId = linksByUserId(content);
         return new AdminUserListResponse(

@@ -11,6 +11,8 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { ChatPage } from "./pages/ChatPage";
 import { UsagePage } from "./pages/UsagePage";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
+import { AdminAnalyticsPage } from "./pages/AdminAnalyticsPage";
+import { AdminAlertsPage } from "./pages/AdminAlertsPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminConfigPage } from "./pages/AdminConfigPage";
 import { AdminUsageCostPage } from "./pages/AdminUsageCostPage";
@@ -123,6 +125,26 @@ export default function App() {
           <ProtectedRoute>
             <AdminRoute>
               <AdminDashboardPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/analytics"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminAnalyticsPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/alerts"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminAlertsPage />
             </AdminRoute>
           </ProtectedRoute>
         }

@@ -1,0 +1,162 @@
+{
+  "info": {
+    "name": "Terminology Enrichment APIs",
+    "_postman_id": "a1b2c3d4-0000-4000-8000-terminology01",
+    "description": "Test 3 nguồn terminology mà chatbot-service dùng: RxNorm (rxnav.nlm.nih.gov), MedlinePlus Connect (connect.medlineplus.gov), LOINC ($lookup, cần Basic Auth).\n\nĐổi biến ở tab Variables (drug_name, rxcui, loinc_code, language...). Request '1. RxNorm - find RxCUI by name' tự lưu rxcui vào biến collection nên chạy nó trước rồi các request sau dùng lại.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "rxnav_base", "value": "https://rxnav.nlm.nih.gov", "type": "string" },
+    { "key": "medlineplus_base", "value": "https://connect.medlineplus.gov/service", "type": "string" },
+    { "key": "loinc_base", "value": "https://fhir.loinc.org", "type": "string" },
+    { "key": "drug_name", "value": "levothyroxine", "type": "string" },
+    { "key": "rxcui", "value": "10582", "type": "string" },
+    { "key": "loinc_code", "value": "4548-4", "type": "string" },
+    { "key": "icd10_code", "value": "E11.9", "type": "string" },
+    { "key": "language", "value": "en", "type": "string" },
+    { "key": "loinc_username", "value": "", "type": "string" },
+    { "key": "loinc_password", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. RxNorm - find RxCUI by name",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Bắt RxCUI đầu tiên và lưu vào biến collection để các request sau dùng lại",
+              "let json = {};",
+              "try { json = pm.response.json(); } catch (e) {}",
+              "const ids = json.idGroup && json.idGroup.rxnormId;",
+              "if (ids && ids.length) {",
+              "    pm.collectionVariables.set('rxcui', ids[0]);",
+              "    console.log('rxcui =', ids[0]);",
+              "}",
+              "pm.test('có RxCUI', function () { pm.expect(ids && ids.length).to.be.ok; });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{rxnav_base}}/REST/rxcui.json?name={{drug_name}}&search=2",
+          "host": ["{{rxnav_base}}"],
+          "path": ["REST", "rxcui.json"],
+          "query": [
+            { "key": "name", "value": "{{drug_name}}" },
+            { "key": "search", "value": "2", "description": "2 = normalized/approximate string match" }
+          ]
+        },
+        "description": "Bước 1 của RxNorm: tra RxCUI từ tên thuốc. Kết quả: idGroup.rxnormId. Test script tự lưu rxcui đầu tiên."
+      }
+    },
+    {
+      "name": "2. RxNorm - properties by RxCUI",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{rxnav_base}}/REST/rxcui/{{rxcui}}/properties.json",
+          "host": ["{{rxnav_base}}"],
+          "path": ["REST", "rxcui", "{{rxcui}}", "properties.json"]
+        },
+        "description": "Bước 2 của RxNorm: lấy properties (name/tty chuẩn hoá) theo RxCUI. Đây là dữ liệu cho entry RxNorm trong knowledge_refs (system + code + display)."
+      }
+    },
+    {
+      "name": "3. RxNorm - all related (brands/dose forms) [optional]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{rxnav_base}}/REST/rxcui/{{rxcui}}/allrelated.json",
+          "host": ["{{rxnav_base}}"],
+          "path": ["REST", "rxcui", "{{rxcui}}", "allrelated.json"]
+        },
+        "description": "Không dùng trong code hiện tại — chỉ để khám phá: các khái niệm liên quan (biệt dược, dạng bào chế) của RxCUI."
+      }
+    },
+    {
+      "name": "4. MedlinePlus Connect - by RxNorm code",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{medlineplus_base}}?mainSearchCriteria.v.cs=2.16.840.1.113883.6.88&mainSearchCriteria.v.c={{rxcui}}&knowledgeResponseType=application/json&informationRecipient.languageCode.c={{language}}",
+          "host": ["{{medlineplus_base}}"],
+          "query": [
+            { "key": "mainSearchCriteria.v.cs", "value": "2.16.840.1.113883.6.88", "description": "OID của RxNorm" },
+            { "key": "mainSearchCriteria.v.c", "value": "{{rxcui}}", "description": "mã RxCUI" },
+            { "key": "knowledgeResponseType", "value": "application/json" },
+            { "key": "informationRecipient.languageCode.c", "value": "{{language}}", "description": "en hoặc es (KHÔNG có vi)" }
+          ]
+        },
+        "description": "Nguồn MedlinePlus cho thuốc: trả về feed.entry[].link.href (url medlineplus.gov) + summary. Đây là entry MedlinePlus trong knowledge_refs."
+      }
+    },
+    {
+      "name": "5. MedlinePlus Connect - by LOINC code",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{medlineplus_base}}?mainSearchCriteria.v.cs=2.16.840.1.113883.6.1&mainSearchCriteria.v.c={{loinc_code}}&knowledgeResponseType=application/json&informationRecipient.languageCode.c={{language}}",
+          "host": ["{{medlineplus_base}}"],
+          "query": [
+            { "key": "mainSearchCriteria.v.cs", "value": "2.16.840.1.113883.6.1", "description": "OID của LOINC" },
+            { "key": "mainSearchCriteria.v.c", "value": "{{loinc_code}}" },
+            { "key": "knowledgeResponseType", "value": "application/json" },
+            { "key": "informationRecipient.languageCode.c", "value": "{{language}}" }
+          ]
+        },
+        "description": "MedlinePlus cho xét nghiệm (lab) theo mã LOINC. Ví dụ 4548-4 = HbA1c."
+      }
+    },
+    {
+      "name": "6. MedlinePlus Connect - by ICD-10-CM (condition)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{medlineplus_base}}?mainSearchCriteria.v.cs=2.16.840.1.113883.6.90&mainSearchCriteria.v.c={{icd10_code}}&knowledgeResponseType=application/json&informationRecipient.languageCode.c={{language}}",
+          "host": ["{{medlineplus_base}}"],
+          "query": [
+            { "key": "mainSearchCriteria.v.cs", "value": "2.16.840.1.113883.6.90", "description": "OID của ICD-10-CM" },
+            { "key": "mainSearchCriteria.v.c", "value": "{{icd10_code}}", "description": "vd E11.9 = ĐTĐ type 2" },
+            { "key": "knowledgeResponseType", "value": "application/json" },
+            { "key": "informationRecipient.languageCode.c", "value": "{{language}}" }
+          ]
+        },
+        "description": "MedlinePlus cho chẩn đoán (Condition) theo mã ICD-10-CM."
+      }
+    },
+    {
+      "name": "7. LOINC - CodeSystem $lookup (Basic Auth)",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{loinc_username}}", "type": "string" },
+            { "key": "password", "value": "{{loinc_password}}", "type": "string" }
+          ]
+        },
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": {
+          "raw": "{{loinc_base}}/CodeSystem/$lookup?system=http://loinc.org&code={{loinc_code}}",
+          "host": ["{{loinc_base}}"],
+          "path": ["CodeSystem", "$lookup"],
+          "query": [
+            { "key": "system", "value": "http://loinc.org" },
+            { "key": "code", "value": "{{loinc_code}}" }
+          ]
+        },
+        "description": "Nguồn LOINC: khác 2 nguồn kia — CẦN Basic Auth (đăng ký free ở loinc.org). Điền loinc_username/loinc_password ở Variables. Không có credential thì code sẽ skip nguồn này."
+      }
+    }
+  ]
+}

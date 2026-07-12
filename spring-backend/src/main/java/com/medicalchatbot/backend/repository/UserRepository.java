@@ -45,6 +45,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    @Query("""
+            select u
+            from User u
+            where lower(u.username) like lower(concat('%', :query, '%'))
+               or lower(coalesce(u.email, '')) like lower(concat('%', :query, '%'))
+               or lower(coalesce(u.displayName, '')) like lower(concat('%', :query, '%'))
+            order by u.username asc
+            """)
+    Page<User> searchByUsernameOrEmail(@Param("query") String query, Pageable pageable);
+
     long countByQuotaPolicyId(UUID quotaPolicyId);
 
     default Optional<UUID> findIdByUsername(String username) {

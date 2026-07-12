@@ -1,8 +1,10 @@
 import {
   BarChart3,
+  BellRing,
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
+  Gauge,
   KeyRound,
   LogOut,
   MessageSquareText,
@@ -21,7 +23,7 @@ import { Button } from "../ui/Button";
 interface DashboardLayoutProps {
   eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
   children: React.ReactNode;
   actions?: React.ReactNode;
 }
@@ -83,6 +85,16 @@ export function DashboardLayout({ eyebrow, title, description, actions, children
                 <span className="flex-1">Admin</span>
                 <ChevronRight className="h-4 w-4 opacity-50" />
               </NavLink>
+              <NavLink to="/admin/analytics" className={navClass}>
+                <Gauge className="h-4 w-4" />
+                <span className="flex-1">Analytics</span>
+                <ChevronRight className="h-4 w-4 opacity-50" />
+              </NavLink>
+              <NavLink to="/admin/alerts" className={navClass}>
+                <BellRing className="h-4 w-4" />
+                <span className="flex-1">Alerts</span>
+                <ChevronRight className="h-4 w-4 opacity-50" />
+              </NavLink>
               <NavLink to="/admin/users" className={navClass}>
                 <Users className="h-4 w-4" />
                 <span className="flex-1">Users</span>
@@ -131,7 +143,7 @@ export function DashboardLayout({ eyebrow, title, description, actions, children
                   {eyebrow}
                 </Badge>
                 <h1 className="mt-4 font-display text-4xl leading-tight text-foreground sm:text-5xl">{title}</h1>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">{description}</p>
+                {description ? <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">{description}</p> : null}
               </div>
               {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
             </div>

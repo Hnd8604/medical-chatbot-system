@@ -73,24 +73,30 @@ class FhirClient:
             birth_date=birth_date,
             identifier=identifier,
         )
-        if bundle.get("entry") or not name or len(name.split()) < 2:
+        tokens = [token for token in (part.strip(" .,'-") for part in name.split()) if len(token) >= 2]
+        if bundle.get("entry") or len(tokens) < 3:
             return bundle
 
-        seen_tokens: set[str] = set()
-        for token in reversed(name.split()):
-            token = token.strip(" .,'-")
-            if len(token) < 2 or token.lower() in seen_tokens:
+        # Khi AND đủ token ra rỗng, chỉ nới lỏng tối thiểu: thử các tổ hợp con giữ
+        # lại n-1 token (bỏ đúng 1 token) để dung sai thứ tự từ / token thừa. KHÔNG
+        # tụt xuống khớp 1 token đơn — tên đệm phổ biến ("An", "Văn", "Thị") sẽ khớp
+        # nhầm người khác và bị tự động chọn im lặng (xem docs/product-spec.md §9, §10).
+        seen_subsets: set[tuple[str, ...]] = set()
+        for drop_index in range(len(tokens)):
+            subset = tuple(tokens[:drop_index] + tokens[drop_index + 1:])
+            key = tuple(sorted(part.lower() for part in subset))
+            if key in seen_subsets:
                 continue
-            seen_tokens.add(token.lower())
-            token_bundle = await self.search_patients(
+            seen_subsets.add(key)
+            subset_bundle = await self.search_patients(
                 count=count,
-                name=token,
+                name=" ".join(subset),
                 phone=phone,
                 birth_date=birth_date,
                 identifier=identifier,
             )
-            if token_bundle.get("entry"):
-                return token_bundle
+            if subset_bundle.get("entry"):
+                return subset_bundle
         return bundle
 
     async def search_patient_resources(

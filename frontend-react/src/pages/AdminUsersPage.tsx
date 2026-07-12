@@ -155,7 +155,6 @@ export function AdminUsersPage() {
     <DashboardLayout
       eyebrow="Admin Users"
       title="Quản lý người dùng"
-      description="Tìm kiếm, lọc theo role/status, đổi quyền và khóa hoặc mở khóa tài khoản. Các thao tác tự khóa hoặc tự hạ quyền admin hiện tại sẽ bị vô hiệu hóa."
       actions={
         <Button type="button" variant="secondary" onClick={() => void loadUsers()} disabled={loading}>
           {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}

@@ -355,6 +355,9 @@ public class ChatApplicationService {
         // context compression khỏi usage tổng.
         metadata.set("summary_usage", chatbotResponse.path("summary_usage"));
         metadata.set("memory_update", chatbotResponse.path("memory_update"));
+        // Nguồn tri thức ngoài (MedlinePlus/RxNorm/LOINC) — ghi lại code + url để audit
+        // truy được câu giải thích lấy từ đâu, song song với evidence_refs của FHIR.
+        metadata.set("knowledge_refs", knowledgeRefs(chatbotResponse));
         if (chatbotResponse.has("needs_patient_selection")) {
             metadata.put("needs_patient_selection", chatbotResponse.path("needs_patient_selection").asBoolean(false));
         }
@@ -400,8 +403,28 @@ public class ChatApplicationService {
         metadata.put("patient_id", textOrNull(chatbotResponse, "patient_id"));
         metadata.put("answer_source", textOrNull(chatbotResponse, "answer_source"));
         metadata.set("evidence_refs", evidenceRefs(chatbotResponse));
+        metadata.set("knowledge_refs", knowledgeRefs(chatbotResponse));
         metadata.set("memory_update", chatbotResponse.path("memory_update"));
         return metadata;
+    }
+
+    private ArrayNode knowledgeRefs(JsonNode chatbotResponse) {
+        ArrayNode refs = objectMapper.createArrayNode();
+        JsonNode knowledge = chatbotResponse.path("external_knowledge");
+        if (!knowledge.isArray()) {
+            return refs;
+        }
+        for (JsonNode item : knowledge) {
+            ObjectNode ref = objectMapper.createObjectNode();
+            ref.put("source", textOrNull(item, "source"));
+            ref.put("type", textOrNull(item, "type"));
+            ref.put("system", textOrNull(item, "system"));
+            ref.put("code", textOrNull(item, "code"));
+            ref.put("display", textOrNull(item, "display"));
+            ref.put("url", textOrNull(item, "url"));
+            refs.add(ref);
+        }
+        return refs;
     }
 
     private ArrayNode evidenceRefs(JsonNode chatbotResponse) {

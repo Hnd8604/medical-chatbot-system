@@ -218,6 +218,39 @@ class PatientUtilsTests(unittest.TestCase):
     def test_self_patient_reference_does_not_create_search_criteria(self):
         self.assertEqual(extract_patient_search_criteria("Thong tin cua toi"), {})
 
+    def test_contextual_patient_reference_does_not_create_search_criteria(self):
+        # "bệnh nhân này/đó" là tham chiếu ngữ cảnh, không phải tên -> không tạo search.
+        self.assertEqual(extract_patient_search_criteria("Tóm tắt hồ sơ của bệnh nhân này"), {})
+        self.assertEqual(extract_patient_search_criteria("Bệnh nhân này đang dùng những thuốc nào?"), {})
+        self.assertEqual(
+            extract_patient_search_criteria("Kết quả xét nghiệm mới nhất của bệnh nhân này"), {}
+        )
+
+    def test_clean_name_candidate_rejects_demonstrative_pronoun(self):
+        self.assertIsNone(clean_name_candidate("này"))
+        self.assertIsNone(clean_name_candidate("kia"))
+
+    async def _extract_with_selected_patient(self, message: str):
+        return await RuleBasedIntentExtractor().extract(message, provided_patient_id="BN2026-00001")
+
+    def test_selected_patient_summary_uses_get_patient(self):
+        import asyncio
+
+        plan = asyncio.run(self._extract_with_selected_patient("Tóm tắt hồ sơ của bệnh nhân này"))
+        self.assertEqual(plan.tool_name, TOOL_GET_PATIENT)
+        self.assertEqual(plan.patient_id, "BN2026-00001")
+        self.assertFalse(has_patient_search_criteria(plan))
+
+    def test_selected_patient_medication_keeps_patient_id(self):
+        import asyncio
+
+        plan = asyncio.run(
+            self._extract_with_selected_patient("Bệnh nhân này đang dùng những thuốc nào?")
+        )
+        self.assertEqual(plan.tool_name, TOOL_GET_MEDICATIONS)
+        self.assertEqual(plan.patient_id, "BN2026-00001")
+        self.assertFalse(has_patient_search_criteria(plan))
+
 
 # ---------------------------------------------------------------------------
 # ObservationUtils

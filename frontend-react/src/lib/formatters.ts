@@ -36,6 +36,17 @@ export function formatPercent(value: number | string | null | undefined): string
   return `${numericValue(value).toFixed(1)}%`;
 }
 
+export function formatBytes(value: number | string | null | undefined): string {
+  const bytes = numericValue(value);
+  if (bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const size = bytes / Math.pow(1024, exponent);
+  return `${size.toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
+
 function codeableText(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) {
     return value;

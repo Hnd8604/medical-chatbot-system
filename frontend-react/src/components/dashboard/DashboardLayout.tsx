@@ -4,6 +4,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
+  DatabaseBackup,
   Gauge,
   KeyRound,
   LogOut,
@@ -113,6 +114,11 @@ export function DashboardLayout({ eyebrow, title, description, actions, children
               <NavLink to="/admin/audit-logs" className={navClass}>
                 <ClipboardList className="h-4 w-4" />
                 <span className="flex-1">Audit</span>
+                <ChevronRight className="h-4 w-4 opacity-50" />
+              </NavLink>
+              <NavLink to="/admin/backup" className={navClass}>
+                <DatabaseBackup className="h-4 w-4" />
+                <span className="flex-1">Sao lưu</span>
                 <ChevronRight className="h-4 w-4 opacity-50" />
               </NavLink>
             </>

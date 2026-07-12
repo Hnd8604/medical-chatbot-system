@@ -17,6 +17,7 @@ import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminConfigPage } from "./pages/AdminConfigPage";
 import { AdminUsageCostPage } from "./pages/AdminUsageCostPage";
 import { AdminAuditLogsPage } from "./pages/AdminAuditLogsPage";
+import { AdminBackupPage } from "./pages/AdminBackupPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -185,6 +186,16 @@ export default function App() {
           <ProtectedRoute>
             <AdminRoute>
               <AdminAuditLogsPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/backup"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminBackupPage />
             </AdminRoute>
           </ProtectedRoute>
         }

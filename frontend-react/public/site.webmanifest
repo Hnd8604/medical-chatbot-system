@@ -1,0 +1,22 @@
+{
+  "name": "Medical Chatbot",
+  "short_name": "MedChat",
+  "description": "Hệ thống chatbot y tế thông minh, hỗ trợ hỏi đáp dữ liệu FHIR.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}

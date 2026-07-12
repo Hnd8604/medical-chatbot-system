@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="crossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0f2fe;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer circle -->
+  <circle cx="32" cy="32" r="30" fill="url(#bgGrad)" />
+
+  <!-- Medical cross -->
+  <rect x="24" y="14" width="16" height="36" rx="4" fill="url(#crossGrad)" />
+  <rect x="14" y="24" width="36" height="16" rx="4" fill="url(#crossGrad)" />
+
+  <!-- Small heart pulse / chat bubble hint -->
+  <circle cx="32" cy="32" r="5" fill="url(#bgGrad)" opacity="0.85"/>
+</svg>

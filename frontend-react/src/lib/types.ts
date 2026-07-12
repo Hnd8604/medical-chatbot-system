@@ -391,3 +391,28 @@ export interface MessageView {
   response?: ChatResponse;
   feedback?: MessageFeedback | null;
 }
+
+export type BackupTrigger = "AUTO" | "MANUAL";
+export type BackupStatus = "RUNNING" | "SUCCESS" | "PARTIAL" | "FAILED";
+
+export interface BackupItem {
+  db: string;
+  file: string;
+  size_bytes: number;
+  ok: boolean;
+  uploaded: boolean;
+}
+
+export interface BackupHistoryItem {
+  id: string;
+  triggerType: BackupTrigger;
+  status: BackupStatus;
+  triggeredBy: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  totalSizeBytes: number | null;
+  uploadTarget: string | null;
+  itemsJson: BackupItem[] | null;
+  errorMessage: string | null;
+  createdAt: string;
+}

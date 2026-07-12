@@ -2,6 +2,7 @@ package com.medicalchatbot.backend;
 
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.AlertRepository;
+import com.medicalchatbot.backend.repository.BackupHistoryRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.LlmVirtualKeyRepository;
@@ -49,6 +50,9 @@ class SpringBackendApplicationTests {
 
 	@MockitoBean
 	private AlertRepository alertRepository;
+
+	@MockitoBean
+	private BackupHistoryRepository backupHistoryRepository;
 
 	@MockitoBean
 	private MessageFeedbackRepository messageFeedbackRepository;

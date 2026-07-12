@@ -41,9 +41,14 @@ class FhirClient:
         birth_date: str | None = None,
         identifier: str | None = None,
     ) -> dict[str, Any]:
-        params: dict[str, str | int] = {"_count": count}
+        params: dict[str, Any] = {"_count": count}
         if name:
-            params["name"] = name
+            # HAPI khớp mỗi tham số `name` theo tiền tố trên từng phần tên (family/
+            # given/...) và AND các tham số `name` lặp lại. Tách tên nhiều từ thành
+            # nhiều `name` để thu hẹp đúng người (vd "Hoàng Quang Phong" -> 1 người)
+            # thay vì chỉ khớp một token cuối và trả về "toàn Phong".
+            tokens = [token for token in (part.strip(" .,'-") for part in name.split()) if token]
+            params["name"] = tokens if len(tokens) > 1 else name
         if phone:
             params["phone"] = phone
         if birth_date:
@@ -109,7 +114,7 @@ class FhirClient:
         self,
         path: str,
         *,
-        params: dict[str, str | int] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
         try:

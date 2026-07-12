@@ -86,7 +86,8 @@ Spring -> chatbot-service -> HAPI FHIR integration: passed
 Patient search proxy endpoint: passed
 Ambiguous patient selection fields passthrough: passed
 Chat history session/message APIs: passed
-App PostgreSQL migration V1/V2/V3: passed
-Created app tables: app_users, quota_policies, chat_sessions, chat_messages, usage_logs, cache_entries, audit_logs
+App PostgreSQL migration V1..V5: passed
+Created app tables: app_users, quota_policies, chat_sessions, chat_messages, usage_logs, audit_logs
+(cache_entries đã bị drop ở V5 — không dùng; caching qua Redis/semantic cache)
 POST /api/chat persisted 1 chat session, 1 user message, 1 assistant message, 1 enhanced usage log, and 1 audit log
 ```

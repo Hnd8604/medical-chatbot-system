@@ -12,7 +12,7 @@ interface UsagePanelProps {
 }
 
 export function UsagePanel({ onClose, className }: UsagePanelProps) {
-  const { quota, cost, loading, error, range, reload } = useUsageData();
+  const { quota, cost, loading, error, reload } = useUsageData();
 
   return (
     <section className={cn("flex h-full min-h-0 flex-col bg-background", className)}>
@@ -42,7 +42,7 @@ export function UsagePanel({ onClose, className }: UsagePanelProps) {
           {error ? (
             <div className="mb-6 rounded-lg border border-danger/25 bg-danger/5 p-4 text-sm text-danger">{error}</div>
           ) : null}
-          <UsageDashboard quota={quota} cost={cost} range={range} loading={loading} />
+          <UsageDashboard quota={quota} cost={cost} loading={loading} />
         </div>
       </div>
     </section>

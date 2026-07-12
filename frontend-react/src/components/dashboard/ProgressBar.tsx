@@ -4,6 +4,7 @@ interface ProgressBarProps {
   value: number;
   tone?: "blue" | "green" | "amber" | "red";
   label?: string;
+  hint?: string;
   className?: string;
 }
 
@@ -14,12 +15,17 @@ const toneClass = {
   red: "from-danger to-red-400",
 };
 
-export function ProgressBar({ value, tone = "blue", label, className }: ProgressBarProps) {
+export function ProgressBar({ value, tone = "blue", label, hint, className }: ProgressBarProps) {
   const safeValue = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 
   return (
     <div className={cn("grid gap-2", className)}>
-      {label ? <div className="text-xs font-semibold text-muted-foreground">{label}</div> : null}
+      {label || hint ? (
+        <div className="flex items-center justify-between gap-2">
+          {label ? <div className="text-xs font-semibold text-muted-foreground">{label}</div> : <span />}
+          {hint ? <div className="text-xs font-semibold tabular-nums text-foreground">{hint}</div> : null}
+        </div>
+      ) : null}
       <div className="h-2.5 overflow-hidden rounded-full bg-muted">
         <div
           className={cn("h-full rounded-full bg-gradient-to-r transition-all duration-500", toneClass[tone])}

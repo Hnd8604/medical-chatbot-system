@@ -7,6 +7,7 @@ import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
 import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
 import com.medicalchatbot.backend.dto.request.ForgotPasswordRequest;
 import com.medicalchatbot.backend.dto.request.ResetPasswordRequest;
+import com.medicalchatbot.backend.dto.request.UpdateProfileRequest;
 import com.medicalchatbot.backend.dto.request.VerifyResetCodeRequest;
 import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
@@ -25,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -55,6 +57,11 @@ public class AuthController {
     @GetMapping("/me")
     public AuthUserResponse me() {
         return authService.currentUser();
+    }
+
+    @PutMapping("/me")
+    public AuthUserResponse updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
+        return authService.updateProfile(request);
     }
 
     @PostMapping("/link-patient")

@@ -531,8 +531,6 @@ export function ChatPage() {
               lastResponse={lastResponse}
               loadingProfile={patientLoading}
               searchingPatients={patientSearching}
-              quota={quota}
-              cost={cost}
               onSearchTermChange={setPatientSearchTerm}
               onSearchPatients={() => void searchPatients()}
               onSelectPatient={(patient) => void loadPatientProfile(patient.id || "")}
@@ -558,7 +556,6 @@ export function ChatPage() {
           collapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
           onQueryChange={setSessionQuery}
-          onRefresh={() => void loadSessions()}
           onNewChat={newChat}
           onSelectSession={(session) => void selectSession(session)}
           onRenameSession={(session, title) => void renameSession(session, title)}
@@ -595,7 +592,6 @@ export function ChatPage() {
               collapsed={false}
               onToggleCollapsed={() => setMobileHistoryOpen(false)}
               onQueryChange={setSessionQuery}
-              onRefresh={() => void loadSessions()}
               onNewChat={() => {
                 newChat();
                 setMobileHistoryOpen(false);
@@ -637,8 +633,6 @@ export function ChatPage() {
               lastResponse={lastResponse}
               loadingProfile={patientLoading}
               searchingPatients={patientSearching}
-              quota={quota}
-              cost={cost}
               onSearchTermChange={setPatientSearchTerm}
               onSearchPatients={() => void searchPatients()}
               onSelectPatient={(patient) => void loadPatientProfile(patient.id || "")}

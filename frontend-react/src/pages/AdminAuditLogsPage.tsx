@@ -207,10 +207,10 @@ export function AdminAuditLogsPage() {
       {error ? <div className="mb-6 rounded-lg border border-danger/25 bg-danger/5 p-4 text-sm text-danger">{error}</div> : null}
 
       <div className="grid gap-6">
-        <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+        <section className="rounded-lg border border-border bg-white p-4">
           <div className="grid gap-3 xl:grid-cols-[1fr_1fr_1fr_1fr_11rem_11rem_auto] xl:items-end">
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">User</span>
+              <span className="text-xs font-medium text-muted-foreground">User</span>
               <select className={inputClass()} value={userId} onChange={(event) => setUserId(event.target.value)}>
                 <option value="">Tất cả user</option>
                 {users.map((item) => (
@@ -221,7 +221,7 @@ export function AdminAuditLogsPage() {
               </select>
             </label>
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Action</span>
+              <span className="text-xs font-medium text-muted-foreground">Action</span>
               <select className={inputClass()} value={action} onChange={(event) => setAction(event.target.value)}>
                 <option value="">Tất cả action</option>
                 {actionOptions.map((item) => (
@@ -232,7 +232,7 @@ export function AdminAuditLogsPage() {
               </select>
             </label>
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Resource</span>
+              <span className="text-xs font-medium text-muted-foreground">Resource</span>
               <select className={inputClass()} value={resourceType} onChange={(event) => setResourceType(event.target.value)}>
                 <option value="">Tất cả resource</option>
                 {resourceOptions.map((item) => (
@@ -243,7 +243,7 @@ export function AdminAuditLogsPage() {
               </select>
             </label>
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Resource ID</span>
+              <span className="text-xs font-medium text-muted-foreground">Resource ID</span>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -258,11 +258,11 @@ export function AdminAuditLogsPage() {
               </div>
             </label>
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Từ ngày</span>
+              <span className="text-xs font-medium text-muted-foreground">Từ ngày</span>
               <input className={inputClass()} type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} />
             </label>
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Đến ngày</span>
+              <span className="text-xs font-medium text-muted-foreground">Đến ngày</span>
               <input className={inputClass()} type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} />
             </label>
             <div className="flex flex-wrap gap-2">
@@ -277,7 +277,7 @@ export function AdminAuditLogsPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-border bg-white p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <SectionLabel>Nhật ký</SectionLabel>
@@ -298,7 +298,7 @@ export function AdminAuditLogsPage() {
           ) : (
             <>
               <div className="hidden overflow-hidden rounded-lg border border-border lg:block">
-                <div className="grid grid-cols-[10rem_12rem_10rem_1fr_8rem_1.2fr] gap-4 border-b border-border bg-muted/60 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                <div className="grid grid-cols-[10rem_12rem_10rem_1fr_8rem_1.2fr] gap-4 border-b border-border bg-muted/60 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <span>Thời gian</span>
                   <span>Action</span>
                   <span>User</span>
@@ -341,7 +341,7 @@ export function AdminAuditLogsPage() {
                             </span>
                             <button
                               type="button"
-                              className="focus-ring mt-2 inline-flex items-center gap-1 rounded-full border border-border bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-accent transition hover:border-accent/30 hover:bg-accent/5"
+                              className="focus-ring mt-2 inline-flex items-center gap-1 rounded-md border border-border bg-white px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/5"
                               onClick={() => toggleMetadata(key)}
                             >
                               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -376,7 +376,7 @@ export function AdminAuditLogsPage() {
                   const expanded = expandedLogId === key;
 
                   return (
-                    <article key={key} className="rounded-lg border border-border bg-white p-4 shadow-sm">
+                    <article key={key} className="rounded-lg border border-border bg-white p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <Badge tone={actionTone(itemAction)}>{itemAction}</Badge>
                         <span className="text-xs text-muted-foreground">{formatDateTime(itemCreatedAt)}</span>
@@ -401,7 +401,7 @@ export function AdminAuditLogsPage() {
                         </p>
                         <button
                           type="button"
-                          className="focus-ring mt-2 inline-flex items-center gap-1 rounded-full border border-border bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-accent"
+                          className="focus-ring mt-2 inline-flex items-center gap-1 rounded-md border border-border bg-white px-2 py-1 text-xs font-medium text-accent"
                           onClick={() => toggleMetadata(key)}
                         >
                           {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}

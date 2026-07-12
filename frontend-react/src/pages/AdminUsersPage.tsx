@@ -167,7 +167,7 @@ export function AdminUsersPage() {
         <div className="mb-6 rounded-lg border border-danger/25 bg-danger/5 p-4 text-sm text-danger">{error}</div>
       ) : null}
 
-      <section className="mb-6 grid gap-3 rounded-lg border border-border bg-white p-4 shadow-sm lg:grid-cols-[1fr_12rem_12rem_auto]">
+      <section className="mb-6 grid gap-3 rounded-lg border border-border bg-white p-4 lg:grid-cols-[1fr_12rem_12rem_auto]">
         <label className="relative">
           <span className="sr-only">Tìm người dùng</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -216,8 +216,8 @@ export function AdminUsersPage() {
         <EmptyState title="Không tìm thấy người dùng phù hợp." description="Hãy đổi từ khóa hoặc bỏ bớt bộ lọc role/status." />
       ) : (
         <>
-          <section className="hidden overflow-hidden rounded-lg border border-border bg-white shadow-sm lg:block">
-            <div className="grid grid-cols-[1.4fr_0.9fr_0.9fr_1fr_1.2fr] gap-4 border-b border-border bg-muted/60 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+          <section className="hidden overflow-hidden rounded-lg border border-border bg-white lg:block">
+            <div className="grid grid-cols-[1.4fr_0.9fr_0.9fr_1fr_1.2fr] gap-4 border-b border-border bg-muted/60 px-5 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <span>Người dùng</span>
               <span>Role</span>
               <span>Trạng thái</span>
@@ -247,7 +247,7 @@ export function AdminUsersPage() {
 
           <section className="grid gap-4 lg:hidden">
             {filteredUsers.map((item) => (
-              <article key={item.id} className="rounded-lg border border-border bg-white p-4 shadow-sm">
+              <article key={item.id} className="rounded-lg border border-border bg-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="line-clamp-1 font-semibold text-foreground">{item.display_name || item.username}</p>
@@ -261,7 +261,7 @@ export function AdminUsersPage() {
                 </div>
                 <div className="mt-4 grid gap-3">
                   <div>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Patient link</p>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Patient link</p>
                     <PatientLinkCell user={item} />
                   </div>
                   <UserControls item={item} />

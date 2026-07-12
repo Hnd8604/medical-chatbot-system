@@ -1,11 +1,10 @@
 import { AlertTriangle } from "lucide-react";
 import type { CostSummaryResponse, QuotaStatusResponse } from "../../lib/types";
-import { formatDate, formatNumber, formatUsd, numericValue } from "../../lib/formatters";
-import type { UsageRange } from "../../hooks/useUsageData";
+import { formatNumber, formatUsd, numericValue } from "../../lib/formatters";
 import { Spinner } from "../ui/Spinner";
-import { EmptyState } from "./EmptyState";
 import { MetricCard } from "./MetricCard";
 import { ProgressBar } from "./ProgressBar";
+import { SevenDayUsageChart } from "./SevenDayUsageChart";
 
 type UsageDay = {
   date?: string;
@@ -36,11 +35,10 @@ function remainingPercentage(remaining: number | string | null | undefined, limi
 interface UsageDashboardProps {
   quota: QuotaStatusResponse | null;
   cost: CostSummaryResponse | null;
-  range: UsageRange;
   loading: boolean;
 }
 
-export function UsageDashboard({ quota, cost, range, loading }: UsageDashboardProps) {
+export function UsageDashboard({ quota, cost, loading }: UsageDashboardProps) {
   const requestProgress = percentage(quota?.used_requests, quota?.daily_request_limit);
   const tokenProgress = percentage(quota?.used_tokens, quota?.daily_token_limit);
   const costProgress = percentage(quota?.used_cost_usd, quota?.daily_cost_limit_usd);
@@ -53,11 +51,6 @@ export function UsageDashboard({ quota, cost, range, loading }: UsageDashboardPr
         remainingPercentage(quota.remaining_cost_usd, quota.daily_cost_limit_usd),
       ) <= 20);
   const days = (Array.isArray(cost?.days) ? cost.days : []) as UsageDay[];
-  const sortedDays = [...days].sort((left, right) => {
-    const leftTime = new Date(left.date || left.day || "").getTime();
-    const rightTime = new Date(right.date || right.day || "").getTime();
-    return (Number.isNaN(rightTime) ? 0 : rightTime) - (Number.isNaN(leftTime) ? 0 : leftTime);
-  });
 
   if (loading && !quota) {
     return (
@@ -88,7 +81,7 @@ export function UsageDashboard({ quota, cost, range, loading }: UsageDashboardPr
         </section>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           label="Request hôm nay"
           value={`${formatNumber(quota?.used_requests)}/${formatNumber(quota?.daily_request_limit)}`}
@@ -110,22 +103,9 @@ export function UsageDashboard({ quota, cost, range, loading }: UsageDashboardPr
           progress={costProgress}
           progressTone={costProgress >= 90 ? "red" : costProgress >= 80 ? "amber" : "green"}
         />
-        <article className="rounded-lg border border-border bg-white p-5 shadow-sm">
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">Request 7 ngày</p>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="font-display text-3xl text-foreground">{formatNumber(cost?.request_count)}</span>
-            <span className="text-sm font-semibold text-muted-foreground">request</span>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {formatNumber(cost?.total_tokens)} token, {formatUsd(cost?.estimated_cost_usd)} ước tính.
-          </p>
-          <div className="mt-5 rounded-lg border border-border bg-muted/60 px-3 py-2 text-xs font-semibold text-muted-foreground">
-            {formatDate(range.from)} - {formatDate(range.to)}
-          </div>
-        </article>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1fr_0.85fr]">
+      <section className="grid items-stretch gap-5 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -134,53 +114,28 @@ export function UsageDashboard({ quota, cost, range, loading }: UsageDashboardPr
             </div>
           </div>
           <div className="mt-6 grid gap-5">
-            <ProgressBar value={requestProgress} tone={requestProgress >= 90 ? "red" : "blue"} label="Request" />
-            <ProgressBar value={tokenProgress} tone={tokenProgress >= 90 ? "red" : "blue"} label="Token" />
-            <ProgressBar value={costProgress} tone={costProgress >= 90 ? "red" : "green"} label="Chi phí" />
+            <ProgressBar
+              value={requestProgress}
+              tone={requestProgress >= 90 ? "red" : "blue"}
+              label="Request"
+              hint={`${formatNumber(quota?.used_requests)}/${formatNumber(quota?.daily_request_limit)} · ${Math.round(requestProgress)}%`}
+            />
+            <ProgressBar
+              value={tokenProgress}
+              tone={tokenProgress >= 90 ? "red" : "blue"}
+              label="Token"
+              hint={`${formatNumber(quota?.used_tokens)}/${formatNumber(quota?.daily_token_limit)} · ${Math.round(tokenProgress)}%`}
+            />
+            <ProgressBar
+              value={costProgress}
+              tone={costProgress >= 90 ? "red" : "green"}
+              label="Chi phí"
+              hint={`${formatUsd(quota?.used_cost_usd)}/${formatUsd(quota?.daily_cost_limit_usd)} · ${Math.round(costProgress)}%`}
+            />
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-foreground p-5 text-white shadow-card">
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-white/60">Trạng thái</p>
-          <h2 className="mt-4 font-display text-3xl">{quota?.allowed ? "Được phép sử dụng" : "Đã bị giới hạn"}</h2>
-          <p className="mt-3 text-sm leading-6 text-white/70">
-            {quota?.allowed
-              ? "Quota hiện tại vẫn đủ để tiếp tục sử dụng chatbot. Các giới hạn sẽ được làm mới theo chính sách hệ thống."
-              : quota?.blocked_reason || "Tài khoản không thể gửi thêm request ở thời điểm này."}
-          </p>
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-3">
-          <div>
-            <h2 className="font-display text-2xl text-foreground">Lịch sử sử dụng gần đây</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Dữ liệu tổng hợp theo ngày nếu backend có trả về.</p>
-          </div>
-        </div>
-
-        {sortedDays.length === 0 ? (
-          <EmptyState title="Chưa có dữ liệu lịch sử." description="Backend chưa trả về thống kê theo ngày cho khoảng thời gian này." />
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-            <div className="hidden grid-cols-[1fr_1fr_1fr_1fr] gap-4 border-b border-border bg-muted/60 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid">
-              <span>Ngày</span>
-              <span>Request</span>
-              <span>Token</span>
-              <span>Chi phí</span>
-            </div>
-            <div className="divide-y divide-border">
-              {sortedDays.map((day, index) => (
-                <article key={`${day.date || day.day || index}`} className="grid gap-2 px-5 py-4 text-sm md:grid-cols-[1fr_1fr_1fr_1fr] md:gap-4">
-                  <span className="font-semibold text-foreground">{formatDate(day.date || day.day)}</span>
-                  <span>{formatNumber(day.request_count)}</span>
-                  <span>{formatNumber(day.total_tokens)}</span>
-                  <span>{formatUsd(day.estimated_cost_usd)}</span>
-                </article>
-              ))}
-            </div>
-          </div>
-        )}
+        <SevenDayUsageChart days={days} />
       </section>
     </div>
   );

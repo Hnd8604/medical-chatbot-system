@@ -167,10 +167,10 @@ export function AdminUsageCostPage() {
       {error ? <div className="mb-6 rounded-lg border border-danger/25 bg-danger/5 p-4 text-sm text-danger">{error}</div> : null}
 
       <div className="grid gap-7">
-        <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+        <section className="rounded-lg border border-border bg-white p-4">
           <div className="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_auto] lg:items-end">
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Username</span>
+              <span className="text-xs font-medium text-muted-foreground">Username</span>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -184,11 +184,11 @@ export function AdminUsageCostPage() {
               </div>
             </label>
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Từ ngày</span>
+              <span className="text-xs font-medium text-muted-foreground">Từ ngày</span>
               <input className={inputClass()} type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} />
             </label>
             <label className="grid gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Đến ngày</span>
+              <span className="text-xs font-medium text-muted-foreground">Đến ngày</span>
               <input className={inputClass()} type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} />
             </label>
             <Button type="button" variant="primary" onClick={() => void loadUserDashboard()} disabled={lookupLoading || !username.trim() || from > to}>
@@ -198,7 +198,7 @@ export function AdminUsageCostPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+        <section className="rounded-lg border border-border bg-white p-4">
           <div className="grid gap-3 lg:grid-cols-[16rem_1fr]">
             <label className="relative self-start">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -218,8 +218,8 @@ export function AdminUsageCostPage() {
                     type="button"
                     className={
                       active
-                        ? "focus-ring rounded-lg border border-accent/30 bg-accent/10 p-3 text-left shadow-sm"
-                        : "focus-ring rounded-lg border border-border bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-card"
+                        ? "focus-ring rounded-lg border border-accent/30 bg-accent/5 p-3 text-left"
+                        : "focus-ring rounded-lg border border-border bg-white p-3 text-left transition-colors hover:bg-muted"
                     }
                     onClick={() => selectUser(item.username)}
                   >
@@ -260,11 +260,11 @@ export function AdminUsageCostPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-border bg-white p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <SectionLabel>Quota</SectionLabel>
-                <h2 className="mt-3 font-display text-2xl text-foreground">{quota?.policy || "-"}</h2>
+                <h2 className="mt-3 text-lg font-semibold text-foreground">{quota?.policy || "-"}</h2>
               </div>
               <ShieldCheck className={quota?.allowed ? "h-6 w-6 text-success" : "h-6 w-6 text-danger"} />
             </div>
@@ -275,7 +275,7 @@ export function AdminUsageCostPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-border bg-white p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <SectionLabel>Model cost</SectionLabel>
               <WalletCards className="h-5 w-5 text-accent" />
@@ -288,7 +288,7 @@ export function AdminUsageCostPage() {
                   <div key={`${providerName(item)}-${modelName(item)}`} className="rounded-lg border border-border bg-muted/40 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate font-mono text-xs uppercase tracking-[0.08em] text-foreground">{modelName(item)}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{modelName(item)}</p>
                         <p className="text-xs text-muted-foreground">{providerName(item)} · {formatNumber(item.request_count)} request</p>
                       </div>
                       <span className="font-semibold text-foreground">{formatUsd(item.estimated_cost_usd)}</span>
@@ -302,7 +302,7 @@ export function AdminUsageCostPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-border bg-white p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <SectionLabel>Policies</SectionLabel>
               <Badge tone="blue">{formatNumber(policies.length)}</Badge>
@@ -319,7 +319,7 @@ export function AdminUsageCostPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-border bg-white p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <SectionLabel>Pricing</SectionLabel>
               <Badge tone="blue">{formatNumber(pricing.length)}</Badge>
@@ -328,7 +328,7 @@ export function AdminUsageCostPage() {
               {pricing.slice(0, 6).map((item) => (
                 <div key={`${item.provider}-${item.model}`} className="grid gap-3 rounded-lg border border-border bg-muted/40 p-3 md:grid-cols-[1fr_auto_auto] md:items-center">
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-xs uppercase tracking-[0.08em] text-foreground">{item.model}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{item.model}</p>
                     <p className="text-xs text-muted-foreground">{item.provider} · {item.currency}</p>
                   </div>
                   <Badge tone="slate">In {formatUsd(item.input_price_per_1m_tokens)}</Badge>
@@ -339,7 +339,7 @@ export function AdminUsageCostPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-border bg-white p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <SectionLabel>Usage days</SectionLabel>
             <CircleDollarSign className="h-5 w-5 text-accent" />
@@ -354,7 +354,7 @@ export function AdminUsageCostPage() {
                     <span className="font-semibold text-foreground">{formatDate(day.date)}</span>
                     <span className="font-mono text-sm text-accent">{formatNumber(day.request_count)}</span>
                   </div>
-                  <p className="mt-2 font-display text-2xl text-foreground">{formatUsd(day.estimated_cost_usd)}</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{formatUsd(day.estimated_cost_usd)}</p>
                   <MiniBar value={numericValue(day.request_count)} max={dayMaxRequests} />
                 </article>
               ))}
@@ -363,7 +363,7 @@ export function AdminUsageCostPage() {
         </section>
 
         {cost?.missing_pricing_models?.length ? (
-          <section className="rounded-xl border border-warning/30 bg-warning/10 p-5">
+          <section className="rounded-lg border border-warning/30 bg-warning/5 p-5">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="amber">Missing pricing</Badge>
               {cost.missing_pricing_models.map((item) => (

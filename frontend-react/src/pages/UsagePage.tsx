@@ -6,7 +6,7 @@ import { UsageDashboard } from "../components/dashboard/UsageDashboard";
 import { useUsageData } from "../hooks/useUsageData";
 
 export function UsagePage() {
-  const { quota, cost, loading, error, range, reload } = useUsageData();
+  const { quota, cost, loading, error, reload } = useUsageData();
 
   return (
     <DashboardLayout
@@ -24,7 +24,7 @@ export function UsagePage() {
         <div className="mb-6 rounded-lg border border-danger/25 bg-danger/5 p-4 text-sm text-danger">{error}</div>
       ) : null}
 
-      <UsageDashboard quota={quota} cost={cost} range={range} loading={loading} />
+      <UsageDashboard quota={quota} cost={cost} loading={loading} />
     </DashboardLayout>
   );
 }

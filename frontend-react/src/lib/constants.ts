@@ -37,6 +37,15 @@ export const TEXT = {
   changePasswordConfirmLabel: "Xác nhận mật khẩu mới",
   changePasswordSubmit: "Đổi mật khẩu",
   changePasswordSuccess: "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.",
+  profileTitle: "Trang cá nhân",
+  profileSubtitle: "Xem và cập nhật thông tin tài khoản của bạn.",
+  profileInfoSection: "Thông tin cá nhân",
+  profileUsernameLabel: "Tên đăng nhập",
+  profileDisplayNameLabel: "Tên hiển thị",
+  profileEmailLabel: "Email",
+  profileRoleLabel: "Vai trò",
+  profileSave: "Lưu thay đổi",
+  profileSaveSuccess: "Cập nhật thông tin cá nhân thành công.",
   newChat: "Hội thoại mới",
   refresh: "Làm mới",
   searchSessions: "Tìm hội thoại",
@@ -65,8 +74,10 @@ export const USER_QUICK_PROMPTS = [
 ];
 
 export const STAFF_QUICK_PROMPTS = [
-  "Bệnh nhân này đang dùng thuốc gì?",
-  "Cho tôi xem chỉ số gần đây của bệnh nhân này",
-  "Lịch sử khám gần đây của bệnh nhân này",
-  "Chẩn đoán hiện có của bệnh nhân này",
+  "Tóm tắt hồ sơ của bệnh nhân này",
+  "Bệnh nhân này đang dùng những thuốc nào?",
+  "Kết quả xét nghiệm mới nhất của bệnh nhân này",
+  "Chẩn đoán và tiền sử bệnh của bệnh nhân này",
+  "Các lần khám gần đây có gì đáng chú ý?",
+  "Chỉ số sinh tồn gần nhất của bệnh nhân này",
 ];

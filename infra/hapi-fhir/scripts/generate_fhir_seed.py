@@ -32,30 +32,30 @@ rng = random.Random(20260702)
 # --- Danh mục tên tiếng Việt -------------------------------------------------
 
 FAMILY_NAMES = [
-    "Nguyen", "Tran", "Le", "Pham", "Hoang", "Huynh", "Phan", "Vu", "Vo", "Dang",
-    "Bui", "Do", "Ho", "Ngo", "Duong", "Ly", "Dinh", "Trinh", "Doan", "Luong",
+    "Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Huỳnh", "Phan", "Vũ", "Võ", "Đặng",
+    "Bùi", "Đỗ", "Hồ", "Ngô", "Dương", "Lý", "Đinh", "Trịnh", "Đoàn", "Lương",
 ]
-MALE_MIDDLE = ["Van", "Minh", "Quang", "Huu", "Duc", "Thanh", "Cong", "Ba", "Xuan", "Hoang"]
-MALE_GIVEN = ["Hung", "Nam", "Tuan", "Khoa", "An", "Binh", "Cuong", "Dung", "Hai",
-              "Long", "Phong", "Son", "Trung", "Vinh", "Thang", "Kien"]
-FEMALE_MIDDLE = ["Thi", "Ngoc", "Thu", "Kim", "Mai", "Hong", "Bich", "Thanh"]
-FEMALE_GIVEN = ["Hoa", "Lan", "Huong", "Mai", "Nga", "Trang", "Yen", "Thao", "Linh",
-                "Ha", "Anh", "Chi", "Loan", "Phuong", "Nhung", "Tuyet"]
+MALE_MIDDLE = ["Văn", "Minh", "Quang", "Hữu", "Đức", "Thành", "Công", "Bá", "Xuân", "Hoàng"]
+MALE_GIVEN = ["Hùng", "Nam", "Tuấn", "Khoa", "An", "Bình", "Cường", "Dũng", "Hải",
+              "Long", "Phong", "Sơn", "Trung", "Vinh", "Thắng", "Kiên"]
+FEMALE_MIDDLE = ["Thị", "Ngọc", "Thu", "Kim", "Mai", "Hồng", "Bích", "Thanh"]
+FEMALE_GIVEN = ["Hoa", "Lan", "Hương", "Mai", "Nga", "Trang", "Yến", "Thảo", "Linh",
+                "Hà", "Anh", "Chi", "Loan", "Phương", "Nhung", "Tuyết"]
 
 DOCTORS = [
-    "BS. Nguyen Van Hung", "BS. Tran Thi Lan", "BS. Le Quang Minh", "BS. Pham Thu Ha",
-    "BS. Hoang Duc Anh", "BS. Vo Thi Nga", "BS. Dang Minh Tuan", "BS. Bui Thi Mai",
+    "BS. Nguyễn Văn Hùng", "BS. Trần Thị Lan", "BS. Lê Quang Minh", "BS. Phạm Thu Hà",
+    "BS. Hoàng Đức Anh", "BS. Võ Thị Nga", "BS. Đặng Minh Tuấn", "BS. Bùi Thị Mai",
 ]
 
 CITIES = [
-    ("Ha Noi", ["Cau Giay", "Dong Da", "Hoan Kiem", "Ha Dong", "Thanh Xuan"]),
-    ("Ho Chi Minh", ["Quan 1", "Quan 3", "Binh Thanh", "Thu Duc", "Go Vap"]),
-    ("Da Nang", ["Hai Chau", "Thanh Khe", "Son Tra"]),
-    ("Hai Phong", ["Le Chan", "Ngo Quyen"]),
-    ("Can Tho", ["Ninh Kieu", "Cai Rang"]),
+    ("Hà Nội", ["Cầu Giấy", "Đống Đa", "Hoàn Kiếm", "Hà Đông", "Thanh Xuân"]),
+    ("Hồ Chí Minh", ["Quận 1", "Quận 3", "Bình Thạnh", "Thủ Đức", "Gò Vấp"]),
+    ("Đà Nẵng", ["Hải Châu", "Thanh Khê", "Sơn Trà"]),
+    ("Hải Phòng", ["Lê Chân", "Ngô Quyền"]),
+    ("Cần Thơ", ["Ninh Kiều", "Cái Răng"]),
 ]
-STREETS = ["Nguyen Trai", "Le Loi", "Tran Hung Dao", "Hai Ba Trung", "Ly Thuong Kiet",
-           "Nguyen Hue", "Le Duan", "Phan Chu Trinh", "Dinh Tien Hoang", "Ba Trieu"]
+STREETS = ["Nguyễn Trãi", "Lê Lợi", "Trần Hưng Đạo", "Hai Bà Trưng", "Lý Thường Kiệt",
+           "Nguyễn Huệ", "Lê Duẩn", "Phan Chu Trinh", "Đinh Tiên Hoàng", "Bà Triệu"]
 
 MARITAL = [
     ("M", "Married"), ("S", "Never Married"), ("W", "Widowed"), ("D", "Divorced"),
@@ -81,7 +81,7 @@ def bp_value(_rng: random.Random) -> dict:
             ("8462-4", "Diastolic blood pressure", dia, "mmHg", "mm[Hg]"),
         ],
         "interpretation": interp("H", "High") if high else interp("N", "Normal"),
-        "note": f"Huyet ap {sys}/{dia} mmHg do tai phong kham.",
+        "note": f"Huyết áp {sys}/{dia} mmHg đo tại phòng khám.",
     }
 
 
@@ -102,7 +102,7 @@ def simple_value(loinc, display, unit, ucum, lo, hi, ref_low, ref_high, decimals
             rr["low"] = {"value": ref_low, "unit": unit, "system": "http://unitsofmeasure.org", "code": ucum}
         if ref_high is not None:
             rr["high"] = {"value": ref_high, "unit": unit, "system": "http://unitsofmeasure.org", "code": ucum}
-        rr["text"] = "Khoang tham chieu nguoi lon."
+        rr["text"] = "Khoảng tham chiếu người lớn."
         return {
             "value": {"value": value, "unit": unit, "system": "http://unitsofmeasure.org", "code": ucum},
             "loinc": loinc, "display": display,
@@ -116,163 +116,163 @@ def simple_value(loinc, display, unit, ucum, lo, hi, ref_low, ref_high, decimals
 PROFILES = [
     {
         "key": "hypertension",
-        "encounter": ("185349003", "Encounter for check up", "Kham dinh ky tang huyet ap"),
-        "reason": "Theo doi huyet ap dinh ky",
+        "encounter": ("185349003", "Encounter for check up", "Khám định kỳ tăng huyết áp"),
+        "reason": "Theo dõi huyết áp định kỳ",
         "condition": {"icd10": "I10", "display": "Essential (primary) hypertension",
-                      "text": "Tang huyet ap vo can", "status": "active", "severity": "moderate",
+                      "text": "Tăng huyết áp vô căn", "status": "active", "severity": "moderate",
                       "onset_years": (2, 8)},
         "observation": {"category": "vital-signs", "code": "85354-9",
-                        "display": "Blood pressure panel", "text": "Huyet ap", "builder": bp_value},
+                        "display": "Blood pressure panel", "text": "Huyết áp", "builder": bp_value},
         "medication": {"rxnorm": "197361", "display": "Amlodipine 5 MG Oral Tablet",
-                       "text": "Amlodipin 5 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (5 mg) moi sang.",
+                       "text": "Amlodipin 5 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (5 mg) mỗi sáng.",
                        "status": "active"},
     },
     {
         "key": "diabetes",
-        "encounter": ("390906007", "Follow-up encounter", "Tai kham dai thao duong"),
-        "reason": "Kiem soat duong huyet",
+        "encounter": ("390906007", "Follow-up encounter", "Tái khám đái tháo đường"),
+        "reason": "Kiểm soát đường huyết",
         "condition": {"icd10": "E11.9", "display": "Type 2 diabetes mellitus without complications",
-                      "text": "Dai thao duong type 2", "status": "active", "severity": "moderate",
+                      "text": "Đái tháo đường type 2", "status": "active", "severity": "moderate",
                       "onset_years": (1, 10)},
         "observation": {"category": "laboratory", "code": "4548-4",
                         "display": "Hemoglobin A1c/Hemoglobin.total in Blood", "text": "HbA1c",
                         "builder": simple_value("4548-4", "HbA1c", "%", "%", 5.5, 10.5, None, 5.7, decimals=1)},
         "medication": {"rxnorm": "861007", "display": "Metformin hydrochloride 500 MG Oral Tablet",
-                       "text": "Metformin 500 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (500 mg) x 2 lan/ngay sau an.",
+                       "text": "Metformin 500 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (500 mg) x 2 lần/ngày sau ăn.",
                        "status": "active"},
     },
     {
         "key": "hyperlipidemia",
-        "encounter": ("185349003", "Encounter for check up", "Kham roi loan lipid mau"),
-        "reason": "Kiem tra mo mau",
+        "encounter": ("185349003", "Encounter for check up", "Khám rối loạn lipid máu"),
+        "reason": "Kiểm tra mỡ máu",
         "condition": {"icd10": "E78.5", "display": "Hyperlipidemia, unspecified",
-                      "text": "Roi loan lipid mau", "status": "active", "severity": "mild",
+                      "text": "Rối loạn lipid máu", "status": "active", "severity": "mild",
                       "onset_years": (1, 6)},
         "observation": {"category": "laboratory", "code": "2093-3",
-                        "display": "Cholesterol [Mass/volume] in Serum or Plasma", "text": "Cholesterol toan phan",
-                        "builder": simple_value("2093-3", "Cholesterol toan phan", "mg/dL", "mg/dL",
+                        "display": "Cholesterol [Mass/volume] in Serum or Plasma", "text": "Cholesterol toàn phần",
+                        "builder": simple_value("2093-3", "Cholesterol toàn phần", "mg/dL", "mg/dL",
                                                 170, 300, None, 200)},
         "medication": {"rxnorm": "617312", "display": "Atorvastatin 20 MG Oral Tablet",
-                       "text": "Atorvastatin 20 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (20 mg) vao buoi toi.",
+                       "text": "Atorvastatin 20 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (20 mg) vào buổi tối.",
                        "status": "active"},
     },
     {
         "key": "asthma",
-        "encounter": ("185345009", "Encounter for symptom", "Kham hen phe quan"),
-        "reason": "Kho tho tai phat",
+        "encounter": ("185345009", "Encounter for symptom", "Khám hen phế quản"),
+        "reason": "Khó thở tái phát",
         "condition": {"icd10": "J45.909", "display": "Unspecified asthma, uncomplicated",
-                      "text": "Hen phe quan", "status": "active", "severity": "mild",
+                      "text": "Hen phế quản", "status": "active", "severity": "mild",
                       "onset_years": (2, 12)},
         "observation": {"category": "vital-signs", "code": "2708-6",
-                        "display": "Oxygen saturation in Arterial blood", "text": "Do bao hoa oxy (SpO2)",
+                        "display": "Oxygen saturation in Arterial blood", "text": "Độ bão hòa oxy (SpO2)",
                         "builder": simple_value("2708-6", "SpO2", "%", "%", 91, 99, 95, None)},
         "medication": {"rxnorm": "745752", "display": "Salbutamol 100 microgram/actuation inhaler",
-                       "text": "Salbutamol xit dinh lieu", "dose": (2, "puff", "{puff}"),
-                       "route": "Duong hit",
-                       "instruction": "Xit 1-2 nhat khi kho tho, toi da 4 lan/ngay.",
+                       "text": "Salbutamol xịt định liều", "dose": (2, "puff", "{puff}"),
+                       "route": "Đường hít",
+                       "instruction": "Xịt 1-2 nhát khi khó thở, tối đa 4 lần/ngày.",
                        "status": "active"},
     },
     {
         "key": "uri",
-        "encounter": ("185345009", "Encounter for symptom", "Kham viem duong ho hap tren"),
-        "reason": "Sot, ho, dau hong",
+        "encounter": ("185345009", "Encounter for symptom", "Khám viêm đường hô hấp trên"),
+        "reason": "Sốt, ho, đau họng",
         "condition": {"icd10": "J06.9", "display": "Acute upper respiratory infection, unspecified",
-                      "text": "Viem duong ho hap tren cap", "status": "resolved", "severity": "mild",
+                      "text": "Viêm đường hô hấp trên cấp", "status": "resolved", "severity": "mild",
                       "onset_years": (0, 0)},
         "observation": {"category": "vital-signs", "code": "8310-5",
-                        "display": "Body temperature", "text": "Nhiet do co the",
-                        "builder": simple_value("8310-5", "Nhiet do", "Cel", "Cel", 36.4, 39.4, 36.1, 37.2, decimals=1)},
+                        "display": "Body temperature", "text": "Nhiệt độ cơ thể",
+                        "builder": simple_value("8310-5", "Nhiệt độ", "Cel", "Cel", 36.4, 39.4, 36.1, 37.2, decimals=1)},
         "medication": {"rxnorm": "198440", "display": "Acetaminophen 500 MG Oral Tablet",
-                       "text": "Paracetamol 500 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (500 mg) moi 6 gio khi sot.",
+                       "text": "Paracetamol 500 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (500 mg) mỗi 6 giờ khi sốt.",
                        "status": "completed"},
     },
     {
         "key": "gastritis",
-        "encounter": ("185345009", "Encounter for symptom", "Kham dau da day"),
-        "reason": "Dau thuong vi, o hoi",
+        "encounter": ("185345009", "Encounter for symptom", "Khám đau dạ dày"),
+        "reason": "Đau thượng vị, ợ hơi",
         "condition": {"icd10": "K29.70", "display": "Gastritis, unspecified, without bleeding",
-                      "text": "Viem da day", "status": "active", "severity": "mild",
+                      "text": "Viêm dạ dày", "status": "active", "severity": "mild",
                       "onset_years": (0, 3)},
         "observation": {"category": "vital-signs", "code": "29463-7",
-                        "display": "Body weight", "text": "Can nang",
-                        "builder": simple_value("29463-7", "Can nang", "kg", "kg", 45, 88, None, None)},
+                        "display": "Body weight", "text": "Cân nặng",
+                        "builder": simple_value("29463-7", "Cân nặng", "kg", "kg", 45, 88, None, None)},
         "medication": {"rxnorm": "200329", "display": "Omeprazole 20 MG Delayed Release Oral Capsule",
-                       "text": "Omeprazol 20 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (20 mg) truoc an sang 30 phut.",
+                       "text": "Omeprazol 20 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (20 mg) trước ăn sáng 30 phút.",
                        "status": "active"},
     },
     {
         "key": "hypothyroidism",
-        "encounter": ("390906007", "Follow-up encounter", "Tai kham tuyen giap"),
-        "reason": "Theo doi chuc nang tuyen giap",
+        "encounter": ("390906007", "Follow-up encounter", "Tái khám tuyến giáp"),
+        "reason": "Theo dõi chức năng tuyến giáp",
         "condition": {"icd10": "E03.9", "display": "Hypothyroidism, unspecified",
-                      "text": "Suy giap", "status": "active", "severity": "mild",
+                      "text": "Suy giáp", "status": "active", "severity": "mild",
                       "onset_years": (1, 7)},
         "observation": {"category": "laboratory", "code": "3016-3",
                         "display": "Thyrotropin [Units/volume] in Serum or Plasma", "text": "TSH",
                         "builder": simple_value("3016-3", "TSH", "mIU/L", "m[IU]/L", 0.4, 8.5, 0.4, 4.0, decimals=2)},
         "medication": {"rxnorm": "966224", "display": "Levothyroxine sodium 0.05 MG Oral Tablet",
-                       "text": "Levothyroxin 50 mcg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (50 mcg) moi sang khi bung doi.",
+                       "text": "Levothyroxin 50 mcg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (50 mcg) mỗi sáng khi bụng đói.",
                        "status": "active"},
     },
     {
         "key": "anemia",
-        "encounter": ("185349003", "Encounter for check up", "Kham thieu mau"),
-        "reason": "Met moi, da xanh",
+        "encounter": ("185349003", "Encounter for check up", "Khám thiếu máu"),
+        "reason": "Mệt mỏi, da xanh",
         "condition": {"icd10": "D50.9", "display": "Iron deficiency anemia, unspecified",
-                      "text": "Thieu mau thieu sat", "status": "active", "severity": "mild",
+                      "text": "Thiếu máu thiếu sắt", "status": "active", "severity": "mild",
                       "onset_years": (0, 2)},
         "observation": {"category": "laboratory", "code": "718-7",
                         "display": "Hemoglobin [Mass/volume] in Blood", "text": "Hemoglobin",
                         "builder": simple_value("718-7", "Hemoglobin", "g/dL", "g/dL", 8.0, 15.0, 12.0, None, decimals=1)},
         "medication": {"rxnorm": "861722", "display": "Ferrous sulfate 325 MG Oral Tablet",
-                       "text": "Sat sulfat 325 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien/ngay sau an, kem vitamin C.",
+                       "text": "Sắt sulfat 325 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên/ngày sau ăn, kèm vitamin C.",
                        "status": "active"},
     },
     {
         "key": "osteoarthritis",
-        "encounter": ("185345009", "Encounter for symptom", "Kham dau khop goi"),
-        "reason": "Dau khop goi khi van dong",
+        "encounter": ("185345009", "Encounter for symptom", "Khám đau khớp gối"),
+        "reason": "Đau khớp gối khi vận động",
         "condition": {"icd10": "M17.9", "display": "Osteoarthritis of knee, unspecified",
-                      "text": "Thoai hoa khop goi", "status": "active", "severity": "moderate",
+                      "text": "Thoái hóa khớp gối", "status": "active", "severity": "moderate",
                       "onset_years": (1, 9)},
         "observation": {"category": "vital-signs", "code": "8867-4",
-                        "display": "Heart rate", "text": "Nhip tim",
-                        "builder": simple_value("8867-4", "Nhip tim", "/min", "/min", 58, 102, 60, 100)},
+                        "display": "Heart rate", "text": "Nhịp tim",
+                        "builder": simple_value("8867-4", "Nhịp tim", "/min", "/min", 58, 102, 60, 100)},
         "medication": {"rxnorm": "103766", "display": "Meloxicam 7.5 MG Oral Tablet",
-                       "text": "Meloxicam 7,5 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (7,5 mg)/ngay sau an.",
+                       "text": "Meloxicam 7,5 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (7,5 mg)/ngày sau ăn.",
                        "status": "active"},
     },
     {
         "key": "migraine",
-        "encounter": ("185345009", "Encounter for symptom", "Kham dau nua dau"),
-        "reason": "Dau dau tai phat",
+        "encounter": ("185345009", "Encounter for symptom", "Khám đau nửa đầu"),
+        "reason": "Đau đầu tái phát",
         "condition": {"icd10": "G43.909",
                       "display": "Migraine, unspecified, not intractable, without status migrainosus",
-                      "text": "Dau nua dau (Migraine)", "status": "active", "severity": "mild",
+                      "text": "Đau nửa đầu (Migraine)", "status": "active", "severity": "mild",
                       "onset_years": (1, 6)},
         "observation": {"category": "vital-signs", "code": "8867-4",
-                        "display": "Heart rate", "text": "Nhip tim",
-                        "builder": simple_value("8867-4", "Nhip tim", "/min", "/min", 60, 98, 60, 100)},
+                        "display": "Heart rate", "text": "Nhịp tim",
+                        "builder": simple_value("8867-4", "Nhịp tim", "/min", "/min", 60, 98, 60, 100)},
         "medication": {"rxnorm": "197806", "display": "Ibuprofen 400 MG Oral Tablet",
-                       "text": "Ibuprofen 400 mg", "dose": (1, "vien", "{tbl}"),
-                       "route": "Duong uong",
-                       "instruction": "Uong 1 vien (400 mg) khi dau dau, toi da 3 lan/ngay.",
+                       "text": "Ibuprofen 400 mg", "dose": (1, "viên", "{tbl}"),
+                       "route": "Đường uống",
+                       "instruction": "Uống 1 viên (400 mg) khi đau đầu, tối đa 3 lần/ngày.",
                        "status": "active"},
     },
 ]
@@ -281,6 +281,22 @@ SEVERITY_SNOMED = {
     "mild": ("255604002", "Mild"),
     "moderate": ("6736007", "Moderate"),
     "severe": ("24484000", "Severe"),
+}
+
+# --- Hồ sơ FHIR gắn với tài khoản app (app_user_patient_links, relationship=SELF) --
+# Khi user hỏi "thông tin của tôi", chatbot lấy đúng hồ sơ này, nên tên/giới tính
+# phải trùng display_name của tài khoản trong V1__baseline_schema_and_seed.sql.
+# Map: chỉ số bệnh nhân (1-based) -> (family, [given...], gender).
+LINKED_PATIENTS = {
+    1:  ("Nguyễn", ["Văn", "An"], "male"),     # user_demo
+    7:  ("Lê", ["Thị", "Hoa"], "female"),      # le_hoa
+    8:  ("Phạm", ["Văn", "Cường"], "male"),    # pham_cuong
+    9:  ("Võ", ["Thị", "Lan"], "female"),      # vo_lan
+    10: ("Đặng", ["Minh", "Tuấn"], "male"),    # dang_tuan
+    11: ("Bùi", ["Thị", "Mai"], "female"),     # bui_mai
+    12: ("Đỗ", ["Văn", "Hùng"], "male"),       # do_hung
+    15: ("Trương", ["Thị", "Nga"], "female"),  # truong_nga
+    16: ("Phan", ["Văn", "Khoa"], "male"),     # phan_khoa
 }
 
 
@@ -315,11 +331,13 @@ def build() -> dict:
         profile = PROFILES[(i - 1) % len(PROFILES)]
         gender = "male" if rng.random() < 0.5 else "female"
         name = make_name(gender)
+        # Ho so gan voi tai khoan app: ten/gioi tinh phai trung danh tinh cua user.
+        if i in LINKED_PATIENTS:
+            family, given, gender = LINKED_PATIENTS[i]
+            name = {"use": "official", "family": family, "given": list(given)}
         # Tao 1 cap trung ten de test tinh nang chon benh nhan (ambiguous).
-        if i == 52:
-            name = {"use": "official", "family": "Tran", "given": ["Thi", "Mai"]}
-        if i == 2:
-            name = {"use": "official", "family": "Tran", "given": ["Thi", "Mai"]}
+        if i in (2, 52):
+            name = {"use": "official", "family": "Trần", "given": ["Thị", "Mai"]}
             gender = "female"
         display_name = full_name(name)
 
@@ -368,7 +386,7 @@ def build() -> dict:
                 "relationship": [{
                     "coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
                                 "code": "N", "display": "Next-of-Kin"}],
-                    "text": "Nguoi than",
+                    "text": "Người thân",
                 }],
                 "name": {"family": name["family"], "given": [rng.choice(MALE_GIVEN + FEMALE_GIVEN)]},
                 "telecom": [{"system": "phone", "value": f"08{i:08d}", "use": "mobile"}],
@@ -387,7 +405,7 @@ def build() -> dict:
             "type": [{"coding": [{"system": "http://snomed.info/sct", "code": enc_code,
                                   "display": enc_display}], "text": enc_text}],
             "serviceType": {"coding": [{"system": "http://snomed.info/sct", "code": "394802001",
-                                        "display": "General medicine"}], "text": "Kham noi tong quat"},
+                                        "display": "General medicine"}], "text": "Khám nội tổng quát"},
             "subject": {"reference": f"Patient/{pid}", "display": display_name},
             "participant": [{
                 "type": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
@@ -396,7 +414,7 @@ def build() -> dict:
             }],
             "period": {"start": enc_start, "end": enc_end},
             "reasonCode": [{"text": profile["reason"]}],
-            "location": [{"location": {"display": f"Phong kham ngoai tru {((i - 1) % 6) + 1}"},
+            "location": [{"location": {"display": f"Phòng khám ngoại trú {((i - 1) % 6) + 1}"},
                           "status": "completed"}],
         }
         entries.append(_entry(encounter, "Encounter", enc_id))
@@ -458,7 +476,7 @@ def build() -> dict:
             "onsetDateTime": onset,
             "recordedDate": enc_date,
             "asserter": {"display": doctor},
-            "note": [{"text": f"Chan doan: {cond['text']} ({cond['icd10']})."}],
+            "note": [{"text": f"Chẩn đoán: {cond['text']} ({cond['icd10']})."}],
         }
         if resolved:
             condition["abatementDateTime"] = enc_date
@@ -487,7 +505,7 @@ def build() -> dict:
             "dosageInstruction": [{
                 "sequence": 1,
                 "text": med["instruction"],
-                "patientInstruction": "Dung thuoc theo huong dan cua bac si.",
+                "patientInstruction": "Dùng thuốc theo hướng dẫn của bác sĩ.",
                 "route": {"text": med["route"]},
                 "doseAndRate": [{"doseQuantity": {"value": dose_val, "unit": dose_unit,
                                                   "system": "http://unitsofmeasure.org", "code": dose_ucum}}],
@@ -498,7 +516,7 @@ def build() -> dict:
                 "expectedSupplyDuration": {"value": 30, "unit": "days",
                                            "system": "http://unitsofmeasure.org", "code": "d"},
             },
-            "note": [{"text": f"Ke don {med['text']} cho {cond['text']}."}],
+            "note": [{"text": f"Kê đơn {med['text']} cho {cond['text']}."}],
         }
         entries.append(_entry(medication, "MedicationRequest", med_id))
 

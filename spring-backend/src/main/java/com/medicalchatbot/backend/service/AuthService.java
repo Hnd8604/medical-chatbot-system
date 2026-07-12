@@ -12,6 +12,7 @@ import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
 import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
 import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
 import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
+import com.medicalchatbot.backend.dto.request.UpdateProfileRequest;
 import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
 import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
@@ -202,6 +203,37 @@ public class AuthService {
 
         logLinkPatientSuccess(user, input.patientId());
         return new AuthLinkPatientResponse("Liên kết hồ sơ bệnh nhân thành công.", userResponse(user));
+    }
+
+    @Transactional
+    public AuthUserResponse updateProfile(UpdateProfileRequest request) {
+        User user = currentUserService.requireCurrentUser();
+
+        String displayName = strip(request.displayName());
+        String email = strip(request.email()).toLowerCase();
+
+        if (displayName.length() < 2 || displayName.length() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên hiển thị phải có từ 2 đến 100 ký tự.");
+        }
+        if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email không hợp lệ.");
+        }
+
+        boolean emailChanged = !email.equalsIgnoreCase(strip(user.getEmail()));
+        if (emailChanged && userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng.");
+        }
+
+        user.setDisplayName(displayName);
+        user.setEmail(email);
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng.");
+        }
+
+        logProfileUpdateSuccess(user, emailChanged);
+        return userResponse(user);
     }
 
     @Transactional
@@ -408,6 +440,14 @@ public class AuthService {
         metadata.put("result", "success");
         metadata.put("role", user.getRole().name());
         auditLogRepository.save(user, null, "REGISTER_SUCCESS", "app_user", user.getId().toString(), metadata);
+    }
+
+    private void logProfileUpdateSuccess(User user, boolean emailChanged) {
+        ObjectNode metadata = objectMapper.createObjectNode();
+        metadata.put("operation", "profile_update");
+        metadata.put("result", "success");
+        metadata.put("email_changed", emailChanged);
+        auditLogRepository.save(user, null, "PROFILE_UPDATE_SUCCESS", "app_user", user.getId().toString(), metadata);
     }
 
     private void logPasswordChangeSuccess(User user) {

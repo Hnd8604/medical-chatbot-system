@@ -154,7 +154,7 @@ function AnalyticsShell({ title, icon, meta, children }: { title: string; icon: 
           <h2 className="mt-3 font-display text-2xl text-foreground">{title}</h2>
           {meta ? <div className="mt-3 flex flex-wrap items-center gap-2">{meta}</div> : null}
         </div>
-        <div className="grid h-11 w-11 place-items-center rounded-xl gradient-surface text-white shadow-accent">{icon}</div>
+        <div className="grid h-11 w-11 place-items-center rounded-xl gradient-surface text-white">{icon}</div>
       </div>
       <div className="bg-gradient-to-b from-muted/40 to-white p-5">{children}</div>
     </section>
@@ -636,7 +636,7 @@ export function AdminDashboardPage() {
                 <SectionLabel>Alert dashboard</SectionLabel>
                 <h2 className="mt-3 font-display text-2xl text-foreground">Alert vận hành</h2>
               </div>
-              <div className="grid h-11 w-11 place-items-center rounded-xl gradient-surface text-white shadow-accent">
+              <div className="grid h-11 w-11 place-items-center rounded-xl gradient-surface text-white">
                 <Database className="h-5 w-5" />
               </div>
             </div>

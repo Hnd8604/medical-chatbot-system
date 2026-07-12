@@ -10,7 +10,6 @@ import {
   patientName,
   patientPhone,
   resourceSecondaryText,
-  safeJson,
 } from "../../lib/formatters";
 import { TEXT } from "../../lib/constants";
 import { cn } from "../../lib/cn";
@@ -35,8 +34,6 @@ interface PatientInsightPanelProps {
   lastResponse: ChatResponse | null;
   loadingProfile: boolean;
   searchingPatients: boolean;
-  quota: unknown;
-  cost: unknown;
   onSearchTermChange: (value: string) => void;
   onSearchPatients: () => void;
   onSelectPatient: (patient: FhirResource) => void;
@@ -106,7 +103,6 @@ function ResourceList({ items, type }: { items: FhirResource[]; type: "observati
         <article key={`${item.resourceType}-${item.id || index}`} className="rounded-xl border border-border bg-white p-3">
           <div className="flex items-start justify-between gap-3">
             <strong className="text-sm">{codeText(item)}</strong>
-            {item.status ? <Badge tone="slate">{item.status}</Badge> : null}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             {resourceSecondaryText(item, type)}
@@ -114,53 +110,6 @@ function ResourceList({ items, type }: { items: FhirResource[]; type: "observati
         </article>
       ))}
     </div>
-  );
-}
-
-function EvidenceBlock({ response }: { response: ChatResponse | null }) {
-  if (!response?.evidence) {
-    return <EmptyText>Chưa có dữ liệu tham chiếu.</EmptyText>;
-  }
-  return (
-    <details className="rounded-xl border border-border bg-muted p-3 text-xs">
-      <summary className="cursor-pointer font-semibold text-foreground">Xem dữ liệu tham chiếu</summary>
-      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-muted-foreground">
-        {safeJson(response.evidence)}
-      </pre>
-    </details>
-  );
-}
-
-function Metadata({ response, quota, cost }: { response: ChatResponse | null; quota: unknown; cost: unknown }) {
-  return (
-    <dl className="grid gap-3 text-sm">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <dt className="text-xs text-muted-foreground">Intent</dt>
-          <dd className="font-medium">{response?.intent || "-"}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Tool</dt>
-          <dd className="break-words font-medium">{response?.tool_name || "-"}</dd>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <dt className="text-xs text-muted-foreground">Nguồn trả lời</dt>
-          <dd className="font-medium">{response?.answer_source || "-"}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Bệnh nhân</dt>
-          <dd className="break-words font-medium">{response?.patient_id || "-"}</dd>
-        </div>
-      </div>
-      <details className="rounded-xl border border-border bg-muted p-3 text-xs">
-        <summary className="cursor-pointer font-semibold">Usage và chi phí</summary>
-        <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words">
-          {safeJson({ usage: response?.usage, answer_usage: response?.answer_usage, saved_usage: response?.saved_usage, quota, cost })}
-        </pre>
-      </details>
-    </dl>
   );
 }
 
@@ -173,8 +122,6 @@ export function PatientInsightPanel({
   lastResponse,
   loadingProfile,
   searchingPatients,
-  quota,
-  cost,
   onSearchTermChange,
   onSearchPatients,
   onSelectPatient,
@@ -264,13 +211,6 @@ export function PatientInsightPanel({
         </DetailSection>
       )}
 
-      <DetailSection title="Phản hồi gần nhất">
-        <Metadata response={lastResponse} quota={quota} cost={cost} />
-      </DetailSection>
-
-      <DetailSection title="Dữ liệu tham chiếu">
-        <EvidenceBlock response={lastResponse} />
-      </DetailSection>
     </aside>
   );
 }

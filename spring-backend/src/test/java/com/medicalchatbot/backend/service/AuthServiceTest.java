@@ -18,7 +18,9 @@ import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
 import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
 import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
 import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
+import com.medicalchatbot.backend.dto.request.UpdateProfileRequest;
 import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
+import com.medicalchatbot.backend.dto.response.AuthUserResponse;
 import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
 import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
@@ -360,6 +362,113 @@ class AuthServiceTest {
                 assertEquals(4, user.getTokenVersion());
                 verify(userRepository).save(user);
                 verify(refreshTokenService).revokeAllForUser(user.getId());
+        }
+
+        @Test
+        void updateProfileUpdatesDisplayNameAndEmail() {
+                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000601");
+                User user = user(
+                                userId,
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "UserDemo123!");
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+                when(userRepository.existsByEmailIgnoreCase("new_mail@example.com")).thenReturn(false);
+                when(userRepository.saveAndFlush(user)).thenReturn(user);
+                when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("BN2026-00001"));
+
+                AuthUserResponse response = newService().updateProfile(
+                                new UpdateProfileRequest("  Tên Mới  ", "NEW_MAIL@example.com"));
+
+                assertEquals("Tên Mới", response.displayName());
+                assertEquals("new_mail@example.com", response.email());
+                verify(userRepository).saveAndFlush(user);
+        }
+
+        @Test
+        void updateProfileRejectsDuplicateEmail() {
+                User user = user(
+                                UUID.fromString("00000000-0000-0000-0000-000000000602"),
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "UserDemo123!");
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+                when(userRepository.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
+
+                ResponseStatusException ex = assertThrows(
+                                ResponseStatusException.class,
+                                () -> newService().updateProfile(
+                                                new UpdateProfileRequest("User Demo", "taken@example.com")));
+
+                assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        }
+
+        @Test
+        void updateProfileAllowsKeepingOwnEmail() {
+                UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000603");
+                User user = user(
+                                userId,
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "UserDemo123!");
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+                when(userRepository.saveAndFlush(user)).thenReturn(user);
+                when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("BN2026-00001"));
+
+                AuthUserResponse response = newService().updateProfile(
+                                new UpdateProfileRequest("Tên Khác", "USER_DEMO@medical-chatbot.local"));
+
+                assertEquals("Tên Khác", response.displayName());
+                assertEquals("user_demo@medical-chatbot.local", response.email());
+        }
+
+        @Test
+        void updateProfileRejectsInvalidEmail() {
+                User user = user(
+                                UUID.fromString("00000000-0000-0000-0000-000000000604"),
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "UserDemo123!");
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+
+                ResponseStatusException ex = assertThrows(
+                                ResponseStatusException.class,
+                                () -> newService().updateProfile(
+                                                new UpdateProfileRequest("User Demo", "not-an-email")));
+
+                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        }
+
+        @Test
+        void updateProfileRejectsTooShortDisplayName() {
+                User user = user(
+                                UUID.fromString("00000000-0000-0000-0000-000000000605"),
+                                "user_demo",
+                                "user_demo@medical-chatbot.local",
+                                "User Demo",
+                                UserRole.USER,
+                                UserStatus.ACTIVE,
+                                "UserDemo123!");
+                when(currentUserService.requireCurrentUser()).thenReturn(user);
+
+                ResponseStatusException ex = assertThrows(
+                                ResponseStatusException.class,
+                                () -> newService().updateProfile(
+                                                new UpdateProfileRequest("A", "user_demo@medical-chatbot.local")));
+
+                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         }
 
         @Test

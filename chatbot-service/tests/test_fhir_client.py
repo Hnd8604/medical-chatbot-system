@@ -71,7 +71,8 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_search_patients_uses_search_criteria(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.params["_count"], "10")
-            self.assertEqual(request.url.params["name"], "Nguyen Van A")
+            # Tên nhiều từ -> nhiều tham số `name` lặp lại (HAPI AND các phần tên).
+            self.assertEqual(request.url.params.get_list("name"), ["Nguyen", "Van", "A"])
             self.assertEqual(request.url.params["phone"], "0900000001")
             self.assertEqual(request.url.params["birthdate"], "2003-01-01")
             self.assertEqual(request.url.params["identifier"], "BN001")
@@ -96,8 +97,10 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
         seen_names = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            seen_names.append(request.url.params["name"])
-            if request.url.params["name"] == "Tran":
+            names = tuple(request.url.params.get_list("name"))
+            seen_names.append(names)
+            # Chỉ khớp khi tìm đúng một token "Tran" (mô phỏng AND đủ token ra rỗng).
+            if names == ("Tran",):
                 return httpx.Response(200, json={
                     "resourceType": "Bundle",
                     "entry": [{"resource": {"resourceType": "Patient", "id": "BN2026-00002"}}],
@@ -111,7 +114,9 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
 
         result = await client.search_patients_flexible(count=5, name="Thi B Tran")
 
-        self.assertEqual(seen_names, ["Thi B Tran", "Tran"])
+        # Lần 1: AND đủ token; rỗng -> fallback thử token cuối "Tran" trước.
+        self.assertEqual(seen_names, [("Thi", "B", "Tran"), ("Tran",)])
+        self.assertTrue(result.get("entry"))
         self.assertEqual(result["entry"][0]["resource"]["id"], "BN2026-00002")
 
 

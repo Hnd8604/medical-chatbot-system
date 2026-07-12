@@ -83,6 +83,14 @@ create table if not exists usage_logs (
     constraint usage_logs_latency_ms_check check (latency_ms is null or latency_ms >= 0)
 );
 
+create table if not exists cache_entries (
+    id uuid primary key default gen_random_uuid(),
+    cache_key varchar(255) not null unique,
+    value_json jsonb not null,
+    expires_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
 
 create table if not exists audit_logs (
     id uuid primary key default gen_random_uuid(),
@@ -175,6 +183,7 @@ create index if not exists idx_usage_logs_session_id_created_at on usage_logs(se
 create index if not exists idx_usage_logs_model_created_at on usage_logs(llm_provider, llm_model, created_at);
 create index if not exists idx_usage_logs_status_created_at on usage_logs(status, created_at);
 
+create index if not exists idx_cache_entries_expires_at on cache_entries(expires_at);
 
 create index if not exists idx_audit_logs_user_id_created_at on audit_logs(user_id, created_at);
 create index if not exists idx_audit_logs_session_id_created_at on audit_logs(session_id, created_at);

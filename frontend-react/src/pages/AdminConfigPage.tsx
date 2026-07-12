@@ -348,12 +348,12 @@ export function AdminConfigPage() {
         </div>
       ) : (
         <div className="grid gap-8">
-          <section className="rounded-lg border border-border bg-white shadow-sm">
+          <section className="rounded-lg border border-border bg-white">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div className="flex items-center gap-3">
                 <Gauge className="h-5 w-5 text-accent" />
                 <div>
-                  <h2 className="font-display text-2xl text-foreground">Chính sách quota</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Chính sách quota</h2>
                   <p className="text-sm text-muted-foreground">Giới hạn request, token và chi phí theo ngày.</p>
                 </div>
               </div>
@@ -411,12 +411,12 @@ export function AdminConfigPage() {
             )}
           </section>
 
-          <section className="rounded-lg border border-border bg-white shadow-sm">
+          <section className="rounded-lg border border-border bg-white">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
               <div className="flex items-center gap-3">
                 <Tag className="h-5 w-5 text-accent" />
                 <div>
-                  <h2 className="font-display text-2xl text-foreground">Bảng giá model</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Bảng giá model</h2>
                   <p className="text-sm text-muted-foreground">Đơn giá token cho mỗi 1 triệu token.</p>
                 </div>
               </div>

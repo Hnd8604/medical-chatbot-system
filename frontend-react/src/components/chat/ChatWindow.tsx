@@ -1,8 +1,8 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Check, FileText, PanelRightClose, PanelRightOpen, Plus, Star, Table2, Trash2 } from "lucide-react";
+import { ArrowUp, Check, PanelRightClose, PanelRightOpen, Sparkles, Star, Trash2 } from "lucide-react";
 import type { ChatResponse, MessageView, NotificationItem, PatientCandidate, UserRole } from "../../lib/types";
 import { formatDateTime, genderLabel, safeJson } from "../../lib/formatters";
-import { STAFF_QUICK_PROMPTS, TEXT, USER_QUICK_PROMPTS } from "../../lib/constants";
+import { STAFF_QUICK_PROMPTS, USER_QUICK_PROMPTS } from "../../lib/constants";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { Spinner } from "../ui/Spinner";
@@ -318,10 +318,8 @@ function MessageBubble({
 export function ChatWindow({
   role,
   messages,
-  currentSessionId,
   displayName,
   sending,
-  selectedPatientId,
   notifications,
   unreadCount,
   notificationOpen,
@@ -334,13 +332,10 @@ export function ChatWindow({
   onSubmitMessage,
   onSubmitFeedback,
   onDeleteFeedback,
-  onExportSession,
 }: ChatWindowProps) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const quickPrompts = role === "USER" ? USER_QUICK_PROMPTS : STAFF_QUICK_PROMPTS;
-  const staffPromptDisabled = role !== "USER" && !selectedPatientId;
-  const sessionExportDisabled = !currentSessionId;
   const hasConversation = messages.length > 0;
 
   useEffect(() => {
@@ -375,14 +370,9 @@ export function ChatWindow({
     }
   }
 
-  function renderQuickPrompts(centered = false) {
+  function renderQuickPrompts() {
     return (
-      <div
-        className={cn(
-          "flex gap-2 pb-1",
-          centered ? "mt-4 flex-wrap justify-center" : "mb-3 overflow-x-auto",
-        )}
-      >
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {quickPrompts.map((prompt) => (
           <Button
             key={prompt}
@@ -390,7 +380,7 @@ export function ChatWindow({
             variant="ghost"
             size="sm"
             className="shrink-0 border border-border bg-white"
-            disabled={staffPromptDisabled || sending}
+            disabled={sending}
             onClick={() => submitText(prompt)}
           >
             {prompt}
@@ -400,29 +390,50 @@ export function ChatWindow({
     );
   }
 
-  function renderComposer() {
+  function renderSuggestionCards() {
     return (
-      <form className="mx-auto w-full max-w-3xl rounded-[1.75rem] border border-border bg-white px-3 py-2 shadow-card" onSubmit={handleSubmit}>
-        <div className="flex items-end gap-2">
-          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full" aria-label="Thêm nội dung">
-            <Plus className="h-5 w-5" />
-          </Button>
-          <textarea
-            className="focus-ring min-h-10 max-h-28 flex-1 resize-none rounded-2xl border-0 bg-transparent px-2 py-2 text-sm leading-6 outline-none placeholder:text-muted-foreground/70"
-            value={draft}
-            rows={1}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={role === "USER" ? "Hỏi về hồ sơ của tôi..." : "Nhập câu hỏi cho chatbot..."}
+      <div className="mt-8 grid w-full gap-3 sm:grid-cols-2">
+        {quickPrompts.slice(0, 4).map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
             disabled={sending}
-            required
-          />
-          {sending ? (
-            <div className="grid h-10 w-10 shrink-0 place-items-center text-accent" aria-label="Đang gửi">
-              <Spinner />
-            </div>
-          ) : null}
-        </div>
+            onClick={() => submitText(prompt)}
+            className="focus-ring rounded-2xl border border-border bg-white px-4 py-3.5 text-left text-sm leading-6 text-foreground transition hover:border-accent/40 hover:bg-accent/5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function renderComposer() {
+    const canSend = Boolean(draft.trim()) && !sending;
+    return (
+      <form
+        className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-[1.75rem] border border-border bg-white px-4 py-2.5 shadow-card focus-within:border-accent/40"
+        onSubmit={handleSubmit}
+      >
+        <textarea
+          className="min-h-9 max-h-40 flex-1 resize-none border-0 bg-transparent py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground/70"
+          value={draft}
+          rows={1}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Hỏi bất kỳ điều gì"
+          disabled={sending}
+          required
+        />
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label="Gửi"
+          title="Gửi"
+          className="focus-ring mb-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-white transition hover:bg-accent/90 disabled:bg-muted disabled:text-muted-foreground/60"
+        >
+          {sending ? <Spinner className="text-white" /> : <ArrowUp className="h-5 w-5" />}
+        </button>
       </form>
     );
   }
@@ -430,19 +441,19 @@ export function ChatWindow({
   return (
     <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <div
-        className="chat-actions pointer-events-none absolute top-4 z-20 flex flex-wrap items-center justify-end gap-2"
+        className="chat-actions pointer-events-none absolute top-4 z-20 flex flex-wrap items-center justify-end gap-1.5"
         data-panel-open={!rightPanelCollapsed}
       >
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           size="icon"
-          className="pointer-events-auto hidden bg-white xl:inline-flex"
+          className="pointer-events-auto hidden xl:inline-flex"
           onClick={onToggleRightPanel}
           aria-label={rightPanelCollapsed ? "Mở panel bên phải" : "Đóng panel bên phải"}
           title={rightPanelCollapsed ? "Mở panel bên phải" : "Đóng panel bên phải"}
         >
-          {rightPanelCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+          {rightPanelCollapsed ? <PanelRightOpen className="h-5 w-5" /> : <PanelRightClose className="h-5 w-5" />}
         </Button>
         <div className="pointer-events-auto">
           <NotificationPopover
@@ -454,30 +465,6 @@ export function ChatWindow({
             onMarkAllRead={onMarkAllNotificationsRead}
           />
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="pointer-events-auto bg-white"
-          disabled={sessionExportDisabled}
-          onClick={() => onExportSession("pdf")}
-          aria-label="Xuất PDF cho phiên hiện tại"
-        >
-          <FileText className="h-4 w-4" />
-          {TEXT.exportPdf}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="pointer-events-auto bg-white"
-          disabled={sessionExportDisabled}
-          onClick={() => onExportSession("csv")}
-          aria-label="Xuất CSV cho phiên hiện tại"
-        >
-          <Table2 className="h-4 w-4" />
-          {TEXT.exportCsv}
-        </Button>
       </div>
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-20">
@@ -496,24 +483,25 @@ export function ChatWindow({
           </div>
         ) : (
           <div className="mx-auto flex min-h-full max-w-3xl flex-col items-center justify-center py-10 text-center">
-            <h2 className="font-display text-4xl text-foreground md:text-5xl">Xin chào {displayName}</h2>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Hôm nay bạn muốn hỏi gì về dữ liệu y tế?</p>
-            <div className="mt-8 w-full">
-              {renderComposer()}
-              {renderQuickPrompts(true)}
+            <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl gradient-surface text-white shadow-card">
+              <Sparkles className="h-6 w-6" />
             </div>
+            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.35em] text-accent">Medical Chatbot</p>
+            <h2 className="font-display text-4xl font-bold text-foreground md:text-5xl">Xin chào {displayName}</h2>
+            {renderSuggestionCards()}
           </div>
         )}
       </div>
 
-      {hasConversation ? (
-        <footer className="shrink-0 bg-white px-4 py-3">
-          <div className="mx-auto max-w-3xl">
-            {renderQuickPrompts(false)}
-            {renderComposer()}
-          </div>
-        </footer>
-      ) : null}
+      <footer className="shrink-0 bg-background px-4 pb-4 pt-2">
+        <div className="mx-auto max-w-3xl">
+          {hasConversation ? renderQuickPrompts() : null}
+          {renderComposer()}
+          <p className="mt-2 text-center text-[11px] text-muted-foreground/70">
+            Chatbot chỉ trả lời dựa trên dữ liệu FHIR hiện có, không thay thế tư vấn y tế.
+          </p>
+        </div>
+      </footer>
     </section>
   );
 }

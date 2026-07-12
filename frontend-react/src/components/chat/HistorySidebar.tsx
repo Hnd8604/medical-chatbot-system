@@ -3,18 +3,21 @@ import {
   Check,
   CircleDollarSign,
   ClipboardList,
+  Download,
   FileText,
-  KeyRound,
   LogOut,
+  MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
   Plus,
-  RefreshCcw,
   Search,
+  Settings,
   Shield,
+  SlidersHorizontal,
   Table2,
   Trash2,
+  UserRound,
   UsersRound,
   X,
 } from "lucide-react";
@@ -24,7 +27,6 @@ import { ChatSessionSummary, AuthUser } from "../../lib/types";
 import { roleLabel } from "../../lib/formatters";
 import { TEXT } from "../../lib/constants";
 import { Button } from "../ui/Button";
-import { Badge } from "../ui/Badge";
 import { inputClass } from "../ui/Field";
 import { cn } from "../../lib/cn";
 
@@ -37,7 +39,6 @@ interface HistorySidebarProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onQueryChange: (value: string) => void;
-  onRefresh: () => void;
   onNewChat: () => void;
   onSelectSession: (session: ChatSessionSummary) => void;
   onRenameSession: (session: ChatSessionSummary, title: string) => void;
@@ -67,7 +68,6 @@ export function HistorySidebar({
   collapsed,
   onToggleCollapsed,
   onQueryChange,
-  onRefresh,
   onNewChat,
   onSelectSession,
   onRenameSession,
@@ -80,6 +80,8 @@ export function HistorySidebar({
 }: HistorySidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const emptyText = query.trim() ? TEXT.emptySessionSearch : TEXT.emptySessions;
 
   function startRename(session: ChatSessionSummary) {
@@ -132,9 +134,6 @@ export function HistorySidebar({
             title={TEXT.searchSessions}
           >
             <Search className="h-5 w-5" />
-          </Button>
-          <Button type="button" variant="ghost" size="icon" onClick={onRefresh} aria-label={TEXT.refresh} title={TEXT.refresh}>
-            <RefreshCcw className="h-5 w-5" />
           </Button>
           <Button
             type="button"
@@ -222,12 +221,12 @@ export function HistorySidebar({
             {shortName}
           </button>
           <Link
-            to="/change-password"
+            to="/profile"
             className="focus-ring grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-            title={TEXT.changePassword}
-            aria-label={TEXT.changePassword}
+            title={TEXT.myProfile}
+            aria-label={TEXT.myProfile}
           >
-            <KeyRound className="h-5 w-5" />
+            <UserRound className="h-5 w-5" />
           </Link>
           <Button type="button" variant="ghost" size="icon" onClick={onLogout} aria-label={TEXT.logoutButton} title={TEXT.logoutButton}>
             <LogOut className="h-5 w-5" />
@@ -237,115 +236,104 @@ export function HistorySidebar({
     );
   }
 
+  const navItemClass =
+    "focus-ring flex min-h-9 w-full items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground";
+  const navActiveClass =
+    "focus-ring flex min-h-9 w-full items-center gap-2.5 rounded-lg bg-accent/10 px-3 text-sm font-semibold text-accent transition";
+  const isAdmin = user.role === "ADMIN";
+
   return (
     <aside className={cn("flex min-h-0 flex-col border-r border-border bg-white", className)}>
-      <header className="space-y-4 border-b border-border p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl">Medical Chatbot</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{roleLabel(user.role)}</p>
-          </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onToggleCollapsed} aria-label="Thu gọn thanh bên">
-            <PanelLeftClose className="h-5 w-5" />
-          </Button>
-        </div>
-
-        <Button type="button" variant="primary" className="w-full justify-start" onClick={onNewChat}>
-          <Plus className="h-4 w-4" />
-          {TEXT.newChat}
+      <header className="flex items-center justify-between gap-2 px-4 pb-1 pt-4">
+        <h1 className="truncate font-display text-lg font-bold">Medical Chatbot</h1>
+        <Button type="button" variant="ghost" size="icon" onClick={onToggleCollapsed} aria-label="Thu gọn thanh bên">
+          <PanelLeftClose className="h-5 w-5" />
         </Button>
       </header>
 
-      <div className="space-y-3 border-b border-border p-4">
-        <label className="grid gap-2 text-sm font-semibold">
+      <nav className="space-y-0.5 px-2 pb-1 pt-2" aria-label="Điều hướng">
+        <button type="button" onClick={onNewChat} className={navActiveClass}>
+          <MessageSquarePlus className="h-4 w-4 shrink-0" />
+          {TEXT.newChat}
+        </button>
+        <button
+          type="button"
+          onClick={() => setSearchOpen((value) => !value)}
+          className={navItemClass}
+          aria-expanded={searchOpen}
+        >
+          <Search className="h-4 w-4 shrink-0" />
           {TEXT.searchSessions}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        </button>
+        {searchOpen ? (
+          <div className="px-1 pb-1 pt-0.5">
             <input
-              className={inputClass("pl-9")}
+              autoFocus
+              className={inputClass("h-9")}
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setSearchOpen(false);
+              }}
               maxLength={100}
-              placeholder="Tiêu đề hội thoại"
+              placeholder={TEXT.searchSessions}
               spellCheck={false}
             />
           </div>
-        </label>
-        <div className="grid gap-2">
-          <Button type="button" variant="secondary" size="sm" className="w-full justify-start" onClick={onRefresh}>
-            <RefreshCcw className="h-4 w-4" />
-            {TEXT.refresh}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="w-full justify-start"
-            onClick={() => onExportHistory("pdf")}
-          >
-            <FileText className="h-4 w-4" />
-            {TEXT.exportPdf}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="w-full justify-start"
-            onClick={() => onExportHistory("csv")}
-          >
-            <Table2 className="h-4 w-4" />
-            {TEXT.exportCsv}
-          </Button>
-        </div>
+        ) : null}
+        <button type="button" onClick={onOpenUsage} className={navItemClass}>
+          <SlidersHorizontal className="h-4 w-4 shrink-0" />
+          Sử dụng / Hạn mức
+        </button>
         <button
           type="button"
-          onClick={onOpenUsage}
-          className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
+          onClick={() => setMoreOpen((value) => !value)}
+          className={navItemClass}
+          aria-expanded={moreOpen}
         >
-          <BarChart3 className="h-4 w-4" />
-          Usage / quota
+          <Download className="h-4 w-4 shrink-0" />
+          Xuất
         </button>
-        {user.role === "ADMIN" ? (
-          <Link
-            to="/admin"
-            className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
-          >
-            <Shield className="h-4 w-4" />
-            Admin dashboard
-          </Link>
+        {moreOpen ? (
+          <div className="space-y-0.5 border-l border-border pl-2">
+            <button type="button" onClick={() => onExportHistory("pdf")} className={navItemClass}>
+              <FileText className="h-4 w-4 shrink-0" />
+              {TEXT.exportPdf}
+            </button>
+            <button type="button" onClick={() => onExportHistory("csv")} className={navItemClass}>
+              <Table2 className="h-4 w-4 shrink-0" />
+              {TEXT.exportCsv}
+            </button>
+            {isAdmin ? (
+              <Link to="/admin" className={navItemClass}>
+                <Shield className="h-4 w-4 shrink-0" />
+                Admin dashboard
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <Link to="/admin/usage-cost" className={navItemClass}>
+                <CircleDollarSign className="h-4 w-4 shrink-0" />
+                Quota / Cost
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <Link to="/admin/audit-logs" className={navItemClass}>
+                <ClipboardList className="h-4 w-4 shrink-0" />
+                Audit log
+              </Link>
+            ) : null}
+            {isAdmin ? (
+              <button type="button" onClick={onOpenAdmin} className={navItemClass}>
+                <UsersRound className="h-4 w-4 shrink-0" />
+                Quản lý người dùng
+              </button>
+            ) : null}
+          </div>
         ) : null}
-        {user.role === "ADMIN" ? (
-          <Link
-            to="/admin/usage-cost"
-            className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
-          >
-            <CircleDollarSign className="h-4 w-4" />
-            Quota / Cost
-          </Link>
-        ) : null}
-        {user.role === "ADMIN" ? (
-          <Link
-            to="/admin/audit-logs"
-            className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
-          >
-            <ClipboardList className="h-4 w-4" />
-            Audit log
-          </Link>
-        ) : null}
-        {user.role === "ADMIN" ? (
-          <button
-            type="button"
-            onClick={onOpenAdmin}
-            className="focus-ring inline-flex min-h-9 w-full items-center justify-start gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-card"
-          >
-            <UsersRound className="h-4 w-4" />
-            Quản lý người dùng
-          </button>
-        ) : null}
-      </div>
+      </nav>
 
-      <section className="min-h-0 flex-1 overflow-auto px-3 py-4" aria-label="Danh sách hội thoại">
-        <h2 className="mb-2 px-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Gần đây</h2>
+      <section className="mt-1 min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t border-border px-3 py-3" aria-label="Danh sách đoạn chat">
+        <h2 className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Đoạn chat</h2>
         {loading ? <p className="px-2 py-3 text-sm text-muted-foreground">Đang tải hội thoại...</p> : null}
         {!loading && sessions.length === 0 ? <p className="px-2 py-3 text-sm text-muted-foreground">{emptyText}</p> : null}
         <div className="grid gap-1">
@@ -392,7 +380,7 @@ export function HistorySidebar({
               <div
                 key={session.id}
                 className={cn(
-                  "group relative flex items-center rounded-xl transition",
+                  "group relative flex min-w-0 items-center rounded-xl transition",
                   activeSessionId === session.id ? "bg-accent/10" : "hover:bg-muted",
                 )}
               >
@@ -405,7 +393,7 @@ export function HistorySidebar({
                   title={session.title || "Hội thoại chưa đặt tên"}
                   onClick={() => onSelectSession(session)}
                 >
-                  <span className="line-clamp-1">{session.title || "Hội thoại chưa đặt tên"}</span>
+                  <span className="block truncate">{session.title || "Hội thoại chưa đặt tên"}</span>
                 </button>
                 <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
                   <button
@@ -433,27 +421,24 @@ export function HistorySidebar({
         </div>
       </section>
 
-      <footer className="border-t border-border p-3">
-        <div className="flex items-center gap-3 rounded-2xl p-2 transition hover:bg-muted">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full gradient-surface text-xs font-bold text-white">
+      <footer className="border-t border-border p-2">
+        <div className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-muted">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full gradient-surface text-xs font-bold text-white">
             {shortName}
           </div>
           <div className="min-w-0 flex-1">
             <strong className="line-clamp-1 text-sm">{displayName}</strong>
-            <p className="line-clamp-1 text-xs text-muted-foreground">{user.email}</p>
+            <p className="line-clamp-1 text-[11px] uppercase tracking-wide text-muted-foreground">{roleLabel(user.role)}</p>
           </div>
-          <Badge tone={user.status === "ACTIVE" ? "green" : "amber"} className="hidden px-2 py-0.5 text-[9px] xl:inline-flex">
-            {user.status}
-          </Badge>
           <Link
-            to="/change-password"
-            className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-            title={TEXT.changePassword}
-            aria-label={TEXT.changePassword}
+            to="/profile"
+            className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-white hover:text-foreground"
+            title={TEXT.myProfile}
+            aria-label={TEXT.myProfile}
           >
-            <KeyRound className="h-4 w-4" />
+            <Settings className="h-4 w-4" />
           </Link>
-          <Button type="button" variant="ghost" size="icon" onClick={onLogout} aria-label={TEXT.logoutButton}>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onLogout} aria-label={TEXT.logoutButton}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>

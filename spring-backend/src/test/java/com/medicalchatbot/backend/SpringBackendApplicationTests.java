@@ -9,6 +9,7 @@ import com.medicalchatbot.backend.repository.LlmVirtualKeyRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
+import com.medicalchatbot.backend.repository.RestoreHistoryRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
@@ -53,6 +54,9 @@ class SpringBackendApplicationTests {
 
 	@MockitoBean
 	private BackupHistoryRepository backupHistoryRepository;
+
+	@MockitoBean
+	private RestoreHistoryRepository restoreHistoryRepository;
 
 	@MockitoBean
 	private MessageFeedbackRepository messageFeedbackRepository;

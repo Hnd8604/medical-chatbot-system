@@ -118,7 +118,7 @@ export function DashboardLayout({ eyebrow, title, description, actions, children
               </NavLink>
               <NavLink to="/admin/backup" className={navClass}>
                 <DatabaseBackup className="h-4 w-4" />
-                <span className="flex-1">Sao lưu</span>
+                <span className="flex-1">Backup</span>
                 <ChevronRight className="h-4 w-4 opacity-50" />
               </NavLink>
             </>

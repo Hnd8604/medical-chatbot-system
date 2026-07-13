@@ -25,7 +25,9 @@ async def get_cached_chat_payload(
     payload = {
         "answer": cached_answer,
         "intent": cached_intent,
-        "patient_id": patient_id_for_cache,
+        # patient_hint (có thể None) chứ không phải sentinel "__no_patient__" —
+        # sentinel chỉ dùng làm cache key, không được lộ ra response/memory_update.
+        "patient_id": patient_hint,
         "answer_source": "semantic_cache_strict",
         "evidence": [],
         "usage": _zero_usage(),
@@ -42,7 +44,7 @@ async def get_cached_chat_payload(
     }
     mock_plan = IntentPlan(
         tool_name="cache_hit",
-        patient_id=patient_id_for_cache,
+        patient_id=patient_hint,
         source="strict_cache",
     )
     # Cache hit không gọi rolling summary (summary rỗng → Spring giữ summary cũ):

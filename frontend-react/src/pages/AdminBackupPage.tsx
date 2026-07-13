@@ -1,15 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { CloudUpload, Database, DatabaseBackup, HardDriveDownload, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  CloudUpload,
+  Database,
+  DatabaseBackup,
+  HardDriveDownload,
+  RefreshCw,
+  RotateCcw,
+} from "lucide-react";
 import { apiGet, apiPost } from "../services/api";
-import type { BackupHistoryItem, BackupStatus, PageResponse } from "../lib/types";
+import type { BackupHistoryItem, BackupStatus, PageResponse, RestoreHistoryItem } from "../lib/types";
 import { formatBytes, formatDateTime } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";
 import { EmptyState } from "../components/dashboard/EmptyState";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
+import { Modal } from "../components/ui/Modal";
 import { Spinner } from "../components/ui/Spinner";
 
 const HISTORY_PATH = "/api/admin/backup/history";
+const RESTORE_HISTORY_PATH = "/api/admin/backup/restore-history";
 const BACKUP_PATH = "/api/admin/backup";
 const POLL_INTERVAL_MS = 4000;
 
@@ -61,22 +71,33 @@ function durationText(startedAt: string, finishedAt: string | null): string {
 
 export function AdminBackupPage() {
   const [items, setItems] = useState<BackupHistoryItem[]>([]);
+  const [restores, setRestores] = useState<RestoreHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
+  const wasRunningRef = useRef(false);
 
-  async function loadHistory(showSpinner = true) {
+  // Modal xác nhận khôi phục.
+  const [restoreTarget, setRestoreTarget] = useState<BackupHistoryItem | null>(null);
+  const [restoreConfirmed, setRestoreConfirmed] = useState(false);
+  const [restoreSubmitting, setRestoreSubmitting] = useState(false);
+
+  async function loadAll(showSpinner = true) {
     if (showSpinner) {
       setLoading(true);
     }
     try {
-      const result = await apiGet<PageResponse<BackupHistoryItem>>(`${HISTORY_PATH}?page=0&size=20`);
-      setItems(result.content || []);
+      const [backupPage, restorePage] = await Promise.all([
+        apiGet<PageResponse<BackupHistoryItem>>(`${HISTORY_PATH}?page=0&size=20`),
+        apiGet<PageResponse<RestoreHistoryItem>>(`${RESTORE_HISTORY_PATH}?page=0&size=10`),
+      ]);
+      setItems(backupPage.content || []);
+      setRestores(restorePage.content || []);
       setError(null);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Không thể tải lịch sử sao lưu.");
+      setError(loadError instanceof Error ? loadError.message : "Không thể tải dữ liệu sao lưu.");
     } finally {
       if (showSpinner) {
         setLoading(false);
@@ -91,7 +112,7 @@ export function AdminBackupPage() {
     try {
       await apiPost<BackupHistoryItem>(BACKUP_PATH);
       setNotice("Đã bắt đầu sao lưu. Quá trình chạy nền, trạng thái sẽ tự cập nhật bên dưới.");
-      await loadHistory(false);
+      await loadAll(false);
     } catch (triggerError) {
       setError(triggerError instanceof Error ? triggerError.message : "Không thể bắt đầu sao lưu.");
     } finally {
@@ -99,8 +120,39 @@ export function AdminBackupPage() {
     }
   }
 
+  function openRestore(item: BackupHistoryItem) {
+    setRestoreConfirmed(false);
+    setRestoreTarget(item);
+  }
+
+  function closeRestore() {
+    if (restoreSubmitting) {
+      return;
+    }
+    setRestoreTarget(null);
+  }
+
+  async function confirmRestore() {
+    if (!restoreTarget) {
+      return;
+    }
+    setRestoreSubmitting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await apiPost<RestoreHistoryItem>(`${BACKUP_PATH}/${encodeURIComponent(restoreTarget.id)}/restore`);
+      setNotice("Đã bắt đầu khôi phục. Quá trình chạy nền, xem trạng thái ở mục Lịch sử khôi phục.");
+      setRestoreTarget(null);
+      await loadAll(false);
+    } catch (restoreError) {
+      setError(restoreError instanceof Error ? restoreError.message : "Không thể bắt đầu khôi phục.");
+    } finally {
+      setRestoreSubmitting(false);
+    }
+  }
+
   useEffect(() => {
-    void loadHistory();
+    void loadAll();
     return () => {
       if (pollRef.current) {
         window.clearInterval(pollRef.current);
@@ -108,25 +160,36 @@ export function AdminBackupPage() {
     };
   }, []);
 
-  // Poll trong khi còn bản ghi đang chạy để cập nhật trạng thái tự động.
-  const hasRunning = items.some((item) => item.status === "RUNNING");
+  // Poll trong khi còn backup hoặc restore đang chạy.
+  const hasRunning =
+    items.some((item) => item.status === "RUNNING") || restores.some((item) => item.status === "RUNNING");
   useEffect(() => {
     if (hasRunning && pollRef.current == null) {
-      pollRef.current = window.setInterval(() => void loadHistory(false), POLL_INTERVAL_MS);
+      pollRef.current = window.setInterval(() => void loadAll(false), POLL_INTERVAL_MS);
     } else if (!hasRunning && pollRef.current != null) {
       window.clearInterval(pollRef.current);
       pollRef.current = null;
     }
   }, [hasRunning]);
 
+  // Tắt banner "Đã bắt đầu ..." ngay khi tiến trình chạy nền vừa kết thúc
+  // (hasRunning chuyển true -> false). Dùng ref để chỉ tắt đúng lúc chuyển trạng
+  // thái, không tắt nhầm ở lần render đầu hay ngay sau khi vừa set banner.
+  useEffect(() => {
+    if (wasRunningRef.current && !hasRunning) {
+      setNotice(null);
+    }
+    wasRunningRef.current = hasRunning;
+  }, [hasRunning]);
+
   return (
     <DashboardLayout
       eyebrow="Admin Backup"
-      title="Sao lưu & phục hồi"
-      description="Sao lưu CSDL ứng dụng và HAPI FHIR lên Google Drive. Tự động lúc 02:00 hằng ngày hoặc chạy thủ công."
+      title="Backup & Restore"
+      description="Backup application database and HAPI FHIR to Google Drive. Auto-runs at 02:00 daily or trigger manually."
       actions={
         <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="secondary" onClick={() => void loadHistory()} disabled={loading}>
+          <Button type="button" variant="secondary" onClick={() => void loadAll()} disabled={loading}>
             {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
             Làm mới
           </Button>
@@ -149,7 +212,7 @@ export function AdminBackupPage() {
           <HardDriveDownload className="mt-0.5 h-5 w-5 text-accent" />
           <div>
             <p className="text-sm font-semibold text-foreground">Lịch tự động</p>
-            <p className="text-sm text-muted-foreground">02:00 hằng ngày (Task Scheduler).</p>
+            <p className="text-sm text-muted-foreground">02:00 hằng ngày (backend tự xử lý).</p>
           </div>
         </div>
         <div className="flex items-start gap-3">
@@ -222,17 +285,123 @@ export function AdminBackupPage() {
                   ) : null}
                 </div>
 
-                <div className="text-right text-sm text-muted-foreground lg:min-w-[8rem]">
-                  <p className="font-semibold text-foreground">
-                    {item.totalSizeBytes != null ? formatBytes(item.totalSizeBytes) : "—"}
-                  </p>
-                  <p className="text-xs">Thời lượng {durationText(item.startedAt, item.finishedAt)}</p>
+                <div className="flex flex-col items-end gap-2 text-right text-sm text-muted-foreground lg:min-w-[8rem]">
+                  <div>
+                    <p className="font-semibold text-foreground">
+                      {item.totalSizeBytes != null ? formatBytes(item.totalSizeBytes) : "—"}
+                    </p>
+                    <p className="text-xs">Thời lượng {durationText(item.startedAt, item.finishedAt)}</p>
+                  </div>
+                  {item.status === "SUCCESS" || item.status === "PARTIAL" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={hasRunning}
+                      onClick={() => openRestore(item)}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Khôi phục
+                    </Button>
+                  ) : null}
                 </div>
               </article>
             ))}
           </div>
         )}
       </section>
+
+      {restores.length > 0 ? (
+        <section className="mt-8 rounded-lg border border-border bg-white">
+          <div className="border-b border-border px-5 py-4">
+            <h2 className="text-lg font-semibold text-foreground">Lịch sử khôi phục</h2>
+            <p className="text-sm text-muted-foreground">10 lần gần nhất.</p>
+          </div>
+          <div className="divide-y divide-border">
+            {restores.map((item) => (
+              <article key={item.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1fr_auto] lg:items-start">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                    <span className="text-sm font-semibold text-foreground">{formatDateTime(item.startedAt)}</span>
+                    {item.triggeredBy ? (
+                      <span className="text-xs text-muted-foreground">bởi {item.triggeredBy}</span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(item.itemsJson || []).map((dbItem) => (
+                      <span
+                        key={dbItem.db}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
+                      >
+                        <Database className="h-3.5 w-3.5" />
+                        <span className="font-medium text-foreground">{dbItem.db}</span>
+                        {dbItem.ok ? (
+                          <RotateCcw className="h-3.5 w-3.5 text-success" />
+                        ) : (
+                          <span className="text-danger">lỗi</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                  {item.errorMessage ? <p className="mt-2 text-xs text-danger">{item.errorMessage}</p> : null}
+                </div>
+                <div className="text-right text-xs text-muted-foreground lg:min-w-[8rem]">
+                  Thời lượng {durationText(item.startedAt, item.finishedAt)}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <Modal
+        open={restoreTarget != null}
+        title="Khôi phục dữ liệu"
+        description="Thao tác này GHI ĐÈ toàn bộ dữ liệu hiện tại bằng bản sao lưu đã chọn."
+        onClose={closeRestore}
+      >
+        {restoreTarget ? (
+          <div className="grid gap-4">
+            <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+              <div>
+                <p className="font-semibold">Không thể hoàn tác.</p>
+                <p className="mt-1 text-muted-foreground">
+                  App DB và HAPI DB sẽ bị ghi đè bằng bản sao lưu lúc{" "}
+                  <span className="font-medium text-foreground">{formatDateTime(restoreTarget.startedAt)}</span>. HAPI sẽ
+                  được khởi động lại trong quá trình này.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-3 text-sm text-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4"
+                checked={restoreConfirmed}
+                onChange={(event) => setRestoreConfirmed(event.target.checked)}
+              />
+              Tôi hiểu dữ liệu hiện tại sẽ bị ghi đè và muốn tiếp tục khôi phục.
+            </label>
+
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="ghost" onClick={closeRestore} disabled={restoreSubmitting}>
+                Hủy
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                disabled={!restoreConfirmed || restoreSubmitting}
+                onClick={() => void confirmRestore()}
+              >
+                {restoreSubmitting ? <Spinner /> : <RotateCcw className="h-4 w-4" />}
+                Khôi phục ngay
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </DashboardLayout>
   );
 }

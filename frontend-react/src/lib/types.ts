@@ -416,3 +416,22 @@ export interface BackupHistoryItem {
   errorMessage: string | null;
   createdAt: string;
 }
+
+export interface RestoreItem {
+  db: string;
+  file: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface RestoreHistoryItem {
+  id: string;
+  backupId: string | null;
+  status: BackupStatus;
+  triggeredBy: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  itemsJson: RestoreItem[] | null;
+  errorMessage: string | null;
+  createdAt: string;
+}

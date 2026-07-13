@@ -149,10 +149,18 @@ async def _answer_patients(client: FhirClient, plan: IntentPlan) -> dict[str, An
                 "Vui lòng chọn đúng bệnh nhân hoặc cung cấp thêm ngày sinh, số điện thoại, mã định danh: "
                 f"{summary}."
             )
+    # Tìm theo tiêu chí (tên/SĐT/ngày sinh/mã) và khớp đúng 1 bệnh nhân → coi như đã
+    # chốt được bệnh nhân: trả patient_id để frontend đổ panel hồ sơ và session memory
+    # ghi active_patient_id cho các câu hỏi nối tiếp ("bệnh nhân này...").
+    resolved_patient_id = (
+        patients[0].get("id")
+        if has_patient_search_criteria(plan) and len(patients) == 1
+        else None
+    )
     return {
         "answer": answer,
         "intent": "list_patients",
-        "patient_id": None,
+        "patient_id": resolved_patient_id if isinstance(resolved_patient_id, str) and resolved_patient_id else None,
         "evidence": [
             _evidence("Patient", patient.get("id"), _format_patient_summary(patient), patient)
             for patient in patients

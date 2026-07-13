@@ -80,10 +80,15 @@ telegram:
     id: ${TELEGRAM_CHAT_ID:}
 
 backup:
-  # Bật/tắt nút sao lưu thủ công (POST /api/admin/backup).
+  # Bật/tắt sao lưu (nút thủ công + lịch tự động).
   enabled: ${BACKUP_ENABLED:true}
+  # Lịch tự động do backend xử lý (Spring @Scheduled). Mặc định 02:00 hằng ngày.
+  cron: ${BACKUP_CRON:0 0 2 * * *}
+  timezone: ${BACKUP_TIMEZONE:Asia/Ho_Chi_Minh}
   # Đường dẫn tới backup.sh, tương đối theo thư mục chạy Spring (spring-backend/).
   script-path: ${BACKUP_SCRIPT_PATH:../infra/scripts/backup.sh}
+  # Script khôi phục không tương tác (dùng cho nút Khôi phục trên Admin UI).
+  restore-script-path: ${BACKUP_RESTORE_SCRIPT_PATH:../infra/scripts/restore-auto.sh}
   # Trình thông dịch bash; đặt đường dẫn tuyệt đối Git Bash nếu không có trong PATH.
   bash-path: ${BACKUP_BASH_PATH:bash}
   # Hủy tiến trình sao lưu nếu chạy quá số phút này.

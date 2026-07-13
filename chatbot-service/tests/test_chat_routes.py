@@ -249,6 +249,56 @@ class IntentExtractorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(ctx.exception.status_code, 403)
 
+    async def test_doctor_name_search_single_match_returns_patient_id(self) -> None:
+        class SingleMatchClient(FakePatientSearchClient):
+            async def search_patients_flexible(self, **kwargs):
+                bundle = await super().search_patients_flexible(**kwargs)
+                return {"entry": bundle["entry"][:1]}
+
+        request = make_request(message="Tom tat ho so benh nhan Nguyen Van A")
+        plan = IntentPlan(
+            tool_name=TOOL_SEARCH_PATIENTS,
+            search_name="Nguyen Van A",
+            source="llm",
+        )
+
+        payload = await chat(
+            request=request,
+            client=SingleMatchClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        # Khớp đúng 1 bệnh nhân theo tên → response phải chốt patient_id để
+        # frontend đổ panel hồ sơ và session memory ghi active_patient_id.
+        self.assertEqual(payload["patient_id"], "BN2026-00001")
+        self.assertEqual(payload["intent"], "list_patients")
+        self.assertFalse(payload.get("needs_patient_selection"))
+        self.assertEqual(
+            payload.get("memory_update", {}).get("active_patient_id"),
+            "BN2026-00001",
+        )
+
+    async def test_doctor_name_search_multiple_matches_keeps_patient_id_none(self) -> None:
+        request = make_request(message="Tim benh nhan Nguyen")
+        plan = IntentPlan(
+            tool_name=TOOL_SEARCH_PATIENTS,
+            search_name="Nguyen",
+            source="llm",
+        )
+
+        payload = await chat(
+            request=request,
+            client=FakePatientSearchClient(),
+            intent_extractor=FakeIntentExtractor(plan),
+            answer_generator=FakeAnswerGenerator(),
+            cache_service=FakeCacheService(),
+        )
+
+        self.assertIsNone(payload["patient_id"])
+        self.assertTrue(payload.get("needs_patient_selection"))
+
     async def test_user_role_can_access_own_linked_patient(self) -> None:
         request = make_request(
             user_role="USER",

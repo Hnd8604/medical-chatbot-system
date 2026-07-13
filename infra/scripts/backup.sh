@@ -25,6 +25,10 @@ BACKUP_UPLOAD="${BACKUP_UPLOAD:-true}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"           # tên remote đã tạo bằng `rclone config`
 RCLONE_DEST="${RCLONE_DEST:-medical-chatbot-backups}"  # thư mục đích trên Drive
 UPLOAD_TARGET="${RCLONE_REMOTE}:${RCLONE_DEST}"
+# Binary rclone. Mặc định tìm trên PATH; nếu Spring khởi động với PATH không có
+# rclone (vd cài sau khi backend đã chạy), đặt đường dẫn tuyệt đối trong .env:
+#   RCLONE_BIN=/c/Users/.../rclone.exe
+RCLONE_BIN="${RCLONE_BIN:-rclone}"
 
 mkdir -p "$BACKUP_DIR"
 
@@ -40,7 +44,7 @@ ANY_OK=false
 
 # Trả về true nếu rclone khả dụng và bật upload.
 upload_enabled() {
-    [ "$BACKUP_UPLOAD" = "true" ] && command -v rclone >/dev/null 2>&1
+    [ "$BACKUP_UPLOAD" = "true" ] && command -v "$RCLONE_BIN" >/dev/null 2>&1
 }
 
 append_item() {
@@ -62,24 +66,45 @@ perform_backup() {
     local size_bytes=0
     local uploaded=false
     local ok=false
+    local upload_err=""
 
     echo "[$(date)] Đang sao lưu $DB_TYPE DB..." >> "$LOG_FILE"
 
+    # Bảng theo dõi backup/restore của chính app phải bị loại HOÀN TOÀN khỏi dump
+    # (kể cả DDL): nếu còn, khôi phục app DB sẽ DROP + tạo lại 2 bảng này, khiến
+    # (1) dòng restore đang chạy bị xóa -> backend findById null -> không cập nhật
+    # được trạng thái -> kẹt "ĐANG CHẠY", và (2) hồi sinh dòng backup RUNNING đóng
+    # băng trong snapshot -> zombie chặn mọi backup/restore sau đó.
+    # --exclude-table (không phải --exclude-table-data) để restore KHÔNG đụng tới
+    # bảng đang có; lịch sử vận hành cũng đúng là không nên bị roll-back. Chỉ app DB.
+    local EXTRA_DUMP_ARGS=()
+    if [ "$DB_TYPE" = "app" ]; then
+        EXTRA_DUMP_ARGS+=(--exclude-table='backup_history' --exclude-table='restore_history')
+    fi
+
     # Chạy backup, nhờ pipefail nên nếu pg_dump sập thì rơi vào nhánh else.
-    if docker exec "$CONTAINER_NAME" pg_dump --clean --if-exists -U "$DB_USER" "$DB_NAME" | gzip > "$OUTPUT_FILE"; then
+    if docker exec "$CONTAINER_NAME" pg_dump --clean --if-exists "${EXTRA_DUMP_ARGS[@]}" -U "$DB_USER" "$DB_NAME" | gzip > "$OUTPUT_FILE"; then
         ok=true
         ANY_OK=true
         size_bytes=$(wc -c < "$OUTPUT_FILE" 2>/dev/null | tr -d ' ')
         [ -z "$size_bytes" ] && size_bytes=0
         echo "[$(date)] ✅ Sao lưu thành công: $OUTPUT_FILE (${size_bytes} bytes)" >> "$LOG_FILE"
 
-        # Upload lên Google Drive.
-        if upload_enabled; then
-            if rclone copy "$OUTPUT_FILE" "${UPLOAD_TARGET}/" --log-level ERROR >> "$LOG_FILE" 2>&1; then
+        # Upload lên Google Drive. Nếu BACKUP_UPLOAD=true mà rclone thiếu/lỗi thì
+        # KHÔNG bỏ qua âm thầm: hạ trạng thái xuống partial + ghi lý do vào item để
+        # UI thấy ngay (tránh tưởng đã lên Drive trong khi thực tế chỉ có bản local).
+        if [ "$BACKUP_UPLOAD" = "true" ]; then
+            if ! command -v "$RCLONE_BIN" >/dev/null 2>&1; then
+                OVERALL_OK=false
+                upload_err="Chua upload: rclone chua cai hoac khong co tren PATH."
+                echo "[$(date)] ⚠️  rclone không khả dụng — chỉ có bản local, chưa upload $DB_TYPE DB!" >> "$LOG_FILE"
+                send_alert "rclone không khả dụng, chưa upload $DB_TYPE DB ($DB_NAME) lên Google Drive lúc $(date)."
+            elif "$RCLONE_BIN" copy "$OUTPUT_FILE" "${UPLOAD_TARGET}/" --log-level ERROR >> "$LOG_FILE" 2>&1; then
                 uploaded=true
                 echo "[$(date)] ☁️  Đã upload lên $UPLOAD_TARGET/$FILE_NAME" >> "$LOG_FILE"
             else
                 OVERALL_OK=false
+                upload_err="Upload len Google Drive that bai (kiem tra remote ${RCLONE_REMOTE})."
                 echo "[$(date)] ⚠️  Upload $DB_TYPE DB lên Google Drive thất bại!" >> "$LOG_FILE"
                 send_alert "Upload $DB_TYPE DB ($DB_NAME) lên Google Drive thất bại lúc $(date)."
             fi
@@ -92,7 +117,11 @@ perform_backup() {
         send_alert "Quá trình sao lưu $DB_TYPE DB ($DB_NAME) thất bại lúc $(date). Vui lòng kiểm tra server!"
     fi
 
-    append_item "{\"db\":\"${DB_TYPE}\",\"file\":\"${FILE_NAME}\",\"size_bytes\":${size_bytes},\"ok\":${ok},\"uploaded\":${uploaded}}"
+    local upload_err_json=""
+    if [ -n "$upload_err" ]; then
+        upload_err_json=",\"upload_error\":\"${upload_err}\""
+    fi
+    append_item "{\"db\":\"${DB_TYPE}\",\"file\":\"${FILE_NAME}\",\"size_bytes\":${size_bytes},\"ok\":${ok},\"uploaded\":${uploaded}${upload_err_json}}"
 }
 
 send_alert() {
@@ -116,7 +145,7 @@ find "$BACKUP_DIR" -type f -name "*.sql.gz" -mtime +$RETENTION_DAYS -exec rm {} 
 # Dọn dẹp bản sao cũ trên Google Drive.
 if upload_enabled; then
     echo "[$(date)] Dọn dẹp bản sao trên $UPLOAD_TARGET cũ hơn $RETENTION_DAYS ngày..." >> "$LOG_FILE"
-    rclone delete --min-age "${RETENTION_DAYS}d" "$UPLOAD_TARGET" --log-level ERROR >> "$LOG_FILE" 2>&1 || true
+    "$RCLONE_BIN" delete --min-age "${RETENTION_DAYS}d" "$UPLOAD_TARGET" --log-level ERROR >> "$LOG_FILE" 2>&1 || true
 fi
 
 # Xác định trạng thái tổng thể.

@@ -5,3 +5,7 @@ pydantic-settings
 openai
 qdrant-client
 fastembed
+# LangGraph agent (M-LG). Chỉ cần khi ENABLE_LANGGRAPH_AGENT=true.
+# Không thêm langchain-openai: agent gọi LLM qua openai SDK + LiteLLM gateway
+# (xem langgraph_agent/llm.py) để không nhân đôi logic virtual key/budget.
+langgraph>=1.2,<2

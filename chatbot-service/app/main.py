@@ -29,7 +29,14 @@ async def cache_cleanup_task():
 async def lifespan(app: FastAPI):
     cache_service = get_semantic_cache()
     await cache_service.init_collection()
-    
+
+    if settings.use_langgraph_agent and settings.enable_plan_cache:
+        # Collection thứ hai cho plan cache (không chứa PHI, TTL dài — xem
+        # docs/M-langgraph-agent.md §6.1). Lỗi ở đây không chặn service khởi động.
+        from langgraph_agent.plan_cache import get_plan_cache
+
+        await get_plan_cache().init_collection()
+
     cleanup_task = asyncio.create_task(cache_cleanup_task())
     log.info("[SYSTEM] Đã khởi động tiến trình dọn dẹp cache ngầm.")
 

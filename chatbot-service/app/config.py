@@ -41,6 +41,36 @@ class Settings(BaseSettings):
     rxnorm_cache_ttl_seconds: int = Field(default=86400)
     loinc_cache_ttl_seconds: int = Field(default=2592000)
 
+    # ---- LangGraph agent (M-LG) ----
+    # Endpoint /chat/langgraph. Tắt mặc định: /chat cũ vẫn là đường chính cho tới M-LG6.
+    enable_langgraph_agent: bool = Field(default=False)
+    # Model theo stage. None -> rơi về model_router/model_simple/model_complex.
+    model_agent_route: str | None = Field(default=None)
+    model_agent_planner: str | None = Field(default=None)
+    model_agent_chat: str | None = Field(default=None)
+    # Router LLM: bao nhiêu quyết định route được nhớ trong LRU (0 = tắt cache).
+    agent_route_cache_size: int = Field(default=512)
+    # Trần số step của một plan sau khi validate.
+    agent_max_plan_steps: int = Field(default=4)
+    # Evidence budget: trần ký tự của evidence đưa vào prompt answer (~4 ký tự/token).
+    agent_evidence_max_chars: int = Field(default=12000)
+    # Template fast-path: plan 1 bước, data_only, <= ngần này evidence -> không gọi answer LLM.
+    agent_template_fast_path: bool = Field(default=False)
+    agent_template_fast_path_max_evidence: int = Field(default=5)
+    # Plan cache: cache "ý định đã validate" (không chứa PHI), dùng chung mọi user.
+    enable_plan_cache: bool = Field(default=True)
+    plan_cache_collection_name: str = Field(default="medical_plan_cache")
+    plan_cache_ttl_seconds: int = Field(default=86400)
+    plan_cache_similarity_threshold: float = Field(default=0.95)
+    # Low-cost mode: quota vượt ngưỡng -> bỏ router/planner LLM, tắt terminology.
+    agent_low_cost_mode_ratio: float = Field(default=0.9)
+    # QUYẾT ĐỊNH BẢO MẬT ĐANG CHỜ CHỐT (docs/M-langgraph-agent.md §2.3d).
+    # false = giữ nguyên chính sách /chat hiện tại: USER không được get_resource_by_id.
+    # true  = cho phép, nhưng plan_executor kiểm tra chủ sở hữu resource sau khi fetch
+    #         và loại bỏ nếu subject không thuộc allowed_patient_ids.
+    # Bật cái này thì USER mới hỏi nối được "chỉ số này có ý nghĩa gì".
+    agent_allow_user_resource_lookup: bool = Field(default=False)
+
     # Semantic Cache Config (Qdrant)
     qdrant_url: str = Field(default="http://localhost:6333")
     cache_collection_name: str = Field(default="medical_chat_cache")
@@ -79,6 +109,24 @@ class Settings(BaseSettings):
     @property
     def use_llm_summary(self) -> bool:
         return self.enable_llm_summary and self.use_llm
+
+    @property
+    def use_langgraph_agent(self) -> bool:
+        """Endpoint /chat/langgraph chỉ bật khi có cả cờ lẫn master key gateway."""
+        return self.enable_langgraph_agent and self.use_llm
+
+    @property
+    def agent_route_model(self) -> str:
+        return self.model_agent_route or self.model_router or self.model_simple
+
+    @property
+    def agent_planner_model(self) -> str:
+        return self.model_agent_planner or self.model_complex
+
+    @property
+    def agent_chat_model(self) -> str:
+        """Model cho general_chat / conversation_meta / unsupported (câu ngắn, không FHIR)."""
+        return self.model_agent_chat or self.model_simple
 
 
 @lru_cache

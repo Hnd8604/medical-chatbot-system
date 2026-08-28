@@ -15,6 +15,11 @@ hệ thống lấy dữ liệu y tế có cấu trúc qua **FHIR REST** rồi LL
 
 Luồng: Frontend → Spring `/api/chat` → chatbot-service `/chat` → FHIR → LLM (tiếng Việt).
 
+> **Đường agent (M-LG)**: chatbot-service còn endpoint thứ hai `/chat/langgraph`
+> (router → planner nhiều bước → validator → executor → answer) sau cờ
+> `ENABLE_LANGGRAPH_AGENT`, mặc định tắt. `/chat` vẫn là đường chính cho tới khi bộ eval
+> `chatbot-service/tests/eval/` cho số liệu. Xem @docs/M-langgraph-agent.md.
+
 ## Lệnh build / test / run
 
 | Việc | Lệnh | Thư mục |
@@ -46,6 +51,7 @@ Luồng: Frontend → Spring `/api/chat` → chatbot-service `/chat` → FHIR �
 
 - @docs/product-spec.md — spec sản phẩm + quy tắc FHIR/usage/cache đầy đủ.
 - @docs/optimization-direction.md — hướng chuyên sâu: tối ưu token/quota/cache/routing/gateway + chỉ số đánh giá.
+- `docs/M-langgraph-agent.md` — thiết kế + trạng thái agent (LangGraph): graph, chính sách role, plan cache, evidence budget, bộ eval.
 - `docs/` — thiết kế từng module (vd `docs/M2-conversation-management.md`).
 
 > Mỗi thư mục con có `CLAUDE.md` riêng (Claude tự nạp khi làm việc trong đó):

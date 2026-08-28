@@ -45,6 +45,7 @@ from chat.resource_answerers import (
     _resolve_patient_id_for_tool,
 )
 from chat.response_builder import _finalize_chat_response, current_user_context
+from app.config import get_settings
 from fhir.client import FhirClient, FhirClientError, get_fhir_client
 from services.semantic_cache import SemanticCacheService, get_semantic_cache
 
@@ -148,6 +149,54 @@ def _ensure_role_can_access_plan(request: ChatRequest, plan) -> None:
     patient_id = normalize_patient_id(plan.patient_id)
     if not patient_id or patient_id not in _allowed_patient_ids(request):
         _user_scope_error("Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh.")
+
+
+@router.post("/chat/langgraph")
+async def chat_langgraph(
+    request: ChatRequest,
+    client: FhirClient = Depends(get_fhir_client),
+    intent_extractor: IntentExtractor = Depends(get_intent_extractor),
+    answer_generator: AnswerGenerator = Depends(get_answer_generator),
+    cache_service: SemanticCacheService = Depends(get_semantic_cache),
+    model_router: ModelRouter = Depends(get_model_router),
+    summary_generator: SummaryGenerator = Depends(get_summary_generator),
+) -> dict[str, Any]:
+    """Đường agent (M-LG): router → planner → validator → executor → answer.
+
+    Chạy song song với ``POST /chat`` cho tới khi bộ eval (M-LG6) chứng minh chi phí
+    mỗi lượt không tăng. Trả về đúng shape response mà Spring/frontend đang đọc,
+    kèm vài trường bổ sung tuỳ chọn (``response_status``, ``plan_steps``,
+    ``stage_usage``, ``agent_route``).
+    """
+    if not get_settings().use_langgraph_agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent chưa được bật (ENABLE_LANGGRAPH_AGENT=false).",
+        )
+
+    from langgraph_agent.errors import AgentError
+    from langgraph_agent.graph import run_agent
+
+    try:
+        return await run_agent(
+            request,
+            client=client,
+            answer_generator=answer_generator,
+            cache_service=cache_service,
+            model_router=model_router,
+            summary_generator=summary_generator,
+            intent_extractor=intent_extractor,
+        )
+    except GatewayBudgetExceededError as exc:
+        raise _budget_exceeded_http() from exc
+    except AgentError as exc:
+        # PolicyError -> 403, PlanError -> 400. Giữ nguyên mã để Spring chuyển tiếp.
+        raise exc.as_http() from exc
+    except FhirClientError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=exc.user_message,
+        ) from exc
 
 
 @router.post("/chat")

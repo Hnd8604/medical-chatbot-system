@@ -21,6 +21,8 @@ import com.medicalchatbot.backend.dto.response.VerifyResetCodeResponse;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -29,9 +31,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class PasswordResetServiceTest {
@@ -71,12 +71,12 @@ class PasswordResetServiceTest {
     void forgotPasswordUnknownEmailReturnsNotFound() {
         when(userRepository.findByEmailIgnoreCase("ghost@demo.local")).thenReturn(Optional.empty());
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service.forgotPassword(new ForgotPasswordRequest("Ghost@Demo.local"))
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, ex.getErrorCode());
         verify(otpService, never()).issueCode(anyString());
         verify(emailService, never()).sendPasswordResetCode(anyString(), anyString());
     }
@@ -99,12 +99,12 @@ class PasswordResetServiceTest {
         user.updateStatus(UserStatus.LOCKED);
         when(userRepository.findByEmailIgnoreCase("user@demo.local")).thenReturn(Optional.of(user));
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service.forgotPassword(new ForgotPasswordRequest("user@demo.local"))
         );
 
-        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals(ErrorCode.ACCESS_DENIED, ex.getErrorCode());
         verify(otpService, never()).issueCode(anyString());
         verify(emailService, never()).sendPasswordResetCode(anyString(), anyString());
     }
@@ -138,7 +138,7 @@ class PasswordResetServiceTest {
     @Test
     void resetPasswordWithWeakPasswordDoesNotConsumeTicket() {
         assertThrows(
-                ResponseStatusException.class,
+                AppException.class,
                 () -> service.resetPassword(new ResetPasswordRequest("jti.secret", "short", "short"))
         );
         verify(otpService, never()).consumeTicket(anyString());
@@ -149,10 +149,10 @@ class PasswordResetServiceTest {
         when(otpService.consumeTicket("jti.secret")).thenReturn("user@demo.local");
         when(userRepository.findByEmailIgnoreCase("user@demo.local")).thenReturn(Optional.empty());
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service.resetPassword(new ResetPasswordRequest("jti.secret", "NewPass123", "NewPass123"))
         );
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
     }
 }

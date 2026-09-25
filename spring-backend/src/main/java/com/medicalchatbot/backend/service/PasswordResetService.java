@@ -12,14 +12,14 @@ import com.medicalchatbot.backend.dto.response.ResetPasswordResponse;
 import com.medicalchatbot.backend.dto.response.VerifyResetCodeResponse;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserStatus;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Điều phối luồng quên mật khẩu 3 bước: gửi mã OTP → xác thực mã lấy ticket → đặt lại mật khẩu.
@@ -40,12 +40,12 @@ public class PasswordResetService {
     public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest request) {
         String email = normalizeEmail(request.email());
         User user = userRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "Không tìm thấy tài khoản với email này."
                 ));
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Tài khoản không ở trạng thái hoạt động.");
+            throw new AppException(ErrorCode.ACCESS_DENIED, "Tài khoản không ở trạng thái hoạt động.");
         }
 
         Optional<String> code = otpService.issueCode(email);
@@ -69,8 +69,8 @@ public class PasswordResetService {
 
         String email = otpService.consumeTicket(request.resetTicket());
         User user = userRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.INVALID_ARGUMENT,
                         "Yeu cau dat lai mat khau khong hop le hoac da het han."
                 ));
 

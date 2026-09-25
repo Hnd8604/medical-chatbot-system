@@ -2,6 +2,7 @@ package com.medicalchatbot.backend.service;
 
 import com.medicalchatbot.backend.dto.response.CacheMetricsResponse;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
+import com.medicalchatbot.backend.repository.projection.CacheMetricsProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,13 +15,22 @@ public class MetricsService {
     private final UsageLogRepository usageLogRepository;
 
     public CacheMetricsResponse getCacheMetrics(OffsetDateTime startDate, OffsetDateTime endDate) {
-        return usageLogRepository.getCacheObservabilityMetrics(startDate, endDate);
+        return toResponse(usageLogRepository.getCacheObservabilityMetrics(startDate, endDate));
     }
 
     public CacheMetricsResponse getCacheMetrics() {
         OffsetDateTime endDate = OffsetDateTime.now(ZoneOffset.UTC);
         OffsetDateTime startDate = endDate.minusDays(30);
 
-        return usageLogRepository.getCacheObservabilityMetrics(startDate, endDate);
+        return toResponse(usageLogRepository.getCacheObservabilityMetrics(startDate, endDate));
+    }
+
+    private CacheMetricsResponse toResponse(CacheMetricsProjection metrics) {
+        return new CacheMetricsResponse(
+                metrics.totalRequests(),
+                metrics.totalCacheHits(),
+                metrics.totalSavedTokens(),
+                metrics.totalSavedCostUsd()
+        );
     }
 }

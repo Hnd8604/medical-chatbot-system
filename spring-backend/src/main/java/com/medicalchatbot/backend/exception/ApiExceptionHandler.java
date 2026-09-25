@@ -80,7 +80,7 @@ public class ApiExceptionHandler {
         if (errorCode.getStatus().is5xxServerError()) {
             log.error("Typed application failure: {}", errorCode.getErrorCode());
         }
-        String publicMessage = errorCode.getStatus().is5xxServerError() ? null : exception.getReason();
+        String publicMessage = errorCode.getStatus().is5xxServerError() ? null : exception.getMessage();
         return build(errorCode, publicMessage);
     }
 

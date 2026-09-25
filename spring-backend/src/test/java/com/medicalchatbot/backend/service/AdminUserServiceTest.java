@@ -19,6 +19,8 @@ import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
@@ -28,9 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class AdminUserServiceTest {
@@ -53,12 +53,12 @@ class AdminUserServiceTest {
         when(currentUserService.requireCurrentUser()).thenReturn(admin);
         when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> newService().updateStatus(admin.getId(), UserStatus.LOCKED)
         );
 
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
         verify(userRepository, never()).save(admin);
     }
 
@@ -68,12 +68,12 @@ class AdminUserServiceTest {
         when(currentUserService.requireCurrentUser()).thenReturn(admin);
         when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> newService().updateRole(admin.getId(), UserRole.DOCTOR)
         );
 
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
         verify(userRepository, never()).save(admin);
     }
 

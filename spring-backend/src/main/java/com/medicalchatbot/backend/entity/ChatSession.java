@@ -3,7 +3,7 @@ package com.medicalchatbot.backend.entity;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
+import com.medicalchatbot.backend.domain.model.ChatSessionMemoryState;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -73,8 +73,8 @@ public class ChatSession {
         this.id = id;
     }
 
-    public ChatSessionMemory memory() {
-        return new ChatSessionMemory(
+    public ChatSessionMemoryState memory() {
+        return new ChatSessionMemoryState(
                 activePatientId,
                 memorySummary,
                 lastIntent,
@@ -84,7 +84,7 @@ public class ChatSession {
         );
     }
 
-    public void applyMemory(ChatSessionMemory memory) {
+    public void applyMemory(ChatSessionMemoryState memory) {
         this.activePatientId = memory.activePatientId();
         this.memorySummary = memory.memorySummary();
         this.lastIntent = memory.lastIntent();

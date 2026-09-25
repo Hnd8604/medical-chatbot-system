@@ -18,33 +18,37 @@ import java.time.OffsetDateTime;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medicalchatbot.backend.dto.request.ChatContextMessage;
 import com.medicalchatbot.backend.dto.request.ChatRequest;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
-import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
 import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
+import com.medicalchatbot.backend.domain.model.ChatSessionMemoryState;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.ChatMessageRole;
 import com.medicalchatbot.backend.enums.UserRole;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
+import com.medicalchatbot.backend.integration.client.ChatbotServiceClient;
+import com.medicalchatbot.backend.mapper.ChatMapper;
+import com.medicalchatbot.backend.mapper.ChatbotResponseMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
+import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
+import com.medicalchatbot.backend.repository.projection.ChatSessionSummaryProjection;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class ChatApplicationServiceTest {
@@ -88,12 +92,12 @@ class ChatApplicationServiceTest {
         when(currentUserService.requireCurrentUserId()).thenReturn(userId);
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(false);
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        AppException exception = assertThrows(
+                AppException.class,
                 () -> service.sessionMessages(sessionId)
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
         verify(chatSessionRepository, never()).findMessagesForSession(sessionId, userId);
     }
 
@@ -102,7 +106,7 @@ class ChatApplicationServiceTest {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000601");
         ChatSession session = new ChatSession(sessionId);
-        session.applyMemory(new ChatSessionMemory(
+        session.applyMemory(new ChatSessionMemoryState(
                 "BN2026-00001",
                 "Da xem huyet ap cua BN2026-00001.",
                 "observations",
@@ -154,8 +158,8 @@ class ChatApplicationServiceTest {
         when(chatSessionRepository.existsForUser(sessionId, userId)).thenReturn(true);
         when(chatSessionRepository.getReferenceById(sessionId)).thenReturn(session);
         when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of(
-                new ChatContextMessage("user", "huyet ap cua benh nhan nay"),
-                new ChatContextMessage("assistant", "Huyet ap 150/92 mmHg")
+                new ChatContextMessageProjection("user", "huyet ap cua benh nhan nay"),
+                new ChatContextMessageProjection("assistant", "Huyet ap 150/92 mmHg")
         ));
         when(chatMessageRepository.countBySession_Id(sessionId)).thenReturn(6L);
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
@@ -181,9 +185,9 @@ class ChatApplicationServiceTest {
         assertEquals(6, chatbotRequest.conversationContext().totalMessageCount());
         assertEquals("BN2026-00001", result.patientId());
 
-        ArgumentCaptor<ChatSessionMemory> memoryCaptor = ArgumentCaptor.forClass(ChatSessionMemory.class);
+        ArgumentCaptor<ChatSessionMemoryState> memoryCaptor = ArgumentCaptor.forClass(ChatSessionMemoryState.class);
         verify(chatSessionRepository).updateMemory(org.mockito.ArgumentMatchers.eq(session), memoryCaptor.capture());
-        ChatSessionMemory savedMemory = memoryCaptor.getValue();
+        ChatSessionMemoryState savedMemory = memoryCaptor.getValue();
         assertEquals("BN2026-00001", savedMemory.activePatientId());
         assertEquals("medications", savedMemory.lastIntent());
         assertEquals("MedicationRequest", savedMemory.lastResourceType());
@@ -195,7 +199,7 @@ class ChatApplicationServiceTest {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000602");
         ChatSession session = new ChatSession(sessionId);
-        session.applyMemory(new ChatSessionMemory(
+        session.applyMemory(new ChatSessionMemoryState(
                 "BN2026-00001",
                 "Da xem huyet ap cua BN2026-00001.",
                 "observations",
@@ -237,9 +241,9 @@ class ChatApplicationServiceTest {
 
         service.chat(new ChatRequest(sessionId, null, "danh sach benh nhan"));
 
-        ArgumentCaptor<ChatSessionMemory> memoryCaptor = ArgumentCaptor.forClass(ChatSessionMemory.class);
+        ArgumentCaptor<ChatSessionMemoryState> memoryCaptor = ArgumentCaptor.forClass(ChatSessionMemoryState.class);
         verify(chatSessionRepository).updateMemory(org.mockito.ArgumentMatchers.eq(session), memoryCaptor.capture());
-        ChatSessionMemory savedMemory = memoryCaptor.getValue();
+        ChatSessionMemoryState savedMemory = memoryCaptor.getValue();
         assertEquals("BN2026-00001", savedMemory.activePatientId());
         assertEquals("Observation", savedMemory.lastResourceType());
         assertEquals("obs-1", savedMemory.lastResourceId());
@@ -379,12 +383,12 @@ class ChatApplicationServiceTest {
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         when(userPatientLinkRepository.findPatientIdsForUser(userId)).thenReturn(List.of("BN2026-00001"));
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        AppException exception = assertThrows(
+                AppException.class,
                 () -> service.chat(new ChatRequest(null, "BN2026-00002", "Thuoc cua Patient/BN2026-00002"))
         );
 
-        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
         verify(chatSessionRepository, never()).create(any(), any());
         verify(chatbotServiceClient, never()).chat(any());
     }
@@ -452,7 +456,7 @@ class ChatApplicationServiceTest {
     void sessionsUsesRecentSessionsWhenQueryIsBlank() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         ChatApplicationService service = newService();
-        ChatSessionSummary summary = new ChatSessionSummary(
+        ChatSessionSummaryProjection summary = new ChatSessionSummaryProjection(
                 UUID.fromString("00000000-0000-0000-0000-000000000701"),
                 "Recent chat",
                 OffsetDateTime.parse("2026-06-01T10:00:00Z"),
@@ -467,7 +471,15 @@ class ChatApplicationServiceTest {
 
         ChatSessionListResponse result = service.sessions("   ", 20);
 
-        assertEquals(List.of(summary), result.sessions());
+        assertEquals(List.of(new ChatSessionSummary(
+                summary.id(),
+                summary.title(),
+                summary.createdAt(),
+                summary.updatedAt(),
+                summary.activePatientId(),
+                summary.messageCount(),
+                summary.lastMessagePreview()
+        )), result.sessions());
         verify(chatSessionRepository).findRecentSessionsForUser(userId, 20);
         verify(chatSessionRepository, never()).searchSessionsForUser(any(), any(), anyInt());
     }
@@ -476,7 +488,7 @@ class ChatApplicationServiceTest {
     void sessionsUsesSearchWhenQueryHasText() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         ChatApplicationService service = newService();
-        ChatSessionSummary summary = new ChatSessionSummary(
+        ChatSessionSummaryProjection summary = new ChatSessionSummaryProjection(
                 UUID.fromString("00000000-0000-0000-0000-000000000702"),
                 "Medication chat",
                 OffsetDateTime.parse("2026-06-02T10:00:00Z"),
@@ -491,7 +503,15 @@ class ChatApplicationServiceTest {
 
         ChatSessionListResponse result = service.sessions("  thuoc  ", 30);
 
-        assertEquals(List.of(summary), result.sessions());
+        assertEquals(List.of(new ChatSessionSummary(
+                summary.id(),
+                summary.title(),
+                summary.createdAt(),
+                summary.updatedAt(),
+                summary.activePatientId(),
+                summary.messageCount(),
+                summary.lastMessagePreview()
+        )), result.sessions());
         verify(chatSessionRepository).searchSessionsForUser(userId, "thuoc", 30);
         verify(chatSessionRepository, never()).findRecentSessionsForUser(any(), anyInt());
     }
@@ -555,18 +575,24 @@ class ChatApplicationServiceTest {
     }
 
     private ChatApplicationService newService() {
+        ChatbotResponseMapper chatbotResponseMapper = new ChatbotResponseMapper(new ObjectMapper());
+        ChatInteractionRecorder chatInteractionRecorder = new ChatInteractionRecorder(
+                usageLogRepository,
+                auditLogRepository,
+                costEstimationService,
+                chatbotResponseMapper
+        );
         return new ChatApplicationService(
                 chatSessionRepository,
                 chatMessageRepository,
-                usageLogRepository,
-                auditLogRepository,
                 chatbotServiceClient,
                 quotaService,
-                costEstimationService,
-                new ObjectMapper(),
                 currentUserService,
                 new UserPatientScopeService(userPatientLinkRepository),
-                llmGatewayKeyService
+                llmGatewayKeyService,
+                new ChatMapper(),
+                chatbotResponseMapper,
+                chatInteractionRecorder
         );
     }
 

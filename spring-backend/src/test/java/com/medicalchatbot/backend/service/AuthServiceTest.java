@@ -28,6 +28,10 @@ import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
+import com.medicalchatbot.backend.integration.client.ChatbotServiceClient;
+import com.medicalchatbot.backend.mapper.AuthUserMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
@@ -36,11 +40,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -136,11 +138,11 @@ class AuthServiceTest {
                                 .thenReturn(new RefreshTokenService.RotationResult(userId, 4));
                 when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().refresh(new AuthRefreshRequest("stale-refresh")));
 
-                assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
+                assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, ex.getErrorCode());
                 verify(refreshTokenService).revokeAllForUser(userId);
         }
 
@@ -159,11 +161,11 @@ class AuthServiceTest {
                                 .thenReturn(new RefreshTokenService.RotationResult(userId, 0));
                 when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().refresh(new AuthRefreshRequest("any-refresh")));
 
-                assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+                assertEquals(ErrorCode.ACCESS_DENIED, ex.getErrorCode());
         }
 
         @Test
@@ -178,11 +180,11 @@ class AuthServiceTest {
                                 "UserDemo123!");
                 when(userRepository.findByUsernameOrEmailIgnoreCase("user_demo")).thenReturn(Optional.of(user));
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().login(new AuthLoginRequest("user_demo", "wrong-password")));
 
-                assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
+                assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, ex.getErrorCode());
         }
 
         @Test
@@ -197,11 +199,11 @@ class AuthServiceTest {
                                 "UserDemo123!");
                 when(userRepository.findByUsernameOrEmailIgnoreCase("locked_user")).thenReturn(Optional.of(user));
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().login(new AuthLoginRequest("locked_user", "UserDemo123!")));
 
-                assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+                assertEquals(ErrorCode.ACCESS_DENIED, ex.getErrorCode());
         }
 
         @Test
@@ -236,8 +238,8 @@ class AuthServiceTest {
         void registerRejectsDuplicateUsername() {
                 when(userRepository.existsByUsernameIgnoreCase("new_user")).thenReturn(true);
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().register(new AuthRegisterRequest(
                                                 "Nguyễn Văn A",
                                                 "new_user",
@@ -245,13 +247,13 @@ class AuthServiceTest {
                                                 "Password123!",
                                                 "Password123!")));
 
-                assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+                assertEquals(ErrorCode.CONFLICT, ex.getErrorCode());
         }
 
         @Test
         void registerRejectsWeakPassword() {
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().register(new AuthRegisterRequest(
                                                 "Nguyễn Văn A",
                                                 "new_user",
@@ -259,7 +261,7 @@ class AuthServiceTest {
                                                 "password",
                                                 "password")));
 
-                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+                assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
         }
 
         @Test
@@ -334,14 +336,14 @@ class AuthServiceTest {
                                 }
                                 """));
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().linkPatient(new AuthLinkPatientRequest(
                                                 "BN2026-00001",
                                                 "2004-01-01",
                                                 "0900000001")));
 
-                assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, ex.getStatusCode());
+                assertEquals(ErrorCode.UNPROCESSABLE_ENTITY, ex.getErrorCode());
         }
 
         @Test
@@ -401,12 +403,12 @@ class AuthServiceTest {
                 when(currentUserService.requireCurrentUser()).thenReturn(user);
                 when(userRepository.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().updateProfile(
                                                 new UpdateProfileRequest("User Demo", "taken@example.com")));
 
-                assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+                assertEquals(ErrorCode.CONFLICT, ex.getErrorCode());
         }
 
         @Test
@@ -443,12 +445,12 @@ class AuthServiceTest {
                                 "UserDemo123!");
                 when(currentUserService.requireCurrentUser()).thenReturn(user);
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().updateProfile(
                                                 new UpdateProfileRequest("User Demo", "not-an-email")));
 
-                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+                assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
         }
 
         @Test
@@ -463,12 +465,12 @@ class AuthServiceTest {
                                 "UserDemo123!");
                 when(currentUserService.requireCurrentUser()).thenReturn(user);
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().updateProfile(
                                                 new UpdateProfileRequest("A", "user_demo@medical-chatbot.local")));
 
-                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+                assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
         }
 
         @Test
@@ -505,12 +507,12 @@ class AuthServiceTest {
                                 "OldPass123!");
                 when(currentUserService.requireCurrentUser()).thenReturn(user);
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().changePassword(
                                                 new ChangePasswordRequest("WrongPass123!", "NewPass456!", "NewPass456!")));
 
-                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+                assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
         }
 
         @Test
@@ -525,26 +527,30 @@ class AuthServiceTest {
                                 "OldPass123!");
                 when(currentUserService.requireCurrentUser()).thenReturn(user);
 
-                ResponseStatusException ex = assertThrows(
-                                ResponseStatusException.class,
+                AppException ex = assertThrows(
+                                AppException.class,
                                 () -> newService().changePassword(
                                                 new ChangePasswordRequest("OldPass123!", "OldPass123!", "OldPass123!")));
 
-                assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+                assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
         }
 
         private AuthService newService() {
                 return new AuthService(
                                 userRepository,
-                                userPatientLinkRepository,
                                 quotaPolicyRepository,
                                 passwordEncoder,
                                 jwtTokenService,
                                 refreshTokenService,
                                 currentUserService,
-                                chatbotServiceClient,
-                                auditLogRepository,
-                                new ObjectMapper());
+                                new PatientLinkService(
+                                                currentUserService,
+                                                userPatientLinkRepository,
+                                                chatbotServiceClient,
+                                                new AuthUserMapper(userPatientLinkRepository),
+                                                new AuthAuditService(auditLogRepository, new ObjectMapper())),
+                                new AuthUserMapper(userPatientLinkRepository),
+                                new AuthAuditService(auditLogRepository, new ObjectMapper()));
         }
 
         private QuotaPolicy quotaPolicy() {

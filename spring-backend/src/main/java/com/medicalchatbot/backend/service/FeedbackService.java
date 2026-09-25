@@ -7,14 +7,14 @@ import com.medicalchatbot.backend.dto.response.FeedbackResponse;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.MessageFeedback;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -43,7 +43,7 @@ public class FeedbackService {
             return toResponse(feedback, messageId);
         } catch (DataIntegrityViolationException ex) {
             // The database unique constraint closes the race between the existence check and insert.
-            throw feedbackAlreadyExists();
+            throw feedbackAlreadyExists(ex);
         }
     }
 
@@ -77,15 +77,23 @@ public class FeedbackService {
         );
     }
 
-    private static ResponseStatusException messageNotFound() {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found.");
+    private static AppException messageNotFound() {
+        return new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Message not found.");
     }
 
-    private static ResponseStatusException feedbackNotFound() {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Feedback not found.");
+    private static AppException feedbackNotFound() {
+        return new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Feedback not found.");
     }
 
-    private static ResponseStatusException feedbackAlreadyExists() {
-        return new ResponseStatusException(HttpStatus.CONFLICT, "Feedback already exists for this message.");
+    private static AppException feedbackAlreadyExists() {
+        return feedbackAlreadyExists(null);
+    }
+
+    private static AppException feedbackAlreadyExists(Throwable cause) {
+        return new AppException(
+                ErrorCode.CONFLICT,
+                "Feedback already exists for this message.",
+                cause
+        );
     }
 }

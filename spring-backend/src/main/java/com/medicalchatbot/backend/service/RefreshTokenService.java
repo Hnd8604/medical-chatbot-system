@@ -11,10 +11,10 @@ import java.util.UUID;
 
 import com.medicalchatbot.backend.config.JwtProperties;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Quản lý refresh token dạng opaque, lưu trong Redis, có rotation.
@@ -65,8 +65,8 @@ public class RefreshTokenService {
     /**
      * Xác thực + xoay refresh token: xóa token cũ và trả về chủ sở hữu để cấp token mới.
      *
-     * @throws ResponseStatusException 401 nếu token sai định dạng, không tồn tại (đã xoay/hết hạn)
-     *                                 hoặc secret không khớp.
+     * @throws AppException nếu token sai định dạng, không tồn tại (đã xoay/hết hạn)
+     *                      hoặc secret không khớp.
      */
     public RotationResult rotate(String rawToken) {
         ParsedToken parsed = parse(rawToken);
@@ -152,8 +152,8 @@ public class RefreshTokenService {
         return USER_SET_PREFIX + userId;
     }
 
-    private static ResponseStatusException unauthorized(String message) {
-        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, message);
+    private static AppException unauthorized(String message) {
+        return new AppException(ErrorCode.AUTHENTICATION_REQUIRED, message);
     }
 
     public record RotationResult(UUID userId, int tokenVersion) {

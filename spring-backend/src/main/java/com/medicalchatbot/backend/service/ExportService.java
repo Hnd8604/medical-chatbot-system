@@ -15,6 +15,7 @@ import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
+import com.medicalchatbot.backend.mapper.ChatMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
@@ -47,6 +48,7 @@ public class ExportService {
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final ChatMapper chatMapper;
 
     private User getCurrentUser() {
         String username = currentUserService.getCurrentUsername();
@@ -60,7 +62,9 @@ public class ExportService {
             throw new AppException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(sessionId, user.getId());
+        List<ChatMessageItem> messages = chatMapper.toMessageItems(
+                chatSessionRepository.findMessagesForSession(sessionId, user.getId())
+        );
 
         byte[] pdfBytes = generatePdf(List.of(new SessionExportData("Session " + sessionId, messages)));
         logExportAction(user, "SESSION", sessionId.toString(), "pdf");
@@ -73,7 +77,9 @@ public class ExportService {
             throw new AppException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(sessionId, user.getId());
+        List<ChatMessageItem> messages = chatMapper.toMessageItems(
+                chatSessionRepository.findMessagesForSession(sessionId, user.getId())
+        );
 
         byte[] csvBytes = generateCsv(List.of(new SessionExportData("Session " + sessionId, messages)));
         logExportAction(user, "SESSION", sessionId.toString(), "csv");
@@ -85,9 +91,13 @@ public class ExportService {
         OffsetDateTime from = fromDate.atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime to = toDate.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
 
-        List<ChatSessionSummary> sessions = chatSessionRepository.findSessionsByDateRangeForUser(user.getId(), from, to);
+        List<ChatSessionSummary> sessions = chatMapper.toSessionSummaries(
+                chatSessionRepository.findSessionsByDateRangeForUser(user.getId(), from, to)
+        );
         List<SessionExportData> exportDataList = sessions.stream().map(session -> {
-            List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(session.id(), user.getId());
+            List<ChatMessageItem> messages = chatMapper.toMessageItems(
+                    chatSessionRepository.findMessagesForSession(session.id(), user.getId())
+            );
             return new SessionExportData(session.title() != null ? session.title() : "Session " + session.id(), messages);
         }).toList();
 
@@ -101,9 +111,13 @@ public class ExportService {
         OffsetDateTime from = fromDate.atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime to = toDate.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
 
-        List<ChatSessionSummary> sessions = chatSessionRepository.findSessionsByDateRangeForUser(user.getId(), from, to);
+        List<ChatSessionSummary> sessions = chatMapper.toSessionSummaries(
+                chatSessionRepository.findSessionsByDateRangeForUser(user.getId(), from, to)
+        );
         List<SessionExportData> exportDataList = sessions.stream().map(session -> {
-            List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(session.id(), user.getId());
+            List<ChatMessageItem> messages = chatMapper.toMessageItems(
+                    chatSessionRepository.findMessagesForSession(session.id(), user.getId())
+            );
             return new SessionExportData(session.title() != null ? session.title() : "Session " + session.id(), messages);
         }).toList();
 

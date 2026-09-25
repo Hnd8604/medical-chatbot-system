@@ -6,12 +6,12 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.request.ChatContextMessage;
-import com.medicalchatbot.backend.dto.response.ChatMessageItem;
-import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
-import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
+import com.medicalchatbot.backend.domain.model.ChatSessionMemoryState;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
+import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
+import com.medicalchatbot.backend.repository.projection.ChatSessionSummaryProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -32,13 +32,13 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
         return existsByIdAndUser_Id(sessionId, userId);
     }
 
-    default ChatSessionMemory findMemoryForSession(UUID sessionId, UUID userId) {
+    default ChatSessionMemoryState findMemoryForSession(UUID sessionId, UUID userId) {
         return findByIdAndUser_Id(sessionId, userId)
                 .map(ChatSession::memory)
-                .orElseGet(ChatSessionMemory::empty);
+                .orElseGet(ChatSessionMemoryState::empty);
     }
 
-    default void updateMemory(ChatSession session, ChatSessionMemory memory) {
+    default void updateMemory(ChatSession session, ChatSessionMemoryState memory) {
         session.applyMemory(memory);
         save(session);
     }
@@ -67,10 +67,10 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
             @Param("limit") int limit
     );
 
-    default List<ChatContextMessage> findRecentMessagesForContext(UUID sessionId, UUID userId, int limit) {
+    default List<ChatContextMessageProjection> findRecentMessagesForContext(UUID sessionId, UUID userId, int limit) {
         return findRecentMessageViewsForContext(sessionId, userId, limit)
                 .stream()
-                .map(message -> new ChatContextMessage(message.getRole(), message.getContent()))
+                .map(message -> new ChatContextMessageProjection(message.getRole(), message.getContent()))
                 .toList();
     }
 
@@ -108,10 +108,10 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
             @Param("limit") int limit
     );
 
-    default List<ChatSessionSummary> findRecentSessionsForUser(UUID userId, int limit) {
+    default List<ChatSessionSummaryProjection> findRecentSessionsForUser(UUID userId, int limit) {
         return findRecentSessionViewsForUser(userId, limit)
                 .stream()
-                .map(session -> new ChatSessionSummary(
+                .map(session -> new ChatSessionSummaryProjection(
                         session.getId(),
                         session.getTitle(),
                         toOffsetDateTime(session.getCreatedAt()),
@@ -151,10 +151,14 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
             @Param("toDate") OffsetDateTime toDate
     );
 
-    default List<ChatSessionSummary> findSessionsByDateRangeForUser(UUID userId, OffsetDateTime fromDate, OffsetDateTime toDate) {
+    default List<ChatSessionSummaryProjection> findSessionsByDateRangeForUser(
+            UUID userId,
+            OffsetDateTime fromDate,
+            OffsetDateTime toDate
+    ) {
         return findSessionViewsByDateRangeForUser(userId, fromDate, toDate)
                 .stream()
-                .map(session -> new ChatSessionSummary(
+                .map(session -> new ChatSessionSummaryProjection(
                         session.getId(),
                         session.getTitle(),
                         toOffsetDateTime(session.getCreatedAt()),
@@ -211,10 +215,10 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
             @Param("limit") int limit
     );
 
-    default List<ChatSessionSummary> searchSessionsForUser(UUID userId, String query, int limit) {
+    default List<ChatSessionSummaryProjection> searchSessionsForUser(UUID userId, String query, int limit) {
         return findSearchSessionViewsForUser(userId, query, limit)
                 .stream()
-                .map(session -> new ChatSessionSummary(
+                .map(session -> new ChatSessionSummaryProjection(
                         session.getId(),
                         session.getTitle(),
                         toOffsetDateTime(session.getCreatedAt()),
@@ -257,20 +261,16 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
             @Param("userId") UUID userId
     );
 
-    default List<ChatMessageItem> findMessagesForSession(UUID sessionId, UUID userId) {
+    default List<ChatMessageProjection> findMessagesForSession(UUID sessionId, UUID userId) {
         return findMessageItemViewsForSession(sessionId, userId)
                 .stream()
-                .map(message -> new ChatMessageItem(
+                .map(message -> new ChatMessageProjection(
                         message.getId(),
                         message.getRole(),
                         message.getContent(),
                         toOffsetDateTime(message.getCreatedAt()),
-                        message.getFeedbackRating() == null
-                                ? null
-                                : new ChatMessageItem.Feedback(
-                                        message.getFeedbackRating(),
-                                        message.getFeedbackComment()
-                                )
+                        message.getFeedbackRating(),
+                        message.getFeedbackComment()
                 ))
                 .toList();
     }

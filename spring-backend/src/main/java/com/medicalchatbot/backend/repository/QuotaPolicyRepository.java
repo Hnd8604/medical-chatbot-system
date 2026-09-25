@@ -3,8 +3,8 @@ package com.medicalchatbot.backend.repository;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
+import com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,7 +12,7 @@ import org.springframework.data.repository.query.Param;
 public interface QuotaPolicyRepository extends JpaRepository<QuotaPolicy, UUID> {
 
     @Query("""
-            select new com.medicalchatbot.backend.dto.response.QuotaPolicyInfo(
+            select new com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection(
                 q.name,
                 q.dailyRequestLimit,
                 q.dailyTokenLimit,
@@ -22,7 +22,7 @@ public interface QuotaPolicyRepository extends JpaRepository<QuotaPolicy, UUID> 
             join u.quotaPolicy q
             where u.id = :userId
             """)
-    Optional<QuotaPolicyInfo> findByUserId(@Param("userId") UUID userId);
+    Optional<QuotaPolicyProjection> findByUserId(@Param("userId") UUID userId);
 
 
     @Query("""

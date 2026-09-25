@@ -1,9 +1,12 @@
 package com.medicalchatbot.backend.exception;
 
-import org.springframework.web.server.ResponseStatusException;
-
-/** A typed application exception that remains compatible with ResponseStatusException. */
-public class AppException extends ResponseStatusException {
+/**
+ * Transport-agnostic application failure.
+ *
+ * <p>The web layer translates its {@link ErrorCode}; services no longer need to
+ * throw a Spring MVC exception just to communicate an expected failure.</p>
+ */
+public class AppException extends RuntimeException {
 
     private final ErrorCode errorCode;
 
@@ -20,7 +23,7 @@ public class AppException extends ResponseStatusException {
     }
 
     public AppException(ErrorCode errorCode, String message, Throwable cause) {
-        super(errorCode.getStatus(), message != null ? message : errorCode.getDefaultMessage(), cause);
+        super(message != null ? message : errorCode.getDefaultMessage(), cause);
         this.errorCode = errorCode;
     }
 

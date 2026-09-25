@@ -5,11 +5,12 @@ import java.util.List;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.config.LiteLLMProperties;
-import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.entity.LlmVirtualKey;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.integration.client.LiteLLMAdminClient;
 import com.medicalchatbot.backend.repository.LlmVirtualKeyRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
+import com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -118,7 +119,7 @@ public class LlmGatewayKeyService {
 
     private BigDecimal budgetForUser(UUID userId) {
         return quotaPolicyRepository.findByUserId(userId)
-                .map(QuotaPolicyInfo::dailyCostLimitUsd)
+                .map(QuotaPolicyProjection::dailyCostLimitUsd)
                 .orElse(DEFAULT_BUDGET_USD);
     }
 }

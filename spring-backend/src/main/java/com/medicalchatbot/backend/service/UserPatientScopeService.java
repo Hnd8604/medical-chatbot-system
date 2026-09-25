@@ -7,11 +7,11 @@ import java.util.Set;
 import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserRole;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -39,16 +39,16 @@ public class UserPatientScopeService {
                 .toList();
 
         if (allowedPatientIds.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new AppException(
+                    ErrorCode.ACCESS_DENIED,
                     "Tai khoan USER chua duoc lien ket voi ho so FHIR nao."
             );
         }
 
         Set<String> allowedSet = new LinkedHashSet<>(allowedPatientIds);
         if (requestPatientId != null && !allowedSet.contains(requestPatientId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
+            throw new AppException(
+                    ErrorCode.ACCESS_DENIED,
                     "Tai khoan USER chi duoc truy cap ho so FHIR da lien ket voi chinh minh."
             );
         }

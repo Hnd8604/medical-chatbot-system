@@ -6,10 +6,15 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.response.*;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.UsageLog;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.repository.projection.CacheMetricsProjection;
+import com.medicalchatbot.backend.repository.projection.CostByDayProjection;
+import com.medicalchatbot.backend.repository.projection.CostByModelProjection;
+import com.medicalchatbot.backend.repository.projection.CostSummaryProjection;
+import com.medicalchatbot.backend.repository.projection.MissingPricingModelProjection;
+import com.medicalchatbot.backend.repository.projection.QuotaUsageProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -82,7 +87,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
     }
 
     @Query("""
-        SELECT new com.medicalchatbot.backend.dto.response.CacheMetricsResponse(
+        SELECT new com.medicalchatbot.backend.repository.projection.CacheMetricsProjection(
             COUNT(u.id),
             SUM(CASE WHEN u.answerSource LIKE '%cache%' THEN 1 ELSE 0 END),
             SUM(u.savedTokens),
@@ -91,7 +96,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
         FROM UsageLog u
         WHERE u.createdAt >= :startDate AND u.createdAt <= :endDate
     """)
-    CacheMetricsResponse getCacheObservabilityMetrics(
+    CacheMetricsProjection getCacheObservabilityMetrics(
             @Param("startDate") OffsetDateTime startDate,
             @Param("endDate") OffsetDateTime endDate
     );
@@ -117,13 +122,13 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             @Param("endExclusive") OffsetDateTime endExclusive
     );
 
-    default QuotaUsageSummary summarizeSuccessfulUsage(
+    default QuotaUsageProjection summarizeSuccessfulUsage(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive
     ) {
         QuotaUsageSummaryView summary = summarizeSuccessfulUsageView(userId, startInclusive, endExclusive);
-        return new QuotaUsageSummary(
+        return new QuotaUsageProjection(
                 summary.getUsedRequests(),
                 summary.getUsedInputTokens(),
                 summary.getUsedOutputTokens(),
@@ -152,25 +157,17 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             @Param("endExclusive") OffsetDateTime endExclusive
     );
 
-    default CostSummaryResponse summarizeCost(
+    default CostSummaryProjection summarizeCost(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive
     ) {
         CostSummaryView summary = summarizeCostView(userId, startInclusive, endExclusive);
-        int inputTokens = summary.getInputTokens();
-        int outputTokens = summary.getOutputTokens();
-        return new CostSummaryResponse(
-                null,
-                null,
+        return new CostSummaryProjection(
                 summary.getRequestCount(),
-                inputTokens,
-                outputTokens,
-                inputTokens + outputTokens,
-                summary.getEstimatedCostUsd(),
-                List.of(),
-                List.of(),
-                List.of()
+                summary.getInputTokens(),
+                summary.getOutputTokens(),
+                summary.getEstimatedCostUsd()
         );
     }
 
@@ -199,20 +196,19 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             @Param("endExclusive") OffsetDateTime endExclusive
     );
 
-    default List<CostByModel> summarizeCostByModel(
+    default List<CostByModelProjection> summarizeCostByModel(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive
     ) {
         return summarizeCostByModelViews(userId, startInclusive, endExclusive)
                 .stream()
-                .map(model -> new CostByModel(
+                .map(model -> new CostByModelProjection(
                         model.getLlmProvider(),
                         model.getLlmModel(),
                         model.getRequestCount(),
                         model.getInputTokens(),
                         model.getOutputTokens(),
-                        model.getInputTokens() + model.getOutputTokens(),
                         model.getEstimatedCostUsd()
                 ))
                 .toList();
@@ -251,7 +247,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             @Param("zoneId") String zoneId
     );
 
-    default List<CostByDay> summarizeCostByDay(
+    default List<CostByDayProjection> summarizeCostByDay(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive,
@@ -259,12 +255,11 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
     ) {
         return summarizeCostByDayViews(userId, startInclusive, endExclusive, zoneId)
                 .stream()
-                .map(day -> new CostByDay(
+                .map(day -> new CostByDayProjection(
                         day.getUsageDate(),
                         day.getRequestCount(),
                         day.getInputTokens(),
                         day.getOutputTokens(),
-                        day.getInputTokens() + day.getOutputTokens(),
                         day.getEstimatedCostUsd()
                 ))
                 .toList();
@@ -299,14 +294,14 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             @Param("endExclusive") OffsetDateTime endExclusive
     );
 
-    default List<MissingPricingModel> findMissingPricingModels(
+    default List<MissingPricingModelProjection> findMissingPricingModels(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive
     ) {
         return findMissingPricingModelViews(userId, startInclusive, endExclusive)
                 .stream()
-                .map(model -> new MissingPricingModel(
+                .map(model -> new MissingPricingModelProjection(
                         model.getLlmProvider(),
                         model.getLlmModel(),
                         model.getRequestCount()

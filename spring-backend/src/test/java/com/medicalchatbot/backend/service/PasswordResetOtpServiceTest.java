@@ -15,6 +15,8 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.medicalchatbot.backend.config.PasswordResetProperties;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -22,8 +24,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class PasswordResetOtpServiceTest {
@@ -98,11 +98,11 @@ class PasswordResetOtpServiceTest {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("password_reset:otp:user@demo.local")).thenReturn(null);
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service().verifyCode("user@demo.local", "123456")
         );
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
     }
 
     @Test
@@ -112,7 +112,7 @@ class PasswordResetOtpServiceTest {
         when(valueOps.get(otpKey)).thenReturn("0|deadbeef");
         when(redisTemplate.getExpire(otpKey, TimeUnit.SECONDS)).thenReturn(120L);
 
-        assertThrows(ResponseStatusException.class, () -> service().verifyCode("user@demo.local", "000000"));
+        assertThrows(AppException.class, () -> service().verifyCode("user@demo.local", "000000"));
 
         verify(valueOps).set(eq(otpKey), startsWith("1|"), eq(Duration.ofSeconds(120)));
     }
@@ -124,21 +124,21 @@ class PasswordResetOtpServiceTest {
         // Đã sai 4 lần (max = 5); lần sai này chạm ngưỡng => xóa mã.
         when(valueOps.get(otpKey)).thenReturn("4|deadbeef");
 
-        assertThrows(ResponseStatusException.class, () -> service().verifyCode("user@demo.local", "000000"));
+        assertThrows(AppException.class, () -> service().verifyCode("user@demo.local", "000000"));
 
         verify(redisTemplate).delete(otpKey);
     }
 
     @Test
     void consumeTicketRejectsMalformedOrMissing() {
-        assertThrows(ResponseStatusException.class, () -> service().consumeTicket("khong-co-dau-cham"));
+        assertThrows(AppException.class, () -> service().consumeTicket("khong-co-dau-cham"));
 
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("password_reset:ticket:abc")).thenReturn(null);
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service().consumeTicket("abc.secret")
         );
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
     }
 }

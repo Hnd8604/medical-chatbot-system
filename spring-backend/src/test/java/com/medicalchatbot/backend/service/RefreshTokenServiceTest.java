@@ -12,6 +12,8 @@ import java.util.UUID;
 
 import com.medicalchatbot.backend.config.JwtProperties;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,8 +22,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class RefreshTokenServiceTest {
@@ -84,20 +84,20 @@ class RefreshTokenServiceTest {
 
         // Sau khi đã xoay, token cũ không còn trong Redis => dùng lại bị từ chối.
         when(valueOps.get(keyCaptor.getValue())).thenReturn(null);
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service.rotate(token)
         );
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
+        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, ex.getErrorCode());
     }
 
     @Test
     void rotateRejectsMalformedToken() {
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service().rotate("khong-co-dau-cham")
         );
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
+        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, ex.getErrorCode());
     }
 
     @Test
@@ -108,10 +108,10 @@ class RefreshTokenServiceTest {
         when(valueOps.get("refresh_token:" + "some-jti"))
                 .thenReturn(userId + "|0|deadbeef");
 
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        AppException ex = assertThrows(
+                AppException.class,
                 () -> service().rotate("some-jti.sai-secret")
         );
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
+        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, ex.getErrorCode());
     }
 }

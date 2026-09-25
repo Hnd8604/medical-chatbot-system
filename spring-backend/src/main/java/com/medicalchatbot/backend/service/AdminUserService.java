@@ -8,6 +8,8 @@ import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
@@ -19,10 +21,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -68,7 +68,7 @@ public class AdminUserService {
         User actor = currentUserService.requireCurrentUser();
         User target = requireUser(userId);
         if (actor.getId().equals(target.getId()) && status != UserStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Admin khong the tu khoa hoac vo hieu hoa chinh minh.");
+            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Admin khong the tu khoa hoac vo hieu hoa chinh minh.");
         }
 
         UserStatus oldStatus = target.getStatus();
@@ -83,7 +83,7 @@ public class AdminUserService {
         User actor = currentUserService.requireCurrentUser();
         User target = requireUser(userId);
         if (actor.getId().equals(target.getId()) && role != UserRole.ADMIN) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Admin khong the tu ha quyen cua chinh minh.");
+            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Admin khong the tu ha quyen cua chinh minh.");
         }
 
         UserRole oldRole = target.getRole();
@@ -110,7 +110,7 @@ public class AdminUserService {
 
     private User requireUser(UUID userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Khong tim thay nguoi dung."));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Khong tim thay nguoi dung."));
     }
 
     private void logChange(User actor, User target, String action, String field, String oldValue, String newValue) {

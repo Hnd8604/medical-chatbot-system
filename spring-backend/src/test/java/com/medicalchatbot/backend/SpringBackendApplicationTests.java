@@ -13,7 +13,7 @@ import com.medicalchatbot.backend.repository.RestoreHistoryRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
-import com.medicalchatbot.backend.service.ChatbotServiceClient;
+import com.medicalchatbot.backend.integration.client.ChatbotServiceClient;
 import com.medicalchatbot.backend.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

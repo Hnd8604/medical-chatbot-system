@@ -5,13 +5,13 @@ import java.util.UUID;
 import com.medicalchatbot.backend.config.AuthenticatedUser;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserRole;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +27,7 @@ public class CurrentUserService {
     public UUID requireCurrentUserId() {
         UUID userId = getCurrentUserIdOrNull();
         if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bạn cần đăng nhập để tiếp tục.");
+            throw authenticationRequired("Bạn cần đăng nhập để tiếp tục.");
         }
         return userId;
     }
@@ -40,7 +40,7 @@ public class CurrentUserService {
     public String getCurrentUsername() {
         String username = getCurrentUsernameOrNull();
         if (username == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bạn cần đăng nhập để tiếp tục.");
+            throw authenticationRequired("Bạn cần đăng nhập để tiếp tục.");
         }
         return username;
     }
@@ -48,7 +48,7 @@ public class CurrentUserService {
     public UserRole getCurrentUserRole() {
         AuthenticatedUser principal = getPrincipal();
         if (principal == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bạn cần đăng nhập để tiếp tục.");
+            throw authenticationRequired("Bạn cần đăng nhập để tiếp tục.");
         }
         return principal.role();
     }
@@ -56,7 +56,7 @@ public class CurrentUserService {
     public User requireCurrentUser() {
         UUID userId = requireCurrentUserId();
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng không tồn tại."));
+                .orElseThrow(() -> authenticationRequired("Người dùng không tồn tại."));
     }
 
     private AuthenticatedUser getPrincipal() {
@@ -69,5 +69,9 @@ public class CurrentUserService {
             return authenticatedUser;
         }
         return null;
+    }
+
+    private static AppException authenticationRequired(String message) {
+        return new AppException(ErrorCode.AUTHENTICATION_REQUIRED, message);
     }
 }

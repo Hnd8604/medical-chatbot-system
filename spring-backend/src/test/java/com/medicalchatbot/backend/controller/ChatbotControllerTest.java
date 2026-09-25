@@ -18,6 +18,7 @@ import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.dto.response.CostByDay;
 import com.medicalchatbot.backend.dto.response.CostByModel;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
+import com.medicalchatbot.backend.dto.response.JsonPayload;
 import com.medicalchatbot.backend.dto.response.MissingPricingModel;
 import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
 import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
@@ -25,7 +26,7 @@ import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.config.JwtAuthenticationFilter;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.service.ChatApplicationService;
-import com.medicalchatbot.backend.service.ChatbotServiceClient;
+import com.medicalchatbot.backend.service.ChatbotQueryService;
 import com.medicalchatbot.backend.service.CostManagementService;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.FeedbackService;
@@ -34,6 +35,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,7 +57,7 @@ class ChatbotControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private ChatbotServiceClient chatbotServiceClient;
+    private ChatbotQueryService chatbotQueryService;
 
     @MockitoBean
     private ChatApplicationService chatApplicationService;
@@ -80,13 +82,11 @@ class ChatbotControllerTest {
 
     @Test
     void patientReturnsChatbotServicePayload() throws Exception {
-        when(chatbotServiceClient.getPatient("BN2026-00001"))
-                .thenReturn(objectMapper.readTree("""
-                        {
-                          "id": "BN2026-00001",
-                          "name": "Van A Nguyen"
-                        }
-                        """));
+        when(chatbotQueryService.patient("BN2026-00001"))
+                .thenReturn(new JsonPayload<>(Map.of(
+                        "id", "BN2026-00001",
+                        "name", "Van A Nguyen"
+                )));
 
         mockMvc.perform(get("/api/patients/BN2026-00001"))
                 .andExpect(status().isOk())
@@ -96,21 +96,17 @@ class ChatbotControllerTest {
 
     @Test
     void searchPatientsReturnsChatbotServicePayload() throws Exception {
-        when(chatbotServiceClient.searchPatients("Nguyen Van A", null, "2003-01-01", null, 20))
-                .thenReturn(objectMapper.readTree("""
-                        {
-                          "criteria": {
-                            "name": "Nguyen Van A",
-                            "birth_date": "2003-01-01"
-                          },
-                          "patients": [
-                            {
-                              "id": "BN2026-00001",
-                              "name": "Van A Nguyen"
-                            }
-                          ]
-                        }
-                        """));
+        when(chatbotQueryService.searchPatients("Nguyen Van A", null, "2003-01-01", null, 20))
+                .thenReturn(new JsonPayload<>(Map.of(
+                        "criteria", Map.of(
+                                "name", "Nguyen Van A",
+                                "birth_date", "2003-01-01"
+                        ),
+                        "patients", List.of(Map.of(
+                                "id", "BN2026-00001",
+                                "name", "Van A Nguyen"
+                        ))
+                )));
 
         mockMvc.perform(get("/api/patients?name=Nguyen Van A&birth_date=2003-01-01"))
                 .andExpect(status().isOk())
@@ -128,18 +124,14 @@ class ChatbotControllerTest {
 
     @Test
     void encountersReturnChatbotServicePayload() throws Exception {
-        when(chatbotServiceClient.getPatientEncounters("BN2026-00005", 5))
-                .thenReturn(objectMapper.readTree("""
-                        {
-                          "patient_id": "BN2026-00005",
-                          "encounters": [
-                            {
-                              "id": "ENC-2026-00006",
-                              "status": "finished"
-                            }
-                          ]
-                        }
-                        """));
+        when(chatbotQueryService.encounters("BN2026-00005", 5))
+                .thenReturn(new JsonPayload<>(Map.of(
+                        "patient_id", "BN2026-00005",
+                        "encounters", List.of(Map.of(
+                                "id", "ENC-2026-00006",
+                                "status", "finished"
+                        ))
+                )));
 
         mockMvc.perform(get("/api/patients/BN2026-00005/encounters"))
                 .andExpect(status().isOk())

@@ -171,17 +171,26 @@ src/main/java/com/medicalchatbot/backend/
   config/       security filter chain, JWT, rate limit interceptor, HTTP client, OpenAPI
   controller/   REST controller theo nhóm API ở trên
   dto/          request/response payload
+  domain/       model nghiệp vụ độc lập với HTTP và persistence projection
   entity/       JPA entity (map với bảng Flyway)
   enums/        UserRole, UserStatus, AlertSeverity, ...
   exception/    global exception handler, QuotaExceeded, RateLimitExceeded
-  repository/   Spring Data JPA repository
-  service/      nghiệp vụ: chat orchestration, quota, cost, analytics, alert, LiteLLM key, ...
+  integration/  outbound adapter: chatbot/LiteLLM client, backup script, notification provider
+  mapper/       chuyển entity/projection/domain model sang API response
+  repository/   Spring Data JPA và query contract; SQL/JDBC nằm trong repository/jdbc
+  service/      orchestration và nghiệp vụ ứng dụng, không chứa SQL hay HTTP client trực tiếp
 ```
 
 ## Quy tắc kiến trúc
 
-1. Frontend chỉ gọi backend này; backend gọi chatbot-service — **không** gọi
+1. Luồng phụ thuộc là `controller → service → repository/integration`; entity và
+   repository không phụ thuộc DTO của REST API.
+2. Controller chỉ làm HTTP mapping/validation; việc gọi hệ thống ngoài phải đi
+   qua application service rồi mới tới adapter trong `integration/`.
+3. SQL và `JdbcTemplate` thuộc tầng repository; service chỉ xử lý use case và
+   mapping kết quả. Các rule này được kiểm tra bởi `LayerDependencyTest`.
+4. Frontend chỉ gọi backend này; backend gọi chatbot-service — **không** gọi
    thẳng HAPI PostgreSQL hay bảng `hfj_*`.
-2. Provider key LLM chỉ nằm ở LiteLLM Gateway; backend quản lý virtual key theo
+5. Provider key LLM chỉ nằm ở LiteLLM Gateway; backend quản lý virtual key theo
    user, không giữ key provider.
-3. Chạy `.\mvnw.cmd test` sau mỗi thay đổi.
+6. Chạy `.\mvnw.cmd test` sau mỗi thay đổi.

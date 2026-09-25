@@ -2,8 +2,8 @@ package com.medicalchatbot.backend.service;
 
 import java.nio.charset.StandardCharsets;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 
 /**
  * Luật mật khẩu dùng chung cho đăng ký và đặt lại mật khẩu, tránh lặp code.
@@ -16,15 +16,15 @@ public final class PasswordPolicy {
     }
 
     /**
-     * Kiểm tra một mật khẩu mới. Ném {@link ResponseStatusException} 400 nếu không hợp lệ.
+     * Kiểm tra một mật khẩu mới. Ném {@link AppException} nếu không hợp lệ.
      */
     public static void validate(String password) {
         int passwordBytes = password.getBytes(StandardCharsets.UTF_8).length;
         if (passwordBytes < 8 || passwordBytes > 72) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu phải có từ 8 đến 72 byte.");
+            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Mật khẩu phải có từ 8 đến 72 byte.");
         }
         if (!password.matches(".*\\p{L}.*") || !password.matches(".*\\d.*")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu phải có ít nhất một chữ và một số.");
+            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Mật khẩu phải có ít nhất một chữ và một số.");
         }
     }
 
@@ -34,7 +34,7 @@ public final class PasswordPolicy {
     public static void validate(String password, String confirmation) {
         validate(password);
         if (!password.equals(confirmation)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Xác nhận mật khẩu không khớp.");
+            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Xác nhận mật khẩu không khớp.");
         }
     }
 }

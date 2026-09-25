@@ -6,8 +6,8 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
+import com.medicalchatbot.backend.repository.projection.ModelPricingProjection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -23,7 +23,7 @@ class CostEstimationServiceTest {
     void estimateUsdCalculatesFromPricingAndRoundsToSixDecimals() {
         CostEstimationService service = new CostEstimationService(modelPricingRepository);
         when(modelPricingRepository.findActiveByProviderAndModel("openai", "gpt-4.1-mini"))
-                .thenReturn(Optional.of(new ModelPricingInfo(
+                .thenReturn(Optional.of(new ModelPricingProjection(
                         "openai",
                         "gpt-4.1-mini",
                         new BigDecimal("0.400000"),

@@ -9,24 +9,24 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
-import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.NotificationType;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
+import com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection;
+import com.medicalchatbot.backend.repository.projection.QuotaUsageProjection;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Service
@@ -175,14 +175,14 @@ public class QuotaService {
     }
 
     private QuotaStatusResponse statusForUser(UUID userId, String username) {
-        QuotaPolicyInfo policy = quotaPolicyRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
+        QuotaPolicyProjection policy = quotaPolicyRepository.findByUserId(userId)
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.INTERNAL_SERVER_ERROR,
                         "Không tìm thấy quota policy cho người dùng."));
         ZonedDateTime now = ZonedDateTime.now(quotaZone);
         OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay(quotaZone).toOffsetDateTime();
         OffsetDateTime startOfNextDay = startOfDay.plusDays(1);
-        QuotaUsageSummary usage = usageLogRepository.summarizeSuccessfulUsage(
+        QuotaUsageProjection usage = usageLogRepository.summarizeSuccessfulUsage(
                 userId,
                 startOfDay,
                 startOfNextDay);
@@ -224,7 +224,7 @@ public class QuotaService {
      * o day tinh theo <b>ngay lich</b> trong quotaZone. Hai cua so co the lech nhau
      * vai gio — chap nhan cho pham vi hien tai, xem docs/M-litellm-gateway.md.
      */
-    private BigDecimal effectiveUsedCost(UUID userId, QuotaUsageSummary usage) {
+    private BigDecimal effectiveUsedCost(UUID userId, QuotaUsageProjection usage) {
         LiteLLMSpendService.GatewaySpend spend = litellmSpendService.getSpendForUser(userId);
         if (spend != null && spend.spendUsd() != null) {
             return spend.spendUsd();
@@ -234,12 +234,17 @@ public class QuotaService {
 
     private UUID getUserIdByUsername(String username) {
         return userRepository.findIdByUsername(username)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "Không tìm thấy người dùng: " + username));
     }
 
-    private String blockedReason(QuotaPolicyInfo policy, QuotaUsageSummary usage, int usedTokens, BigDecimal usedCostUsd) {
+    private String blockedReason(
+            QuotaPolicyProjection policy,
+            QuotaUsageProjection usage,
+            int usedTokens,
+            BigDecimal usedCostUsd
+    ) {
         if (usage.usedRequests() >= policy.dailyRequestLimit()) {
             return "Đã vượt quá hạn mức " + policy.dailyRequestLimit() + " lượt gọi AI/ngày.";
         }
@@ -278,7 +283,7 @@ public class QuotaService {
                 metadata);
     }
 
-    private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyInfo policy, QuotaUsageSummary usage,
+    private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyProjection policy, QuotaUsageProjection usage,
             int usedTokens, BigDecimal usedCostUsd) {
         double requestUsagePct = ratio(usage.usedRequests(), policy.dailyRequestLimit());
         double tokenUsagePct = ratio(usedTokens, policy.dailyTokenLimit());

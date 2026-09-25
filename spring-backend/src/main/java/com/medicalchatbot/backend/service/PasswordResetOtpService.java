@@ -11,10 +11,10 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import com.medicalchatbot.backend.config.PasswordResetProperties;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Quản lý mã OTP quên mật khẩu và ticket đặt lại, lưu trong Redis.
@@ -75,7 +75,7 @@ public class PasswordResetOtpService {
      * Xác thực mã OTP. Sai quá {@code maxAttempts} lần thì vô hiệu mã. Đúng thì xóa mã và cấp ticket.
      *
      * @return ticket thô {@code {jti}.{secret}} dùng cho bước đặt lại mật khẩu.
-     * @throws ResponseStatusException 400 nếu mã sai hoặc đã hết hạn.
+     * @throws AppException nếu mã sai hoặc đã hết hạn.
      */
     public String verifyCode(String email, String code) {
         String normalized = normalize(email);
@@ -113,7 +113,7 @@ public class PasswordResetOtpService {
      * Xác thực + tiêu thụ ticket (dùng một lần).
      *
      * @return email chủ ticket.
-     * @throws ResponseStatusException 400 nếu ticket sai hoặc đã hết hạn/đã dùng.
+     * @throws AppException nếu ticket sai hoặc đã hết hạn/đã dùng.
      */
     public String consumeTicket(String ticket) {
         if (ticket == null) {
@@ -189,11 +189,11 @@ public class PasswordResetOtpService {
         );
     }
 
-    private static ResponseStatusException invalidCode() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ma xac thuc khong dung hoac da het han.");
+    private static AppException invalidCode() {
+        return new AppException(ErrorCode.INVALID_ARGUMENT, "Ma xac thuc khong dung hoac da het han.");
     }
 
-    private static ResponseStatusException invalidTicket() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Yeu cau dat lai mat khau khong hop le hoac da het han.");
+    private static AppException invalidTicket() {
+        return new AppException(ErrorCode.INVALID_ARGUMENT, "Yeu cau dat lai mat khau khong hop le hoac da het han.");
     }
 }

@@ -1,4 +1,4 @@
-package com.medicalchatbot.backend.service;
+package com.medicalchatbot.backend.integration.client;
 
 import java.math.BigDecimal;
 import java.util.List;

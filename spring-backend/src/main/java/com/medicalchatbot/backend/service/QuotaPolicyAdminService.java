@@ -8,15 +8,15 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.request.QuotaPolicyUpsertRequest;
 import com.medicalchatbot.backend.dto.response.QuotaPolicyAdminResponse;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Service
@@ -57,8 +57,8 @@ public class QuotaPolicyAdminService {
     @Transactional
     public QuotaPolicyAdminResponse create(QuotaPolicyUpsertRequest request) {
         if (quotaPolicyRepository.existsByName(request.name())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
+            throw new AppException(
+                    ErrorCode.CONFLICT,
                     "Quota policy đã tồn tại với tên: " + request.name()
             );
         }
@@ -81,8 +81,8 @@ public class QuotaPolicyAdminService {
         quotaPolicyRepository.findByName(request.name())
                 .filter(existing -> !existing.getId().equals(id))
                 .ifPresent(existing -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
+                    throw new AppException(
+                            ErrorCode.CONFLICT,
                             "Quota policy đã tồn tại với tên: " + request.name()
                     );
                 });
@@ -106,8 +106,8 @@ public class QuotaPolicyAdminService {
         QuotaPolicy policy = getEntity(id);
         long referencing = userRepository.countByQuotaPolicyId(id);
         if (referencing > 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
+            throw new AppException(
+                    ErrorCode.CONFLICT,
                     "Không thể xoá: còn " + referencing + " người dùng đang dùng policy này."
             );
         }
@@ -117,8 +117,8 @@ public class QuotaPolicyAdminService {
 
     private QuotaPolicy getEntity(UUID id) {
         return quotaPolicyRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "Không tìm thấy quota policy: " + id
                 ));
     }

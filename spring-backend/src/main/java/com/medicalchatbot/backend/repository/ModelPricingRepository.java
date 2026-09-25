@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
 import com.medicalchatbot.backend.entity.ModelPricing;
+import com.medicalchatbot.backend.repository.projection.ModelPricingProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,7 +13,7 @@ import org.springframework.data.repository.query.Param;
 public interface ModelPricingRepository extends JpaRepository<ModelPricing, UUID> {
 
     @Query("""
-            select new com.medicalchatbot.backend.dto.response.ModelPricingInfo(
+            select new com.medicalchatbot.backend.repository.projection.ModelPricingProjection(
                 p.provider,
                 p.model,
                 p.inputPricePer1mTokens,
@@ -25,12 +25,12 @@ public interface ModelPricingRepository extends JpaRepository<ModelPricing, UUID
               and lower(p.model) = lower(:model)
               and p.active = true
             """)
-    Optional<ModelPricingInfo> findActivePricing(
+    Optional<ModelPricingProjection> findActivePricing(
             @Param("provider") String provider,
             @Param("model") String model
     );
 
-    default Optional<ModelPricingInfo> findActiveByProviderAndModel(String provider, String model) {
+    default Optional<ModelPricingProjection> findActiveByProviderAndModel(String provider, String model) {
         if (provider == null || model == null || provider.isBlank() || model.isBlank()) {
             return Optional.empty();
         }
@@ -38,7 +38,7 @@ public interface ModelPricingRepository extends JpaRepository<ModelPricing, UUID
     }
 
     @Query("""
-            select new com.medicalchatbot.backend.dto.response.ModelPricingInfo(
+            select new com.medicalchatbot.backend.repository.projection.ModelPricingProjection(
                 p.provider,
                 p.model,
                 p.inputPricePer1mTokens,
@@ -49,7 +49,7 @@ public interface ModelPricingRepository extends JpaRepository<ModelPricing, UUID
             where p.active = true
             order by p.provider, p.model
             """)
-    List<ModelPricingInfo> findActivePricing();
+    List<ModelPricingProjection> findActivePricing();
 
     /**
      * Tìm bản ghi pricing đang active cho (provider, model). Partial unique index

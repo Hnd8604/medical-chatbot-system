@@ -16,6 +16,8 @@ import com.medicalchatbot.backend.dto.response.FeedbackResponse;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.MessageFeedback;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,8 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class FeedbackServiceTest {
@@ -84,12 +84,12 @@ class FeedbackServiceTest {
         when(chatMessageRepository.findAssistantMessageOwnedByUser(messageId, userId))
                 .thenReturn(Optional.empty());
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        AppException exception = assertThrows(
+                AppException.class,
                 () -> feedbackService.createFeedback(messageId, new FeedbackRequest(4, null))
         );
 
-        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
         verifyNoInteractions(feedbackRepository);
     }
 
@@ -100,12 +100,12 @@ class FeedbackServiceTest {
         when(feedbackRepository.findByMessage_IdAndUser_Id(messageId, userId))
                 .thenReturn(Optional.of(new MessageFeedback(message, user, 3, null)));
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        AppException exception = assertThrows(
+                AppException.class,
                 () -> feedbackService.createFeedback(messageId, new FeedbackRequest(4, null))
         );
 
-        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONFLICT);
         verify(feedbackRepository, never()).saveAndFlush(any(MessageFeedback.class));
     }
 
@@ -118,12 +118,12 @@ class FeedbackServiceTest {
         when(feedbackRepository.saveAndFlush(any(MessageFeedback.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        AppException exception = assertThrows(
+                AppException.class,
                 () -> feedbackService.createFeedback(messageId, new FeedbackRequest(4, null))
         );
 
-        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONFLICT);
     }
 
     @Test
@@ -153,12 +153,12 @@ class FeedbackServiceTest {
         when(feedbackRepository.findAuthorizedFeedback(messageId, userId))
                 .thenReturn(Optional.empty());
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
+        AppException exception = assertThrows(
+                AppException.class,
                 () -> feedbackService.updateFeedback(messageId, new FeedbackRequest(5, null))
         );
 
-        assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
     }
 
     @Test

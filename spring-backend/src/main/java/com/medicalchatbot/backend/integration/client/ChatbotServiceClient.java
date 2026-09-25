@@ -1,4 +1,4 @@
-package com.medicalchatbot.backend.service;
+package com.medicalchatbot.backend.integration.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;

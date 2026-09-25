@@ -16,8 +16,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medicalchatbot.backend.dto.response.QuotaPolicyInfo;
-import com.medicalchatbot.backend.dto.response.QuotaUsageSummary;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.NotificationType;
@@ -26,6 +24,8 @@ import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
+import com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection;
+import com.medicalchatbot.backend.repository.projection.QuotaUsageProjection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -67,7 +67,7 @@ class QuotaServiceTest {
         when(user.getId()).thenReturn(userId);
         when(user.getUsername()).thenReturn("user_demo");
         when(currentUserService.requireCurrentUser()).thenReturn(user);
-        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
+        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyProjection(
                 "user_standard",
                 30,
                 1000,
@@ -77,7 +77,7 @@ class QuotaServiceTest {
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
-        )).thenReturn(new QuotaUsageSummary(
+        )).thenReturn(new QuotaUsageProjection(
                 12,
                 100,
                 50,
@@ -101,7 +101,7 @@ class QuotaServiceTest {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         QuotaService service = newService();
 
-        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
+        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyProjection(
                 "user_standard",
                 1,
                 1000,
@@ -111,7 +111,7 @@ class QuotaServiceTest {
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
-        )).thenReturn(new QuotaUsageSummary(
+        )).thenReturn(new QuotaUsageProjection(
                 1,
                 0,
                 0,
@@ -149,7 +149,7 @@ class QuotaServiceTest {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         QuotaService service = newService();
 
-        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
+        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyProjection(
                 "user_standard",
                 30,
                 50000,
@@ -159,7 +159,7 @@ class QuotaServiceTest {
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
-        )).thenReturn(new QuotaUsageSummary(
+        )).thenReturn(new QuotaUsageProjection(
                 1,
                 100,
                 50,
@@ -190,7 +190,7 @@ class QuotaServiceTest {
         when(user.getUsername()).thenReturn("user_demo");
         when(currentUserService.requireCurrentUser()).thenReturn(user);
         // Request/token con thap, chi cost cham nguong 85% -> van phai canh bao.
-        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyInfo(
+        when(quotaPolicyRepository.findByUserId(userId)).thenReturn(Optional.of(new QuotaPolicyProjection(
                 "user_standard",
                 30,
                 50000,
@@ -200,7 +200,7 @@ class QuotaServiceTest {
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
-        )).thenReturn(new QuotaUsageSummary(
+        )).thenReturn(new QuotaUsageProjection(
                 1,
                 100,
                 50,

@@ -1,6 +1,5 @@
 package com.medicalchatbot.backend.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.medicalchatbot.backend.dto.request.FeedbackRequest;
 import com.medicalchatbot.backend.dto.request.RenameSessionRequest;
 import com.medicalchatbot.backend.dto.response.ChatMessagesResponse;
@@ -10,15 +9,17 @@ import com.medicalchatbot.backend.dto.response.ChatSessionListResponse;
 import com.medicalchatbot.backend.dto.response.ChatSessionRenameResponse;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
 import com.medicalchatbot.backend.dto.response.FeedbackResponse;
+import com.medicalchatbot.backend.dto.response.JsonPayload;
 import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.service.ChatApplicationService;
-import com.medicalchatbot.backend.service.ChatbotServiceClient;
+import com.medicalchatbot.backend.service.ChatbotQueryService;
 import com.medicalchatbot.backend.service.CostManagementService;
 import com.medicalchatbot.backend.service.FeedbackService;
 import com.medicalchatbot.backend.service.QuotaService;
 import org.springframework.http.HttpStatus;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -45,63 +46,63 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class ChatbotController {
 
-    private final ChatbotServiceClient chatbotServiceClient;
+    private final ChatbotQueryService chatbotQueryService;
     private final ChatApplicationService chatApplicationService;
     private final QuotaService quotaService;
     private final CostManagementService costManagementService;
     private final FeedbackService feedbackService;
 
     @GetMapping("/chatbot/status")
-    JsonNode chatbotStatus() {
-        return chatbotServiceClient.getStatus();
+    JsonPayload<Map<String, Object>> chatbotStatus() {
+        return chatbotQueryService.status();
     }
 
     @GetMapping("/patients")
-    JsonNode searchPatients(
+    JsonPayload<Map<String, Object>> searchPatients(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String phone,
             @RequestParam(name = "birth_date", required = false) String birthDate,
             @RequestParam(required = false) String identifier,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit
     ) {
-        return chatbotServiceClient.searchPatients(name, phone, birthDate, identifier, limit);
+        return chatbotQueryService.searchPatients(name, phone, birthDate, identifier, limit);
     }
 
     @GetMapping("/patients/{patientId}")
-    JsonNode patient(@PathVariable String patientId) {
-        return chatbotServiceClient.getPatient(patientId);
+    JsonPayload<Map<String, Object>> patient(@PathVariable String patientId) {
+        return chatbotQueryService.patient(patientId);
     }
 
     @GetMapping("/patients/{patientId}/observations")
-    JsonNode observations(
+    JsonPayload<Map<String, Object>> observations(
             @PathVariable String patientId,
             @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit
     ) {
-        return chatbotServiceClient.getPatientObservations(patientId, limit);
+        return chatbotQueryService.observations(patientId, limit);
     }
 
     @GetMapping("/patients/{patientId}/conditions")
-    JsonNode conditions(
+    JsonPayload<Map<String, Object>> conditions(
             @PathVariable String patientId,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit
     ) {
-        return chatbotServiceClient.getPatientConditions(patientId, limit);
+        return chatbotQueryService.conditions(patientId, limit);
     }
 
     @GetMapping("/patients/{patientId}/encounters")
-    JsonNode encounters(
+    JsonPayload<Map<String, Object>> encounters(
             @PathVariable String patientId,
             @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit
     ) {
-        return chatbotServiceClient.getPatientEncounters(patientId, limit);
+        return chatbotQueryService.encounters(patientId, limit);
     }
 
     @GetMapping("/patients/{patientId}/medications")
-    JsonNode medications(
+    JsonPayload<Map<String, Object>> medications(
             @PathVariable String patientId,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit
     ) {
-        return chatbotServiceClient.getPatientMedications(patientId, limit);
+        return chatbotQueryService.medications(patientId, limit);
     }
 
     @PostMapping("/chat")

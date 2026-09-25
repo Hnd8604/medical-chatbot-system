@@ -8,13 +8,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.request.ModelPricingUpsertRequest;
 import com.medicalchatbot.backend.dto.response.ModelPricingAdminResponse;
 import com.medicalchatbot.backend.entity.ModelPricing;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
 @Service
@@ -92,8 +92,8 @@ public class ModelPricingAdminService {
 
     private ModelPricing getEntity(UUID id) {
         return modelPricingRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "Không tìm thấy model pricing: " + id
                 ));
     }
@@ -106,8 +106,8 @@ public class ModelPricingAdminService {
         modelPricingRepository.findByProviderIgnoreCaseAndModelIgnoreCaseAndActiveTrue(provider, model)
                 .filter(existing -> !existing.getId().equals(selfId))
                 .ifPresent(existing -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
+                    throw new AppException(
+                            ErrorCode.CONFLICT,
                             "Đã tồn tại cấu hình giá active cho model: " + provider + "/" + model
                     );
                 });

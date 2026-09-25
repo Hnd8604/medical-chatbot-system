@@ -3,11 +3,12 @@ package com.medicalchatbot.backend.service;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.dto.response.SelfPatientProfileResponse;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
+import com.medicalchatbot.backend.integration.client.ChatbotServiceClient;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Truy xuất hồ sơ FHIR của chính người dùng (SELF scope).
@@ -43,8 +44,8 @@ public class SelfPatientService {
                 .map(UserPatientScopeService::normalizePatientId)
                 .filter(id -> id != null && !id.isBlank())
                 .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "Tai khoan chua duoc lien ket voi ho so FHIR nao."
                 ));
     }

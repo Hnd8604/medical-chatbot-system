@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.medicalchatbot.backend.config.LiteLLMProperties;
 import com.medicalchatbot.backend.entity.LlmVirtualKey;
+import com.medicalchatbot.backend.integration.client.LiteLLMAdminClient;
 import com.medicalchatbot.backend.repository.LlmVirtualKeyRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

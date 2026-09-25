@@ -6,19 +6,17 @@ import com.medicalchatbot.backend.entity.Alert;
 import com.medicalchatbot.backend.dto.response.AlertResponse;
 import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.AlertStatus;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
+import com.medicalchatbot.backend.integration.notification.TelegramAlertClient;
 import com.medicalchatbot.backend.repository.AlertRepository;
 import com.medicalchatbot.backend.mapper.AlertMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.client.RestClient;
-import java.util.concurrent.CompletableFuture;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -29,15 +27,7 @@ public class AlertService {
 
     private final AlertRepository alertRepository;
     private final AlertMapper alertMapper;
-
-
-    @Value("${telegram.bot.token:}")
-    private String botToken;
-
-    @Value("${telegram.chat.id:}")
-    private String chatId;
-
-    private final RestClient restClient = RestClient.create();
+    private final TelegramAlertClient telegramAlertClient;
 
     @Transactional
     public void triggerAlert(String source, String alertType, AlertSeverity severity, String message, JsonNode metadata) {
@@ -65,7 +55,7 @@ public class AlertService {
         alertRepository.save(alert);
         log.warn("[SYSTEM ALERT - {}] {}: {}", severity, alertType, message);
 
-        sendTelegramNotification(alertType, severity, message);
+        telegramAlertClient.send(alertType, severity, message);
 
     }
 
@@ -88,8 +78,8 @@ public class AlertService {
     @Transactional
     public void resolveAlert(UUID alertId, String resolvedBy) {
         Alert alert = alertRepository.findById(alertId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new AppException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
                         "Không tìm thấy Alert với ID: " + alertId
                 ));
 
@@ -100,33 +90,5 @@ public class AlertService {
             alertRepository.save(alert);
             log.info("Alert {} đã được đánh dấu RESOLVED bởi {}", alertId, resolvedBy);
         }
-    }
-
-
-    private void sendTelegramNotification(String type, AlertSeverity severity, String message) {
-        if (botToken == null || botToken.isBlank() || chatId == null || chatId.isBlank()) {
-            return;
-        }
-
-        String emoji = switch (severity) {
-            case CRITICAL -> "🆘";
-            case WARNING -> "⚠️";
-            case INFO -> "ℹ️";
-        };
-        String text = String.format("%s [MEDICAL SYSTEM]\nMức độ: %s\nLoại: %s\nChi tiết: %s",
-                emoji, severity.name(), type, message);
-
-        String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
-        CompletableFuture.runAsync(() -> {
-            try {
-                restClient.post()
-                        .uri(url)
-                        .body(java.util.Map.of("chat_id", chatId, "text", text))
-                        .retrieve()
-                        .toBodilessEntity();
-            } catch (Exception e) {
-                log.error(" Không thể gửi tin nhắn Telegram: {}", e.getMessage());
-            }
-        });
     }
 }

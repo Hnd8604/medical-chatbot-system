@@ -3,8 +3,8 @@ package com.medicalchatbot.backend.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
 import com.medicalchatbot.backend.repository.ModelPricingRepository;
+import com.medicalchatbot.backend.repository.projection.ModelPricingProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +29,7 @@ public class CostEstimationService {
                 .orElseGet(() -> normalizeCost(fallbackEstimatedCostUsd));
     }
 
-    private BigDecimal calculate(ModelPricingInfo pricing, int inputTokens, int outputTokens) {
+    private BigDecimal calculate(ModelPricingProjection pricing, int inputTokens, int outputTokens) {
         BigDecimal inputCost = BigDecimal.valueOf(Math.max(0, inputTokens))
                 .multiply(pricing.inputPricePer1mTokens())
                 .divide(TOKENS_PER_MILLION, COST_SCALE, RoundingMode.HALF_UP);

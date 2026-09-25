@@ -1,28 +1,23 @@
 spring:
   config:
     import: optional:file:.env[.properties]
+  profiles:
+    default: dev
   application:
     name: spring-backend
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/medical_chatbot_app}
-    username: ${SPRING_DATASOURCE_USERNAME:app_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:app_password}
-    driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
     locations: classpath:db/migration
-    baseline-on-migrate: true
+    baseline-on-migrate: false
+    validate-on-migrate: true
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto:
+      ddl-auto: validate
   data:
     redis:
-      host: ${SPRING_DATA_REDIS_HOST:localhost}
-      port: ${SPRING_DATA_REDIS_PORT:6379}
-      timeout: 2000
+      timeout: 2s
   mail:
-    # Bỏ trống host => không tạo bean JavaMailSender; EmailService rơi về dev fallback (log mã).
     host: ${SPRING_MAIL_HOST:}
     port: ${SPRING_MAIL_PORT:587}
     username: ${SPRING_MAIL_USERNAME:}
@@ -33,44 +28,47 @@ spring:
           auth: true
           starttls:
             enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 
 server:
   port: ${SERVER_PORT:8081}
-
-password-reset:
-  # Mã OTP gửi qua email có thời hạn ngắn; lưu hash trong Redis (không đụng DB).
-  otp-ttl-minutes: ${PASSWORD_RESET_OTP_TTL_MINUTES:10}
-  # Ticket đặt lại mật khẩu cấp sau khi xác thực mã đúng, cũng ngắn hạn.
-  ticket-ttl-minutes: ${PASSWORD_RESET_TICKET_TTL_MINUTES:10}
-  # Số lần nhập sai mã tối đa trước khi vô hiệu mã.
-  max-attempts: ${PASSWORD_RESET_MAX_ATTEMPTS:5}
-  # Chặn gửi lại mã quá nhanh (giây).
-  resend-cooldown-seconds: ${PASSWORD_RESET_RESEND_COOLDOWN_SECONDS:60}
-  from-address: ${PASSWORD_RESET_FROM_ADDRESS:no-reply@medical-chatbot.local}
-  from-name: ${PASSWORD_RESET_FROM_NAME:Medical Chatbot}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+  health:
+    mail:
+      enabled: false
+  endpoint:
+    health:
+      show-details: never
 
 chatbot:
   service:
-    base-url: ${CHATBOT_SERVICE_BASE_URL:http://localhost:8000}
+    connect-timeout: ${CHATBOT_SERVICE_CONNECT_TIMEOUT:3s}
+    read-timeout: ${CHATBOT_SERVICE_READ_TIMEOUT:120s}
 
-litellm:
-  # AI Gateway: Spring dung master key de cap/dong bo virtual key theo user va doc spend.
-  base-url: ${LITELLM_BASE_URL:http://localhost:4000}
-  master-key: ${LITELLM_MASTER_KEY:}
-  # enabled=false hoac thieu master key => bo qua gateway, chatbot-service dung master key mac dinh.
-  enabled: ${LITELLM_GATEWAY_ENABLED:true}
+password-reset:
+  otp-ttl-minutes: ${PASSWORD_RESET_OTP_TTL_MINUTES:10}
+  ticket-ttl-minutes: ${PASSWORD_RESET_TICKET_TTL_MINUTES:10}
+  max-attempts: ${PASSWORD_RESET_MAX_ATTEMPTS:5}
+  resend-cooldown-seconds: ${PASSWORD_RESET_RESEND_COOLDOWN_SECONDS:60}
+  from-address: ${PASSWORD_RESET_FROM_ADDRESS:no-reply@medical-chatbot.local}
+  from-name: ${PASSWORD_RESET_FROM_NAME:Medical Chatbot}
 
 jwt:
-  secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-please-1234567890}
-  # Access token: TTL ngắn để giảm rủi ro khi lộ token; client tự gọi /api/auth/refresh để gia hạn.
   expiration-minutes: ${JWT_EXPIRATION_MINUTES:30}
-  # Refresh token: opaque, lưu trong Redis, có rotation. Mặc định 7 ngày = 10080 phút.
   refresh-expiration-minutes: ${JWT_REFRESH_EXPIRATION_MINUTES:10080}
 
 telegram:
@@ -80,25 +78,18 @@ telegram:
     id: ${TELEGRAM_CHAT_ID:}
 
 backup:
-  # Bật/tắt sao lưu (nút thủ công + lịch tự động).
-  enabled: ${BACKUP_ENABLED:true}
-  # Lịch tự động do backend xử lý (Spring @Scheduled). Mặc định 02:00 hằng ngày.
   cron: ${BACKUP_CRON:0 0 2 * * *}
   timezone: ${BACKUP_TIMEZONE:Asia/Ho_Chi_Minh}
-  # Đường dẫn tới backup.sh, tương đối theo thư mục chạy Spring (spring-backend/).
   script-path: ${BACKUP_SCRIPT_PATH:../infra/scripts/backup.sh}
-  # Script khôi phục không tương tác (dùng cho nút Khôi phục trên Admin UI).
   restore-script-path: ${BACKUP_RESTORE_SCRIPT_PATH:../infra/scripts/restore-auto.sh}
-  # Trình thông dịch bash; đặt đường dẫn tuyệt đối Git Bash nếu không có trong PATH.
   bash-path: ${BACKUP_BASH_PATH:bash}
-  # Hủy tiến trình sao lưu nếu chạy quá số phút này.
   timeout-minutes: ${BACKUP_TIMEOUT_MINUTES:10}
 
 springdoc:
   api-docs:
     path: /api-docs
   swagger-ui:
-    path: /swagger-ui.html # truy cập: http://localhost:8081/swagger-ui/index.html
+    path: /swagger-ui.html
     display-request-duration: true
     tags-sorter: alpha
     operations-sorter: alpha

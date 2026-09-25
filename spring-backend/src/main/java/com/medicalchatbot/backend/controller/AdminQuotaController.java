@@ -1,7 +1,7 @@
 package com.medicalchatbot.backend.controller;
 
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
-import com.medicalchatbot.backend.entity.QuotaPolicy;
+import com.medicalchatbot.backend.dto.response.QuotaPolicyAdminResponse;
 import com.medicalchatbot.backend.service.QuotaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,8 +19,10 @@ public class AdminQuotaController {
     private final QuotaService quotaService;
 
     @GetMapping("/policies")
-    public List<QuotaPolicy> getAllPolicies() {
-        return quotaService.getAllQuotaPolicies();
+    public List<QuotaPolicyAdminResponse> getAllPolicies() {
+        return quotaService.getAllQuotaPolicies().stream()
+                .map(QuotaPolicyAdminResponse::from)
+                .toList();
     }
 
 

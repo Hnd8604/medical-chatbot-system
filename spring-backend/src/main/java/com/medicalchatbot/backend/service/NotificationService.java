@@ -10,6 +10,8 @@ import com.medicalchatbot.backend.dto.response.NotificationItem;
 import com.medicalchatbot.backend.entity.Notification;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.NotificationType;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.NotificationRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +35,7 @@ public class NotificationService {
 
         Notification notification = new Notification(user, type, title, content);
         Notification saved = notificationRepository.save(notification);
-        log.info("Created notification for user {}: {} - {}", user.getUsername(), title, content);
+        log.info("Created notification type {} for user {}", type, userId);
 
         // Đẩy realtime tới các tab đang mở của user qua SSE.
         notificationStreamService.publish(userId, NotificationItem.from(saved));
@@ -57,10 +59,11 @@ public class NotificationService {
     @Transactional
     public void markAsRead(UUID userId, UUID notificationId) {
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new IllegalArgumentException("Notification not found: " + notificationId));
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND));
 
         if (!notification.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied for notification: " + notificationId);
+            // Do not disclose whether another user's notification exists.
+            throw new AppException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
         notification.markAsRead();
@@ -84,10 +87,10 @@ public class NotificationService {
     }
 
     private void sendMockEmail(String email, String title, String content) {
-        log.info("=== [MOCK EMAIL DISPATCH] ===");
-        log.info("To: {}", email);
-        log.info("Subject: {}", title);
-        log.info("Content: {}", content);
+        // Never write email addresses or medical notification content to application logs.
+        log.debug("Mock email dispatch skipped (subjectLength={}, contentLength={})",
+                title == null ? 0 : title.length(),
+                content == null ? 0 : content.length());
         log.info("=============================");
     }
 }

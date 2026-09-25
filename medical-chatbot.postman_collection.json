@@ -146,8 +146,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res && res.token) {",
-                  "  pm.collectionVariables.set('token', res.token);",
+                  "if (res && res.code === 1000 && res.result && res.result.access_token) {",
+                  "  pm.collectionVariables.set('token', res.result.access_token);",
                   "  console.log('Saved token');",
                   "}"
                 ]
@@ -256,7 +256,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res && res.session_id) pm.collectionVariables.set('sessionId', res.session_id);"
+                  "if (res && res.code === 1000 && res.result && res.result.session_id) pm.collectionVariables.set('sessionId', res.result.session_id);"
                 ]
               }
             }

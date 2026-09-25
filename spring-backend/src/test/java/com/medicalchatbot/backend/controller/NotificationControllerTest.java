@@ -84,9 +84,10 @@ class NotificationControllerTest {
 
         mockMvc.perform(get("/api/notifications"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.unread_count").value(1))
-                .andExpect(jsonPath("$.notifications[0].title").value("Cảnh báo Quota"))
-                .andExpect(jsonPath("$.notifications[0].type").value("QUOTA_WARNING"));
+                .andExpect(jsonPath("$.code").value(1000))
+                .andExpect(jsonPath("$.result.unread_count").value(1))
+                .andExpect(jsonPath("$.result.notifications[0].title").value("Cảnh báo Quota"))
+                .andExpect(jsonPath("$.result.notifications[0].type").value("QUOTA_WARNING"));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.medicalchatbot.backend.service;
 
-import com.medicalchatbot.backend.entity.AuditLog;
+import com.medicalchatbot.backend.dto.response.AuditLogResponse;
+import com.medicalchatbot.backend.mapper.AuditLogMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,8 +19,10 @@ import java.util.UUID;
 public class AuditLogService {
 
     private final AuditLogRepository auditLogRepository;
+    private final AuditLogMapper auditLogMapper;
+
     @Transactional(readOnly = true)
-    public Page<AuditLog> searchAuditLogs(
+    public Page<AuditLogResponse> searchAuditLogs(
             UUID userId,
             String action,
             String resourceType,
@@ -38,6 +41,6 @@ public class AuditLogService {
                 fromDate,
                 toDate,
                 pageable
-        );
+        ).map(auditLogMapper::toResponse);
     }
 }

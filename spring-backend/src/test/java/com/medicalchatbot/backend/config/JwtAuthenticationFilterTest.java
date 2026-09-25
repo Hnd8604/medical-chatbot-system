@@ -84,6 +84,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = runFilter(token, tokenService(480));
 
         assertEquals(401, response.getStatus());
+        assertTrue(response.getContentAsString().contains("\"code\":1101"));
         assertTrue(response.getContentAsString().contains("Phien dang nhap da het hieu luc."));
         verify(filterChain, never()).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
@@ -103,6 +104,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = runFilter(token, tokenService(480));
 
         assertEquals(403, response.getStatus());
+        assertTrue(response.getContentAsString().contains("\"code\":1102"));
         assertTrue(response.getContentAsString().contains("Tai khoan da bi khoa."));
         verify(filterChain, never()).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }

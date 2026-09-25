@@ -346,7 +346,10 @@ if (-not $SkipFlowCheck) {
         throw "Full chat flow login failed with HTTP $([int]$loginResponse.StatusCode): $loginResponseText"
     }
     $login = $loginResponseText | ConvertFrom-Json
-    $httpClient.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $login.access_token)
+    if (-not $login.result.access_token) {
+        throw "Full chat flow login returned an invalid API envelope: $loginResponseText"
+    }
+    $httpClient.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $login.result.access_token)
 
     # Keep the smoke-test payload ASCII to avoid Windows PowerShell source encoding issues.
     $body = @{
@@ -364,10 +367,13 @@ if (-not $SkipFlowCheck) {
         throw "Full chat flow check failed with HTTP $([int]$httpResponse.StatusCode): $responseText"
     }
     $response = $responseText | ConvertFrom-Json
+    if ($response.code -ne 1000 -or -not $response.result) {
+        throw "Full chat flow returned an invalid API envelope: $responseText"
+    }
 
-    Write-Host "Intent: $($response.intent)"
-    Write-Host "Tool: $($response.tool_name)"
-    Write-Host "Answer: $($response.answer)"
+    Write-Host "Intent: $($response.result.intent)"
+    Write-Host "Tool: $($response.result.tool_name)"
+    Write-Host "Answer: $($response.result.answer)"
 }
 
 Write-Step "Dev stack is ready"

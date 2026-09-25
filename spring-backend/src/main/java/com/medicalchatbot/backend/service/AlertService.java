@@ -3,9 +3,11 @@ package com.medicalchatbot.backend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.medicalchatbot.backend.entity.Alert;
+import com.medicalchatbot.backend.dto.response.AlertResponse;
 import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.AlertStatus;
 import com.medicalchatbot.backend.repository.AlertRepository;
+import com.medicalchatbot.backend.mapper.AlertMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -26,6 +28,7 @@ import java.util.UUID;
 public class AlertService {
 
     private final AlertRepository alertRepository;
+    private final AlertMapper alertMapper;
 
 
     @Value("${telegram.bot.token:}")
@@ -68,7 +71,7 @@ public class AlertService {
 
 
     @Transactional(readOnly = true)
-    public Page<Alert> searchAlerts(
+    public Page<AlertResponse> searchAlerts(
             AlertStatus status,
             AlertSeverity severity,
             String source,
@@ -77,7 +80,8 @@ public class AlertService {
             OffsetDateTime toDate,
             Pageable pageable
     ) {
-        return alertRepository.searchAlerts(status, severity, source, alertType, fromDate, toDate, pageable);
+        return alertRepository.searchAlerts(status, severity, source, alertType, fromDate, toDate, pageable)
+                .map(alertMapper::toResponse);
     }
 
 

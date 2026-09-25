@@ -13,6 +13,8 @@ import com.lowagie.text.pdf.PdfWriter;
 import com.medicalchatbot.backend.dto.response.ChatMessageItem;
 import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
@@ -55,7 +57,7 @@ public class ExportService {
     public byte[] exportSessionAsPdf(UUID sessionId) {
         User user = getCurrentUser();
         if (!chatSessionRepository.existsForUser(sessionId, user.getId())) {
-            throw new IllegalArgumentException("Session not found or permission denied");
+            throw new AppException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
         List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(sessionId, user.getId());
@@ -68,7 +70,7 @@ public class ExportService {
     public byte[] exportSessionAsCsv(UUID sessionId) {
         User user = getCurrentUser();
         if (!chatSessionRepository.existsForUser(sessionId, user.getId())) {
-            throw new IllegalArgumentException("Session not found or permission denied");
+            throw new AppException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
         List<ChatMessageItem> messages = chatSessionRepository.findMessagesForSession(sessionId, user.getId());

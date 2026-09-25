@@ -25,7 +25,8 @@ Frontend (5174) → Spring Backend (8081) → chatbot-service (8000) → HAPI FH
 | LiteLLM Gateway | `http://localhost:4000` — cấp virtual key LLM theo user |
 | Swagger UI | `http://localhost:8081/swagger-ui/index.html` |
 
-Tài khoản demo (seed sẵn bằng Flyway):
+Tài khoản demo (chỉ active ở profile `dev`; profile `prod` vô hiệu hóa các
+credential công khai này):
 
 | Username | Password | Role |
 |---|---|---|
@@ -53,8 +54,11 @@ Hoặc bật cả stack (Docker infra + 3 service) từ thư mục gốc repo:
 
 ## Cấu hình
 
-Cấu hình đọc từ `application.yml`, override được qua biến môi trường hoặc file
-`.env` (Spring tự import `optional:file:.env`). Các biến chính:
+Cấu hình chung nằm trong `application.yml`; profile mặc định `dev` đọc
+`application-dev.yml` và file `.env`. Khi deploy phải bật `prod`, dùng
+`application-prod.yml` và cung cấp đầy đủ DB/JWT/CORS từ môi trường (không có
+secret production mặc định). Mẫu tương ứng: `.env.example` và
+`.env.prod.example`.
 
 ```env
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/medical_chatbot_app
@@ -71,7 +75,27 @@ TELEGRAM_BOT_TOKEN=                  # tùy chọn: gửi cảnh báo admin qua 
 
 Không commit secret thật vào repo.
 
+Build image backend (multi-stage, runtime non-root):
+
+```powershell
+docker build -t medical-backend .
+docker run --env-file .env.prod -p 8081:8081 medical-backend
+```
+
+CI tại `.github/workflows/ci.yml` chạy unit test, kiểm tra Flyway trên PostgreSQL
+rỗng, build frontend và kiểm tra Docker image.
+
 ## API chính
+
+Mọi response JSON thành công dùng contract ổn định:
+
+```json
+{"code": 1000, "result": {}}
+```
+
+Lỗi giữ HTTP status phù hợp và trả `status`, `code`, `error_code`, `message`,
+`detail`. SSE và nội dung tải xuống (PDF/CSV) không bị bọc. Frontend giải bọc
+contract này tập trung tại `src/services/api.ts`.
 
 Tài liệu đầy đủ (tham số, schema) xem tại Swagger UI. Nhóm endpoint:
 
@@ -122,7 +146,7 @@ $login = Invoke-RestMethod -Uri "http://localhost:8081/api/auth/login" -Method P
   -Body (@{ username = "user_demo"; password = "UserDemo123!" } | ConvertTo-Json)
 
 Invoke-RestMethod -Uri "http://localhost:8081/api/chat" -Method Post -ContentType "application/json" `
-  -Headers @{ Authorization = "Bearer $($login.access_token)" } `
+  -Headers @{ Authorization = "Bearer $($login.result.access_token)" } `
   -Body (@{ message = "Bệnh nhân BN2026-00001 đang dùng thuốc gì?"; patient_id = "BN2026-00001" } | ConvertTo-Json)
 ```
 
@@ -137,7 +161,8 @@ Bảng chính: `app_users`, `quota_policies`, `chat_sessions`, `chat_messages`,
 `llm_virtual_keys`.
 
 Seed data gồm 3 user demo ở trên, quota policy mặc định, bảng giá model, và
-liên kết `user_demo ↔ Patient BN2026-00001`.
+liên kết `user_demo ↔ Patient BN2026-00001`. Migration production vô hiệu hóa
+ba tài khoản demo; repeatable migration riêng của profile `dev` mới kích hoạt lại.
 
 ## Bố cục package
 

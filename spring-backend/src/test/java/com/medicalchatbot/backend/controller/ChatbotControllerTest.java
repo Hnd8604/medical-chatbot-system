@@ -90,8 +90,8 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/patients/BN2026-00001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value("BN2026-00001"))
-                .andExpect(jsonPath("$.name").value("Van A Nguyen"));
+                .andExpect(jsonPath("$.result.id").value("BN2026-00001"))
+                .andExpect(jsonPath("$.result.name").value("Van A Nguyen"));
     }
 
     @Test
@@ -114,14 +114,15 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/patients?name=Nguyen Van A&birth_date=2003-01-01"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.patients[0].id").value("BN2026-00001"))
-                .andExpect(jsonPath("$.criteria.name").value("Nguyen Van A"));
+                .andExpect(jsonPath("$.result.patients[0].id").value("BN2026-00001"))
+                .andExpect(jsonPath("$.result.criteria.name").value("Nguyen Van A"));
     }
 
     @Test
     void observationsRejectInvalidLimit() throws Exception {
         mockMvc.perform(get("/api/patients/BN2026-00001/observations?limit=100"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(9009))
                 .andExpect(jsonPath("$.detail").value("Dữ liệu yêu cầu không hợp lệ."));
     }
 
@@ -142,8 +143,8 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/patients/BN2026-00005/encounters"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.patient_id").value("BN2026-00005"))
-                .andExpect(jsonPath("$.encounters[0].id").value("ENC-2026-00006"));
+                .andExpect(jsonPath("$.result.patient_id").value("BN2026-00005"))
+                .andExpect(jsonPath("$.result.encounters[0].id").value("ENC-2026-00006"));
     }
 
     @Test
@@ -198,12 +199,12 @@ class ChatbotControllerTest {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.session_id").value(sessionId.toString()))
-                .andExpect(jsonPath("$.intent").value("medications"))
-                .andExpect(jsonPath("$.tool_name").value("get_medication_requests"))
-                .andExpect(jsonPath("$.intent_source").value("llm"))
-                .andExpect(jsonPath("$.answer_source").value("llm"))
-                .andExpect(jsonPath("$.patient_id").value("BN2026-00001"));
+                .andExpect(jsonPath("$.result.session_id").value(sessionId.toString()))
+                .andExpect(jsonPath("$.result.intent").value("medications"))
+                .andExpect(jsonPath("$.result.tool_name").value("get_medication_requests"))
+                .andExpect(jsonPath("$.result.intent_source").value("llm"))
+                .andExpect(jsonPath("$.result.answer_source").value("llm"))
+                .andExpect(jsonPath("$.result.patient_id").value("BN2026-00001"));
     }
 
     @Test
@@ -236,6 +237,7 @@ class ChatbotControllerTest {
                                 }
                                 """))
                 .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value(4001))
                 .andExpect(jsonPath("$.detail").value("Đã vượt quá hạn mức 1 lượt gọi AI/ngày."));
     }
 
@@ -255,11 +257,11 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/chat/sessions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sessions[0].id").value(sessionId.toString()))
-                .andExpect(jsonPath("$.sessions[0].title").value("Thuốc của bệnh nhân 001"))
-                .andExpect(jsonPath("$.sessions[0].active_patient_id").value("BN2026-00001"))
-                .andExpect(jsonPath("$.sessions[0].message_count").value(2))
-                .andExpect(jsonPath("$.sessions[0].last_message_preview").value("Theo dữ liệu FHIR..."));
+                .andExpect(jsonPath("$.result.sessions[0].id").value(sessionId.toString()))
+                .andExpect(jsonPath("$.result.sessions[0].title").value("Thuốc của bệnh nhân 001"))
+                .andExpect(jsonPath("$.result.sessions[0].active_patient_id").value("BN2026-00001"))
+                .andExpect(jsonPath("$.result.sessions[0].message_count").value(2))
+                .andExpect(jsonPath("$.result.sessions[0].last_message_preview").value("Theo dữ liệu FHIR..."));
     }
 
     @Test
@@ -278,10 +280,10 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/chat/sessions?query=thuoc&limit=30"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.sessions[0].id").value(sessionId.toString()))
-                .andExpect(jsonPath("$.sessions[0].title").value("Thuoc cua benh nhan 002"))
-                .andExpect(jsonPath("$.sessions[0].active_patient_id").value("BN2026-00002"))
-                .andExpect(jsonPath("$.sessions[0].message_count").value(4));
+                .andExpect(jsonPath("$.result.sessions[0].id").value(sessionId.toString()))
+                .andExpect(jsonPath("$.result.sessions[0].title").value("Thuoc cua benh nhan 002"))
+                .andExpect(jsonPath("$.result.sessions[0].active_patient_id").value("BN2026-00002"))
+                .andExpect(jsonPath("$.result.sessions[0].message_count").value(4));
     }
 
     @Test
@@ -326,14 +328,14 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/chat/sessions/{sessionId}/messages", sessionId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.session_id").value(sessionId.toString()))
-                .andExpect(jsonPath("$.messages[0].id").value(userMessageId.toString()))
-                .andExpect(jsonPath("$.messages[0].role").value("user"))
-                .andExpect(jsonPath("$.messages[0].content").value("Bệnh nhân này dùng thuốc gì?"))
-                .andExpect(jsonPath("$.messages[0].feedback").isEmpty())
-                .andExpect(jsonPath("$.messages[1].role").value("assistant"))
-                .andExpect(jsonPath("$.messages[1].feedback.rating").value(5))
-                .andExpect(jsonPath("$.messages[1].feedback.comment").value("Rất hữu ích"));
+                .andExpect(jsonPath("$.result.session_id").value(sessionId.toString()))
+                .andExpect(jsonPath("$.result.messages[0].id").value(userMessageId.toString()))
+                .andExpect(jsonPath("$.result.messages[0].role").value("user"))
+                .andExpect(jsonPath("$.result.messages[0].content").value("Bệnh nhân này dùng thuốc gì?"))
+                .andExpect(jsonPath("$.result.messages[0].feedback").isEmpty())
+                .andExpect(jsonPath("$.result.messages[1].role").value("assistant"))
+                .andExpect(jsonPath("$.result.messages[1].feedback.rating").value(5))
+                .andExpect(jsonPath("$.result.messages[1].feedback.comment").value("Rất hữu ích"));
     }
 
     @Test
@@ -351,8 +353,8 @@ class ChatbotControllerTest {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(sessionId.toString()))
-                .andExpect(jsonPath("$.title").value("Tên mới"));
+                .andExpect(jsonPath("$.result.id").value(sessionId.toString()))
+                .andExpect(jsonPath("$.result.title").value("Tên mới"));
     }
 
     @Test
@@ -403,12 +405,12 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/quota/status"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.user").value("demo_user"))
-                .andExpect(jsonPath("$.policy").value("user_standard"))
-                .andExpect(jsonPath("$.daily_request_limit").value(50))
-                .andExpect(jsonPath("$.used_requests").value(12))
-                .andExpect(jsonPath("$.remaining_requests").value(38))
-                .andExpect(jsonPath("$.allowed").value(true));
+                .andExpect(jsonPath("$.result.user").value("demo_user"))
+                .andExpect(jsonPath("$.result.policy").value("user_standard"))
+                .andExpect(jsonPath("$.result.daily_request_limit").value(50))
+                .andExpect(jsonPath("$.result.used_requests").value(12))
+                .andExpect(jsonPath("$.result.remaining_requests").value(38))
+                .andExpect(jsonPath("$.result.allowed").value(true));
     }
 
     @Test
@@ -446,17 +448,17 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/usage/cost-summary?from=2026-06-01&to=2026-06-01"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.from").value("2026-06-01"))
-                .andExpect(jsonPath("$.to").value("2026-06-01"))
-                .andExpect(jsonPath("$.request_count").value(2))
-                .andExpect(jsonPath("$.input_tokens").value(3000))
-                .andExpect(jsonPath("$.output_tokens").value(700))
-                .andExpect(jsonPath("$.total_tokens").value(3700))
-                .andExpect(jsonPath("$.estimated_cost_usd").value(0.002320))
-                .andExpect(jsonPath("$.models[0].llm_provider").value("openai"))
-                .andExpect(jsonPath("$.models[0].llm_model").value("gpt-4.1-mini"))
-                .andExpect(jsonPath("$.days[0].date").value("2026-06-01"))
-                .andExpect(jsonPath("$.missing_pricing_models[0].llm_model").value("custom-model"));
+                .andExpect(jsonPath("$.result.from").value("2026-06-01"))
+                .andExpect(jsonPath("$.result.to").value("2026-06-01"))
+                .andExpect(jsonPath("$.result.request_count").value(2))
+                .andExpect(jsonPath("$.result.input_tokens").value(3000))
+                .andExpect(jsonPath("$.result.output_tokens").value(700))
+                .andExpect(jsonPath("$.result.total_tokens").value(3700))
+                .andExpect(jsonPath("$.result.estimated_cost_usd").value(0.002320))
+                .andExpect(jsonPath("$.result.models[0].llm_provider").value("openai"))
+                .andExpect(jsonPath("$.result.models[0].llm_model").value("gpt-4.1-mini"))
+                .andExpect(jsonPath("$.result.days[0].date").value("2026-06-01"))
+                .andExpect(jsonPath("$.result.missing_pricing_models[0].llm_model").value("custom-model"));
     }
 
     @Test
@@ -487,10 +489,10 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/model-pricing"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pricing[0].provider").value("openai"))
-                .andExpect(jsonPath("$.pricing[0].model").value("gpt-4.1-mini"))
-                .andExpect(jsonPath("$.pricing[0].input_price_per_1m_tokens").value(0.400000))
-                .andExpect(jsonPath("$.pricing[0].output_price_per_1m_tokens").value(1.600000))
-                .andExpect(jsonPath("$.pricing[0].currency").value("USD"));
+                .andExpect(jsonPath("$.result.pricing[0].provider").value("openai"))
+                .andExpect(jsonPath("$.result.pricing[0].model").value("gpt-4.1-mini"))
+                .andExpect(jsonPath("$.result.pricing[0].input_price_per_1m_tokens").value(0.400000))
+                .andExpect(jsonPath("$.result.pricing[0].output_price_per_1m_tokens").value(1.600000))
+                .andExpect(jsonPath("$.result.pricing[0].currency").value("USD"));
     }
 }

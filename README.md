@@ -180,7 +180,8 @@ npm run dev
 | Redis | `localhost:6379` | — |
 | Qdrant | `localhost:6333` | — |
 
-Tài khoản demo (Flyway seed sẵn):
+Tài khoản demo (chỉ được kích hoạt bởi Flyway khi chạy profile `dev`; profile
+`prod` tự vô hiệu hóa các credential đã biết này):
 
 | Username | Password | Role |
 |---|---|---|
@@ -229,6 +230,11 @@ chatbot-service hay Spring. Không commit key thật.
 
 ## API chính
 
+Spring trả JSON thành công theo envelope `{ "code": 1000, "result": ... }`;
+frontend giải bọc tập trung trong lớp API dùng chung. Response lỗi có mã số ổn định
+`code`, mã máy đọc `error_code` và HTTP status tương ứng. SSE/PDF/CSV giữ nguyên
+định dạng stream/file.
+
 Chi tiết đầy đủ xem Swagger của từng service. Tóm tắt:
 
 - **Spring** (`:8081`, prefix `/api`) — `auth/*` (login/register/refresh/OTP),
@@ -248,7 +254,7 @@ $login = Invoke-RestMethod -Uri "http://localhost:8081/api/auth/login" -Method P
   -Body (@{ username = "user_demo"; password = "UserDemo123!" } | ConvertTo-Json)
 
 Invoke-RestMethod -Uri "http://localhost:8081/api/chat" -Method Post -ContentType "application/json; charset=utf-8" `
-  -Headers @{ Authorization = "Bearer $($login.access_token)" } `
+  -Headers @{ Authorization = "Bearer $($login.result.access_token)" } `
   -Body (@{ message = "Bệnh nhân BN2026-00001 đang dùng thuốc gì?"; patient_id = "BN2026-00001" } | ConvertTo-Json)
 ```
 

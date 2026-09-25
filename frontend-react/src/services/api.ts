@@ -15,12 +15,48 @@ import type { AuthRefreshResponse } from "../lib/types";
 export class ApiError extends Error {
   status: number;
   detail: string;
+  code?: number;
+  errorCode?: string;
 
-  constructor(status: number, detail: string) {
+  constructor(status: number, detail: string, code?: number, errorCode?: string) {
     super(detail);
+    this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+    this.code = code;
+    this.errorCode = errorCode;
   }
+}
+
+export interface ApiResponse<T> {
+  code: number;
+  message?: string | null;
+  result?: T;
+}
+
+interface ApiErrorPayload {
+  status?: number;
+  code?: number;
+  error_code?: string;
+  message?: string;
+  detail?: string;
+  error?: string;
+}
+
+const SUCCESS_CODE = 1000;
+
+function unwrapApiResponse<T>(data: ApiResponse<T> | null | undefined): T {
+  // Successful endpoints that intentionally return no body (for example HTTP 204).
+  if (data == null) {
+    return undefined as T;
+  }
+  if (typeof data !== "object" || typeof data.code !== "number") {
+    throw new ApiError(0, "Phản hồi từ máy chủ không đúng định dạng.");
+  }
+  if (data.code !== SUCCESS_CODE) {
+    throw new ApiError(0, data.message || "Yêu cầu không thành công.", data.code);
+  }
+  return data.result as T;
 }
 
 // ----- Quản lý token (nguồn sự thật duy nhất cho access + refresh token) -----
@@ -82,13 +118,14 @@ async function doRefresh(): Promise<string | null> {
   }
   try {
     // Gọi axios "trần" (không qua interceptor) để tránh đệ quy refresh.
-    const { data } = await axios.post<AuthRefreshResponse>(
+    const { data } = await axios.post<ApiResponse<AuthRefreshResponse>>(
       `${API_BASE_URL}/api/auth/refresh`,
       { refresh_token: refreshToken },
       { headers: { "Content-Type": "application/json" } },
     );
-    setTokens(data.access_token, data.refresh_token);
-    return data.access_token;
+    const refreshed = unwrapApiResponse(data);
+    setTokens(refreshed.access_token, refreshed.refresh_token);
+    return refreshed.access_token;
   } catch {
     handleRefreshFailure();
     return null;
@@ -139,10 +176,13 @@ http.interceptors.response.use(
 // ----- Chuyển AxiosError thành ApiError với thông điệp đọc được -----
 
 function toApiError(error: unknown): ApiError {
+  if (error instanceof ApiError) {
+    return error;
+  }
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 0;
     const data = error.response?.data as
-      | { message?: string; detail?: string; error?: string }
+      | ApiErrorPayload
       | string
       | undefined;
 
@@ -152,7 +192,7 @@ function toApiError(error: unknown): ApiError {
     if (data && typeof data === "object") {
       const detail = data.message || data.detail || data.error;
       if (detail) {
-        return new ApiError(status, detail);
+        return new ApiError(status, detail, data.code, data.error_code);
       }
     }
     return new ApiError(
@@ -163,12 +203,33 @@ function toApiError(error: unknown): ApiError {
   return new ApiError(0, error instanceof Error ? error.message : "Yêu cầu không thành công.");
 }
 
+async function toDownloadError(error: unknown): Promise<ApiError> {
+  if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
+    try {
+      const raw = await error.response.data.text();
+      const payload = JSON.parse(raw) as ApiErrorPayload;
+      const detail = payload.message || payload.detail || payload.error;
+      if (detail) {
+        return new ApiError(
+          error.response.status,
+          detail,
+          payload.code,
+          payload.error_code,
+        );
+      }
+    } catch {
+      // Fall through to the normal transport error when the response is not JSON.
+    }
+  }
+  return toApiError(error);
+}
+
 // ----- Helper HTTP idiomatic: nhận/trả object, tự ném ApiError -----
 
 export async function apiGet<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
   try {
-    const { data } = await http.get<T>(path, config);
-    return data;
+    const { data } = await http.get<ApiResponse<T>>(path, config);
+    return unwrapApiResponse(data);
   } catch (error) {
     throw toApiError(error);
   }
@@ -180,8 +241,8 @@ export async function apiPost<T>(
   config?: AxiosRequestConfig,
 ): Promise<T> {
   try {
-    const { data } = await http.post<T>(path, body, config);
-    return data;
+    const { data } = await http.post<ApiResponse<T>>(path, body, config);
+    return unwrapApiResponse(data);
   } catch (error) {
     throw toApiError(error);
   }
@@ -193,8 +254,8 @@ export async function apiPut<T>(
   config?: AxiosRequestConfig,
 ): Promise<T> {
   try {
-    const { data } = await http.put<T>(path, body, config);
-    return data;
+    const { data } = await http.put<ApiResponse<T>>(path, body, config);
+    return unwrapApiResponse(data);
   } catch (error) {
     throw toApiError(error);
   }
@@ -206,8 +267,8 @@ export async function apiPatch<T>(
   config?: AxiosRequestConfig,
 ): Promise<T> {
   try {
-    const { data } = await http.patch<T>(path, body, config);
-    return data;
+    const { data } = await http.patch<ApiResponse<T>>(path, body, config);
+    return unwrapApiResponse(data);
   } catch (error) {
     throw toApiError(error);
   }
@@ -218,8 +279,8 @@ export async function apiDelete<T = void>(
   config?: AxiosRequestConfig,
 ): Promise<T> {
   try {
-    const { data } = await http.delete<T>(path, config);
-    return data;
+    const { data } = await http.delete<ApiResponse<T>>(path, config);
+    return unwrapApiResponse(data);
   } catch (error) {
     throw toApiError(error);
   }
@@ -231,7 +292,7 @@ export async function apiDownload(path: string, filename: string): Promise<void>
     const response = await http.get<Blob>(path, { responseType: "blob" });
     blob = response.data;
   } catch (error) {
-    throw toApiError(error);
+    throw await toDownloadError(error);
   }
 
   const url = URL.createObjectURL(blob);

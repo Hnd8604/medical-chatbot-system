@@ -6,6 +6,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
@@ -47,7 +49,19 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/error", "/actuator/health", "/api/health", "/api/chatbot/status").permitAll()
+                        .requestMatchers(
+                                "/error",
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/api/health",
+                                "/api/chatbot/status",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/api-docs",
+                                "/api-docs/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/login",
                                 "/api/auth/register",
@@ -57,21 +71,23 @@ public class SecurityConfig {
                                 "/api/auth/reset-password"
                         ).permitAll()
                         .requestMatchers("/api/admin/**", "/api/audit-logs", "/api/metrics/cache").hasRole("ADMIN")
-                        .requestMatchers("/api/patients/**").hasAnyRole("DOCTOR", "ADMIN")
+                        .requestMatchers("/api/patients", "/api/patients/**").hasAnyRole("DOCTOR", "ADMIN")
                         .requestMatchers(
                                 "/api/auth/me",
                                 "/api/auth/logout",
                                 "/api/auth/change-password",
                                 "/api/auth/link-patient",
                                 "/api/me/**",
+                                "/api/chat",
                                 "/api/chat/**",
                                 "/api/quota/status",
                                 "/api/usage/cost-summary",
+                                "/api/notifications",
                                 "/api/notifications/**",
-                                "/api/model-pricing",
-                                "/api/chat/messages/*/feedback"
+                                "/api/model-pricing"
                         ).authenticated()
-                        .anyRequest().permitAll()
+                        // Deny by default so a newly added controller cannot become public by omission.
+                        .anyRequest().denyAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

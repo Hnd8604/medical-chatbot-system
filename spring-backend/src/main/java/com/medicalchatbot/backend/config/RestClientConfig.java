@@ -13,6 +13,8 @@ public class RestClientConfig {
     @Bean
     RestClient chatbotRestClient(ChatbotServiceProperties properties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(properties.connectTimeout());
+        requestFactory.setReadTimeout(properties.readTimeout());
 
         return RestClient.builder()
                 .requestFactory(requestFactory)

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ListFilter, RefreshCw } from "lucide-react";
 import { apiGet, apiPatch, toQuery } from "../services/api";
-import { useAuth } from "../hooks/useAuth";
 import type { AdminAlertItem, PageResponse } from "../lib/types";
 import { formatDateTime, formatNumber } from "../lib/formatters";
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";
@@ -47,8 +46,6 @@ export function AdminAlertsPage() {
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { user } = useAuth();
-
   async function loadAlerts(status = statusFilter, severity = severityFilter, nextPage = page) {
     setLoading(true);
     setError(null);
@@ -75,8 +72,7 @@ export function AdminAlertsPage() {
   async function resolveAlert(alertId: string) {
     setResolvingAlertId(alertId);
     try {
-      const resolvedBy = encodeURIComponent(user?.username || "admin");
-      await apiPatch<void>(`/api/admin/alerts/${alertId}/resolve?resolvedBy=${resolvedBy}`);
+      await apiPatch<void>(`/api/admin/alerts/${alertId}/resolve`);
       await loadAlerts();
     } catch {
       setError("Không thể đánh dấu alert đã xử lý.");

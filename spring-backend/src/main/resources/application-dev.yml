@@ -1,0 +1,47 @@
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/devmigration
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/medical_chatbot_app}
+    username: ${SPRING_DATASOURCE_USERNAME:app_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:app_password}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  jpa:
+    show-sql: false
+  output:
+    ansi:
+      enabled: always
+
+chatbot:
+  service:
+    base-url: ${CHATBOT_SERVICE_BASE_URL:http://localhost:8000}
+
+litellm:
+  base-url: ${LITELLM_BASE_URL:http://localhost:4000}
+  master-key: ${LITELLM_MASTER_KEY:}
+  enabled: ${LITELLM_GATEWAY_ENABLED:true}
+
+jwt:
+  secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-please-1234567890}
+
+backup:
+  enabled: ${BACKUP_ENABLED:true}
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:5174
+      - http://127.0.0.1:5174
+      - http://localhost:3000
+      - http://127.0.0.1:3000
+
+logging:
+  level:
+    root: info
+    com.medicalchatbot.backend: debug
+    org.hibernate.SQL: warn
+    org.hibernate.orm.jdbc.bind: warn

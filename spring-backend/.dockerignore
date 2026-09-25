@@ -1,0 +1,8 @@
+target
+.env*
+.git
+.gitignore
+.idea
+.vscode
+*.log
+test-output.pdf

@@ -68,7 +68,7 @@ Frontend render message (role "error"), không crash layout
 
 ## Luồng trong code
 
-- **Global handler:** [ApiExceptionHandler.java](spring-backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java) — body builder ([L50-58](spring-backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L50-L58)).
+- **Global handler:** [ApiExceptionHandler.java](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java) — body builder ([L50-58](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L50-L58)).
 - **Lỗi FHIR (Python):** `FhirClientError` ([client.py:9-17](chatbot-service/fhir/client.py#L9-L17), [126-137](chatbot-service/fhir/client.py#L126-L137)).
 - **Lỗi LLM (Python):** [answer_generator.py:113-126](chatbot-service/agents/answer_generator.py#L113-L126).
 - **Logger config:** [app/logger.py](chatbot-service/app/logger.py); Spring Slf4j trong các service.
@@ -77,8 +77,8 @@ Frontend render message (role "error"), không crash layout
 
 | Vai trò | File |
 |---|---|
-| Global exception handler | `spring-backend/.../exception/ApiExceptionHandler.java` |
-| Exceptions | `spring-backend/.../exception/{QuotaExceededException,RateLimitExceededException}.java` |
+| Global exception handler | `backend/.../exception/ApiExceptionHandler.java` |
+| Exceptions | `backend/.../exception/{QuotaExceededException,RateLimitExceededException}.java` |
 | Lỗi FHIR | `chatbot-service/fhir/client.py` |
 | Lỗi LLM | `chatbot-service/agents/answer_generator.py` |
 | Logger | `chatbot-service/app/logger.py` |

@@ -113,5 +113,5 @@ SUMMARY_TRIGGER_MESSAGE_COUNT=8
 - `chatbot-service/chat/response_builder.py` — await summary task, `summary_usage`, `memory_update.summary`.
 - `chatbot-service/api/chat_routes.py` — tạo summary task song song, inject context vào intent extractor.
 - `chatbot-service/agents/intent/llm_extractor.py`, `agents/answer_generator.py` — prompt nhận `conversation`.
-- `spring-backend/.../ChatApplicationService.java` — gửi `total_message_count`, log `summary_usage`.
+- `backend/.../ChatApplicationService.java` — gửi `total_message_count`, log `summary_usage`.
 - Tests: `tests/test_summary_generator.py`, `tests/test_chat_routes.py`, `ChatApplicationServiceTest.java`.

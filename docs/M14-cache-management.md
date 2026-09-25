@@ -71,7 +71,7 @@ Khi dữ liệu bệnh nhân đổi: invalidate_patient_cache(patient_id)
 - **Đọc cache (đầu pipeline):** `get_cached_chat_payload()` ([cache_flow.py:10-49](chatbot-service/chat/cache_flow.py#L10-L49)); gọi tại [chat_routes.py:176-180](chatbot-service/api/chat_routes.py#L176-L180).
 - **Semantic cache service:** `get_cached_answer` / `save_to_cache` / `cleanup_expired_cache` / `invalidate_patient_cache` ([semantic_cache.py:54-167](chatbot-service/services/semantic_cache.py#L54-L167)).
 - **Config cache:** [config.py:19-25](chatbot-service/app/config.py#L19-L25).
-- **Observability (Spring):** `MetricsService` ([MetricsService.java](spring-backend/src/main/java/com/medicalchatbot/backend/service/MetricsService.java)); ghi saved usage trong [ChatApplicationService.saveUsage()](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L196-L229).
+- **Observability (Spring):** `MetricsService` ([MetricsService.java](backend/src/main/java/com/medicalchatbot/backend/service/MetricsService.java)); ghi saved usage trong [ChatApplicationService.saveUsage()](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L196-L229).
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -80,6 +80,6 @@ Khi dữ liệu bệnh nhân đổi: invalidate_patient_cache(patient_id)
 | Semantic cache (Qdrant) | `chatbot-service/services/semantic_cache.py` |
 | Cache flow (đọc đầu pipeline) | `chatbot-service/chat/cache_flow.py` |
 | Config cache | `chatbot-service/app/config.py` |
-| Observability metrics | `spring-backend/.../service/MetricsService.java`, `.../controller/MetricsController.java` |
-| Saved usage + migration | `spring-backend/.../service/ChatApplicationService.java`, `db/migration/V1__baseline_schema_and_seed.sql` (cột `answer_source`/`saved_tokens`/`saved_cost_usd`) |
-| Cache entries (key-value) | `spring-backend/.../entity/CacheEntry.java`, `db/migration/V1__baseline_schema_and_seed.sql` |
+| Observability metrics | `backend/.../service/MetricsService.java`, `.../controller/MetricsController.java` |
+| Saved usage + migration | `backend/.../service/ChatApplicationService.java`, `db/migration/V1__baseline_schema_and_seed.sql` (cột `answer_source`/`saved_tokens`/`saved_cost_usd`) |
+| Cache entries (key-value) | `backend/.../entity/CacheEntry.java`, `db/migration/V1__baseline_schema_and_seed.sql` |

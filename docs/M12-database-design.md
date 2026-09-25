@@ -4,7 +4,7 @@ Thiết kế schema database ứng dụng (tách hoàn toàn khỏi HAPI FHIR da
 
 > Lịch sử migration V1→V17 cũ đã được **gộp (squash) thành baseline `V1`**;
 > `V2` bổ sung bảng `llm_virtual_keys` cho AI Gateway (LiteLLM).
-> ERD chi tiết (Mermaid + DBML): [spring-backend/docs/m12-database-erd.md](../spring-backend/docs/m12-database-erd.md).
+> ERD chi tiết (Mermaid + DBML): [backend/docs/m12-database-erd.md](../backend/docs/m12-database-erd.md).
 
 ## M12.1 - Core application schema
 
@@ -81,7 +81,7 @@ App DB hoàn toàn tách biệt HAPI FHIR DB (hai PostgreSQL khác nhau — xem 
 
 | Vai trò | File / thư mục |
 |---|---|
-| Migrations | `spring-backend/src/main/resources/db/migration/V1__baseline_schema_and_seed.sql`, `V2__llm_virtual_keys.sql` |
-| Entities | `spring-backend/.../entity/*.java` |
-| Repositories | `spring-backend/.../repository/*.java` |
-| ERD chi tiết | `spring-backend/docs/m12-database-erd.md` |
+| Migrations | `backend/src/main/resources/db/migration/V1__baseline_schema_and_seed.sql`, `V2__llm_virtual_keys.sql` |
+| Entities | `backend/.../entity/*.java` |
+| Repositories | `backend/.../repository/*.java` |
+| ERD chi tiết | `backend/docs/m12-database-erd.md` |

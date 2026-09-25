@@ -428,7 +428,7 @@ LITELLM_BASE_URL=http://localhost:4000
 LITELLM_MASTER_KEY=sk-local-dev   # phải khớp master_key của gateway
 ```
 
-**`spring-backend/.env`** (Spring quản virtual key + đọc spend):
+**`backend/.env`** (Spring quản virtual key + đọc spend):
 ```
 LITELLM_BASE_URL=http://localhost:4000
 LITELLM_MASTER_KEY=sk-local-dev   # phải khớp master_key của gateway

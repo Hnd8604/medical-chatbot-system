@@ -82,7 +82,7 @@
 M20 config:
    chatbot-service: pydantic Settings (env/.env) → get_settings() (lru_cache)
         LLM / FHIR / cache config
-   spring-backend: quota_policies, model_pricing (DB) + admin API
+   backend: quota_policies, model_pricing (DB) + admin API
         Hibernate ddl-auto=validate + pydantic validation → fail-fast khi sai config
 
 M22 feedback:
@@ -103,16 +103,16 @@ M22 feedback:
 
 - **Config (Python):** [config.py](chatbot-service/app/config.py) — `Settings` + `get_settings()`.
 - **Config admin (Spring):** `QuotaPolicyAdminService`, `ModelPricingAdminService`.
-- **Feedback API:** `ChatbotController.submitFeedback()` ([ChatbotController.java:136-142](spring-backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L136-L142)).
-- **Feedback service (upsert):** [FeedbackService.java:26-46](spring-backend/src/main/java/com/medicalchatbot/backend/service/FeedbackService.java#L26-L46).
-- **Feedback UI:** `ChatPage.submitFeedback()` ([ChatPage.tsx:342-353](frontend-react/src/routes/ChatPage.tsx#L342-L353)).
+- **Feedback API:** `ChatbotController.submitFeedback()` ([ChatbotController.java:136-142](backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L136-L142)).
+- **Feedback service (upsert):** [FeedbackService.java:26-46](backend/src/main/java/com/medicalchatbot/backend/service/FeedbackService.java#L26-L46).
+- **Feedback UI:** `ChatPage.submitFeedback()` ([ChatPage.tsx:342-353](frontend/src/routes/ChatPage.tsx#L342-L353)).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
 | Config chatbot-service | `chatbot-service/app/config.py` |
-| Quota/pricing admin (Spring) | `spring-backend/.../service/{QuotaPolicyAdminService,ModelPricingAdminService}.java` |
-| Feedback service | `spring-backend/.../service/FeedbackService.java` |
-| Feedback entity/migration | `spring-backend/.../entity/MessageFeedback.java`, `db/migration/V1__baseline_schema_and_seed.sql` (bảng `message_feedback`) |
-| Feedback UI | `frontend-react/src/routes/ChatPage.tsx` |
+| Quota/pricing admin (Spring) | `backend/.../service/{QuotaPolicyAdminService,ModelPricingAdminService}.java` |
+| Feedback service | `backend/.../service/FeedbackService.java` |
+| Feedback entity/migration | `backend/.../entity/MessageFeedback.java`, `db/migration/V1__baseline_schema_and_seed.sql` (bảng `message_feedback`) |
+| Feedback UI | `frontend/src/routes/ChatPage.tsx` |

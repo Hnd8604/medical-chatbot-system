@@ -1,6 +1,6 @@
 # Notification: Realtime qua SSE (Server-Sent Events)
 
-Tài liệu này mô tả kênh **đẩy thông báo realtime** của `spring-backend` → `frontend-react`.
+Tài liệu này mô tả kênh **đẩy thông báo realtime** của `backend` → `frontend`.
 Thay cho việc frontend poll `GET /api/notifications` mỗi 60 giây, mỗi thông báo mới (quota
 warning, system error…) được **push tức thì** tới các tab đang mở của user qua một kết nối
 SSE mở sẵn. Phần nghiệp vụ notification (tạo, đọc, mock email) xem [M25](M21-M23-M25-utilities.md);
@@ -38,7 +38,7 @@ trong `GET /api/notifications` (dùng chung `NotificationItem.from(...)`).
 `EventSource` của trình duyệt **không cho set header** `Authorization`. Nên riêng endpoint SSE,
 access token được đính kèm qua query param `?token=<jwt>`.
 
-Để hạn chế lộ token (URL hay bị ghi vào access log), [JwtAuthenticationFilter](../spring-backend/src/main/java/com/medicalchatbot/backend/config/JwtAuthenticationFilter.java)
+Để hạn chế lộ token (URL hay bị ghi vào access log), [JwtAuthenticationFilter](../backend/src/main/java/com/medicalchatbot/backend/config/JwtAuthenticationFilter.java)
 **chỉ** chấp nhận token-qua-query khi:
 
 ```text
@@ -52,7 +52,7 @@ thái tài khoản) **không đổi**.
 
 ## 4. Phía server: registry emitter theo user
 
-[NotificationStreamService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/NotificationStreamService.java)
+[NotificationStreamService](../backend/src/main/java/com/medicalchatbot/backend/service/NotificationStreamService.java)
 giữ các kết nối đang mở:
 
 ```text
@@ -81,13 +81,13 @@ ApiExceptionHandler.notifyCurrentUser()      ─┤→ NotificationService.creat
 
 ## 5. Phía client
 
-[services/api.ts](../frontend-react/src/services/api.ts) — `openNotificationStream(handlers)`:
+[services/api.ts](../frontend/src/services/api.ts) — `openNotificationStream(handlers)`:
 
 - Lấy access token từ `sessionStorage`, mở `EventSource` tới
   `${API_BASE_URL}/api/notifications/stream?token=<jwt>`.
 - Trả về hàm **đóng kết nối** (`source.close()`) để cleanup khi unmount.
 
-[ChatPage.tsx](../frontend-react/src/pages/ChatPage.tsx) trong một `useEffect`:
+[ChatPage.tsx](../frontend/src/pages/ChatPage.tsx) trong một `useEffect`:
 
 ```text
 mount → loadNotifications()                    // baseline
@@ -114,25 +114,25 @@ unmount → close()                              // đóng EventSource
 
 | File | Vai trò |
 |---|---|
-| [NotificationStreamService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/NotificationStreamService.java) | Registry emitter theo user; `subscribe` / `publish` / auto-cleanup |
-| [NotificationController](../spring-backend/src/main/java/com/medicalchatbot/backend/controller/NotificationController.java) | `GET /api/notifications/stream` → `SseEmitter` |
-| [NotificationService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/NotificationService.java) | `createNotification()` gọi `publish()` sau khi lưu |
-| [NotificationItem](../spring-backend/src/main/java/com/medicalchatbot/backend/dto/response/NotificationItem.java) | `from(Notification)` — shape dùng chung cho REST + SSE |
-| [JwtAuthenticationFilter](../spring-backend/src/main/java/com/medicalchatbot/backend/config/JwtAuthenticationFilter.java) | `resolveToken()` — chấp nhận `?token=` riêng cho path stream |
-| [services/api.ts](../frontend-react/src/services/api.ts) | `openNotificationStream()` — mở `EventSource`, trả hàm đóng |
-| [ChatPage.tsx](../frontend-react/src/pages/ChatPage.tsx) | Đăng ký stream, prepend/dedupe item, resync khi `connected` |
+| [NotificationStreamService](../backend/src/main/java/com/medicalchatbot/backend/service/NotificationStreamService.java) | Registry emitter theo user; `subscribe` / `publish` / auto-cleanup |
+| [NotificationController](../backend/src/main/java/com/medicalchatbot/backend/controller/NotificationController.java) | `GET /api/notifications/stream` → `SseEmitter` |
+| [NotificationService](../backend/src/main/java/com/medicalchatbot/backend/service/NotificationService.java) | `createNotification()` gọi `publish()` sau khi lưu |
+| [NotificationItem](../backend/src/main/java/com/medicalchatbot/backend/dto/response/NotificationItem.java) | `from(Notification)` — shape dùng chung cho REST + SSE |
+| [JwtAuthenticationFilter](../backend/src/main/java/com/medicalchatbot/backend/config/JwtAuthenticationFilter.java) | `resolveToken()` — chấp nhận `?token=` riêng cho path stream |
+| [services/api.ts](../frontend/src/services/api.ts) | `openNotificationStream()` — mở `EventSource`, trả hàm đóng |
+| [ChatPage.tsx](../frontend/src/pages/ChatPage.tsx) | Đăng ký stream, prepend/dedupe item, resync khi `connected` |
 
 ## 8. Kiểm thử
 
-`spring-backend`, `./mvnw.cmd test` (JAVA_HOME = JDK 21):
+`backend`, `./mvnw.cmd test` (JAVA_HOME = JDK 21):
 
-- [JwtAuthenticationFilterTest](../spring-backend/src/test/java/com/medicalchatbot/backend/config/JwtAuthenticationFilterTest.java):
+- [JwtAuthenticationFilterTest](../backend/src/test/java/com/medicalchatbot/backend/config/JwtAuthenticationFilterTest.java):
   token qua query param xác thực được path `/api/notifications/stream`; token qua query param
   **bị bỏ qua** ở path khác (coi như ẩn danh).
-- [NotificationControllerTest](../spring-backend/src/test/java/com/medicalchatbot/backend/controller/NotificationControllerTest.java):
+- [NotificationControllerTest](../backend/src/test/java/com/medicalchatbot/backend/controller/NotificationControllerTest.java):
   list/mark-read giữ nguyên hành vi (mock thêm `NotificationStreamService`).
 
-Kết quả gần nhất: **65 test pass, BUILD SUCCESS**; `frontend-react` `npm run typecheck` sạch.
+Kết quả gần nhất: **65 test pass, BUILD SUCCESS**; `frontend` `npm run typecheck` sạch.
 
 ## 9. Giới hạn hiện tại / hướng mở rộng
 

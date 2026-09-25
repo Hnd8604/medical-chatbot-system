@@ -66,15 +66,15 @@ Aggregation: summarizeSuccessfulUsage(userId, from, to)
 
 ## Luồng trong code
 
-- **Ghi usage:** `saveUsage()` ([ChatApplicationService.java:180-230](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L180-L230)); đo latency ([L89-100](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L89-L100)).
-- **Aggregate:** `UsageLogRepository.summarizeSuccessfulUsage()` (dùng trong [QuotaService.statusForUser()](spring-backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L159-L199)).
+- **Ghi usage:** `saveUsage()` ([ChatApplicationService.java:180-230](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L180-L230)); đo latency ([L89-100](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L89-L100)).
+- **Aggregate:** `UsageLogRepository.summarizeSuccessfulUsage()` (dùng trong [QuotaService.statusForUser()](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L159-L199)).
 - **Token nguồn:** `usage` trong response của chatbot-service ([answer_generator.py:128-133](chatbot-service/agents/answer_generator.py#L128-L133)).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Ghi usage | `spring-backend/.../service/ChatApplicationService.java` (`saveUsage`) |
-| Entity/repository | `spring-backend/.../entity/UsageLog.java`, `.../repository/UsageLogRepository.java` |
+| Ghi usage | `backend/.../service/ChatApplicationService.java` (`saveUsage`) |
+| Entity/repository | `backend/.../entity/UsageLog.java`, `.../repository/UsageLogRepository.java` |
 | Token nguồn (LLM) | `chatbot-service/agents/answer_generator.py` |
 | Migration | `db/migration/V1`, `V3` (status/provider/model/latency), `V7` (cache fields) |

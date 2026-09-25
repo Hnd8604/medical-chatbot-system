@@ -52,7 +52,7 @@ Hai đường kích hoạt:
 
 ## 2. Biến môi trường
 
-`backup.sh` đọc `spring-backend/.env` (xem `spring-backend/.env.example`):
+`backup.sh` đọc `backend/.env` (xem `backend/.env.example`):
 
 ```env
 BACKUP_UPLOAD=true                 # false = chỉ backup local, bỏ qua upload
@@ -65,7 +65,7 @@ Phía Spring (nút Admin UI), cấu hình trong `application.yml` (đều có m�
 ```yaml
 backup:
   enabled: true
-  script-path: ../infra/scripts/backup.sh   # tương đối theo thư mục chạy Spring (spring-backend/)
+  script-path: ../infra/scripts/backup.sh   # tương đối theo thư mục chạy Spring (backend/)
   bash-path: bash                            # cần Git Bash trong PATH; hoặc trỏ tuyệt đối
   timeout-minutes: 10
 ```

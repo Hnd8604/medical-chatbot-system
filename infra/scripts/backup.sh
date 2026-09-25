@@ -12,7 +12,7 @@ RETENTION_DAYS=7
 # Nguồn kích hoạt: "auto" (Task Scheduler 2h sáng) hoặc "manual" (nút Admin UI).
 TRIGGER="${1:-auto}"
 
-ENV_FILE="$PROJECT_ROOT/spring-backend/.env"
+ENV_FILE="$PROJECT_ROOT/backend/.env"
 if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"

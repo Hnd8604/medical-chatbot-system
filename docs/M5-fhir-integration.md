@@ -85,7 +85,7 @@ Lỗi: 404 → FhirNotFoundError | khác → FhirClientError
 - **Config base URL/timeout:** [config.py:9-10](chatbot-service/app/config.py#L9-L10).
 - **Endpoint layer:** [api/fhir_routes.py](chatbot-service/api/fhir_routes.py).
 - **Normalization:** [fhir/normalizer.py](chatbot-service/fhir/normalizer.py).
-- **Proxy phía Spring:** [ChatbotServiceClient.java](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatbotServiceClient.java).
+- **Proxy phía Spring:** [ChatbotServiceClient.java](backend/src/main/java/com/medicalchatbot/backend/service/ChatbotServiceClient.java).
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -96,4 +96,4 @@ Lỗi: 404 → FhirNotFoundError | khác → FhirClientError
 | Normalization | `chatbot-service/fhir/normalizer.py` |
 | Config FHIR | `chatbot-service/app/config.py` |
 | Hạ tầng HAPI | `infra/hapi-fhir/` |
-| Proxy FHIR (Spring) | `spring-backend/.../service/ChatbotServiceClient.java` |
+| Proxy FHIR (Spring) | `backend/.../service/ChatbotServiceClient.java` |

@@ -89,19 +89,19 @@ Ghi (trong mỗi lượt /api/chat — ChatApplicationService.chat, @Transaction
 
 ## Luồng trong code
 
-- **Ghi message:** `ChatApplicationService.chat()` → `chatMessageRepository.save(... USER ...)` ([ChatApplicationService.java:84-87](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L84-L87)) rồi `saveAndReturn(... ASSISTANT ...)` ([L103-108](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L103-L108)). Cả hai gọi `session.touch()` để cập nhật `updated_at`.
-- **Metadata builders:** `userMessageMetadata()` / `assistantMessageMetadata()` / `evidenceRefs()` ([ChatApplicationService.java:337-375](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L337-L375)) — `evidenceRefs()` rút gọn `evidence` thành `{resource_type, resource_id, summary}` thay vì lưu cả bundle.
-- **Entity & repository:** `ChatMessage` ([ChatMessage.java](spring-backend/src/main/java/com/medicalchatbot/backend/entity/ChatMessage.java)), `ChatMessageRepository` ([ChatMessageRepository.java](spring-backend/src/main/java/com/medicalchatbot/backend/repository/ChatMessageRepository.java)).
-- **Query đọc theo thứ tự + quyền:** `findMessageItemViewsForSession()` ([ChatSessionRepository.java:227-256](spring-backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L227-L256)).
-- **Frontend render:** `mapHistoryMessage()` và `selectSession()` ([ChatPage.tsx:50-58](frontend-react/src/routes/ChatPage.tsx#L50-L58), [L234-246](frontend-react/src/routes/ChatPage.tsx#L234-L246)).
+- **Ghi message:** `ChatApplicationService.chat()` → `chatMessageRepository.save(... USER ...)` ([ChatApplicationService.java:84-87](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L84-L87)) rồi `saveAndReturn(... ASSISTANT ...)` ([L103-108](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L103-L108)). Cả hai gọi `session.touch()` để cập nhật `updated_at`.
+- **Metadata builders:** `userMessageMetadata()` / `assistantMessageMetadata()` / `evidenceRefs()` ([ChatApplicationService.java:337-375](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L337-L375)) — `evidenceRefs()` rút gọn `evidence` thành `{resource_type, resource_id, summary}` thay vì lưu cả bundle.
+- **Entity & repository:** `ChatMessage` ([ChatMessage.java](backend/src/main/java/com/medicalchatbot/backend/entity/ChatMessage.java)), `ChatMessageRepository` ([ChatMessageRepository.java](backend/src/main/java/com/medicalchatbot/backend/repository/ChatMessageRepository.java)).
+- **Query đọc theo thứ tự + quyền:** `findMessageItemViewsForSession()` ([ChatSessionRepository.java:227-256](backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L227-L256)).
+- **Frontend render:** `mapHistoryMessage()` và `selectSession()` ([ChatPage.tsx:50-58](frontend/src/routes/ChatPage.tsx#L50-L58), [L234-246](frontend/src/routes/ChatPage.tsx#L234-L246)).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Entity message | `spring-backend/.../entity/ChatMessage.java` |
-| Enum role (user/assistant/system) | `spring-backend/.../enums/ChatMessageRole.java` |
-| Repository message | `spring-backend/.../repository/ChatMessageRepository.java` |
-| Query đọc + sắp xếp | `spring-backend/.../repository/ChatSessionRepository.java` |
-| Ghi message trong luồng chat | `spring-backend/.../service/ChatApplicationService.java` |
-| Frontend render lịch sử | `frontend-react/src/routes/ChatPage.tsx` |
+| Entity message | `backend/.../entity/ChatMessage.java` |
+| Enum role (user/assistant/system) | `backend/.../enums/ChatMessageRole.java` |
+| Repository message | `backend/.../repository/ChatMessageRepository.java` |
+| Query đọc + sắp xếp | `backend/.../repository/ChatSessionRepository.java` |
+| Ghi message trong luồng chat | `backend/.../service/ChatApplicationService.java` |
+| Frontend render lịch sử | `frontend/src/routes/ChatPage.tsx` |

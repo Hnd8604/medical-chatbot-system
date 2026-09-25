@@ -95,7 +95,7 @@ rõ bệnh nhân, hệ thống lấy hồ sơ primary (sắp xếp `primaryLink 
 `AdminUserService` đọc link qua `findLinksForUser` / `findLinksForUsers` và map sang
 [AdminUserPatientLinkResponse](../src/main/java/com/medicalchatbot/backend/dto/response/AdminUserPatientLinkResponse.java)
 (`fhir_patient_id`, `relationship`, `is_primary`). Frontend dùng ở
-[AdminUsersPage.tsx](../../frontend-react/src/pages/AdminUsersPage.tsx) để cho admin
+[AdminUsersPage.tsx](../../frontend/src/pages/AdminUsersPage.tsx) để cho admin
 thấy mỗi tài khoản đang gắn với hồ sơ FHIR nào.
 
 ---

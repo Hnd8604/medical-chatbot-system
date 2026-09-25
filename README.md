@@ -55,8 +55,8 @@ Provider key LLM chỉ nằm trong LiteLLM gateway.
 
 | Service | Thư mục | Vai trò |
 |---|---|---|
-| Frontend | `frontend-react/` | Chat UI, lịch sử hội thoại, panel bệnh nhân, dashboard admin. Chỉ gọi Spring. |
-| Spring Backend | `spring-backend/` | Backend chính: auth, quota, session/message, usage/audit, notifications, virtual key. |
+| Frontend | `frontend/` | Chat UI, lịch sử hội thoại, panel bệnh nhân, dashboard admin. Chỉ gọi Spring. |
+| Spring Backend | `backend/` | Backend chính: auth, quota, session/message, usage/audit, notifications, virtual key. |
 | chatbot-service | `chatbot-service/` | Intent extraction, policy theo role, gọi FHIR, routing, semantic cache, sinh câu trả lời. |
 | HAPI FHIR | `infra/hapi-fhir/` | FHIR Server R4 — source of truth dữ liệu y tế. |
 | Hạ tầng khác | `infra/` | App Postgres, Redis, Qdrant, LiteLLM — Docker Compose. |
@@ -155,13 +155,13 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 # 3. Spring backend (terminal mới)
-cd spring-backend
+cd backend
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 .\mvnw.cmd spring-boot:run
 
 # 4. Frontend (terminal mới)
-cd frontend-react
+cd frontend
 npm install
 npm run dev
 ```
@@ -219,9 +219,9 @@ Không có master key → chatbot-service fallback sang rule/template (không g�
 
 ### Spring backend
 
-Mặc định trong `spring-backend/src/main/resources/application.yml`, override qua
+Mặc định trong `backend/src/main/resources/application.yml`, override qua
 biến môi trường hoặc file `.env` (JWT secret, mail OTP, LiteLLM master key,
-Telegram alert…). Chi tiết xem `spring-backend/README.md`.
+Telegram alert…). Chi tiết xem `backend/README.md`.
 
 ### LiteLLM
 
@@ -276,9 +276,9 @@ routing model rẻ…) xem `docs/optimization-direction.md`.
 
 | Service | Lệnh | Thư mục |
 |---|---|---|
-| Spring | `.\mvnw.cmd test` (cần `JAVA_HOME` = JDK 21) | `spring-backend` |
+| Spring | `.\mvnw.cmd test` (cần `JAVA_HOME` = JDK 21) | `backend` |
 | chatbot-service | `python -m unittest discover tests` | `chatbot-service` |
-| Frontend | `npm run typecheck` | `frontend-react` |
+| Frontend | `npm run typecheck` | `frontend` |
 | FHIR smoke | `python infra/hapi-fhir/scripts/check_connection.py` | gốc |
 
 ## Troubleshooting
@@ -311,4 +311,4 @@ routing model rẻ…) xem `docs/optimization-direction.md`.
 - `docs/optimization-direction.md` — hướng tối ưu token/quota/cache/routing/gateway + chỉ số đánh giá.
 - `docs/M-*.md` — thiết kế từng milestone (LiteLLM gateway, model routing, rolling summary…).
 - `MILESTONES.md` — tiến độ chi tiết.
-- README riêng của từng service: `spring-backend/README.md`, …
+- README riêng của từng service: `backend/README.md`, …

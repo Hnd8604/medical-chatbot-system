@@ -36,7 +36,7 @@ credential công khai này):
 
 ## Chạy & test
 
-Chạy từ thư mục `spring-backend` (cần đặt `JAVA_HOME` trỏ JDK 21 trước):
+Chạy từ thư mục `backend` (cần đặt `JAVA_HOME` trỏ JDK 21 trước):
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"

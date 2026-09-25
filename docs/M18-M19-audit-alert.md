@@ -99,18 +99,18 @@ M19 Alert (khi sự cố):
 
 ## Luồng trong code
 
-- **Audit ghi:** `saveAuditLog()` + map tool→action ([ChatApplicationService.java:232-320](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L232-L320)).
-- **Audit search:** [AuditLogService.java:21-42](spring-backend/src/main/java/com/medicalchatbot/backend/service/AuditLogService.java#L21-L42); API `AuditLogController` (`/api/audit-logs`).
-- **Alert trigger + chống spam + Telegram:** [AlertService.java:39-125](spring-backend/src/main/java/com/medicalchatbot/backend/service/AlertService.java#L39-L125).
-- **Nguồn phát alert:** [ApiExceptionHandler.java](spring-backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L94-L179), [QuotaService.java:139-145](spring-backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L139-L145).
+- **Audit ghi:** `saveAuditLog()` + map tool→action ([ChatApplicationService.java:232-320](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L232-L320)).
+- **Audit search:** [AuditLogService.java:21-42](backend/src/main/java/com/medicalchatbot/backend/service/AuditLogService.java#L21-L42); API `AuditLogController` (`/api/audit-logs`).
+- **Alert trigger + chống spam + Telegram:** [AlertService.java:39-125](backend/src/main/java/com/medicalchatbot/backend/service/AlertService.java#L39-L125).
+- **Nguồn phát alert:** [ApiExceptionHandler.java](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L94-L179), [QuotaService.java:139-145](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L139-L145).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Audit ghi | `spring-backend/.../service/ChatApplicationService.java` (`saveAuditLog`) |
-| Audit search/API | `spring-backend/.../service/AuditLogService.java`, `.../controller/AuditLogController.java` |
-| Audit logs UI | `frontend-react/src/routes/AdminAuditLogsPage.tsx` |
-| Alert service | `spring-backend/.../service/AlertService.java` |
-| Alert API | `spring-backend/.../controller/AdminAlertController.java` |
+| Audit ghi | `backend/.../service/ChatApplicationService.java` (`saveAuditLog`) |
+| Audit search/API | `backend/.../service/AuditLogService.java`, `.../controller/AuditLogController.java` |
+| Audit logs UI | `frontend/src/routes/AdminAuditLogsPage.tsx` |
+| Alert service | `backend/.../service/AlertService.java` |
+| Alert API | `backend/.../controller/AdminAlertController.java` |
 | Entity/migration | `.../entity/{AuditLog,Alert}.java`, `db/migration/V3` (audit), `V8` (alert) |

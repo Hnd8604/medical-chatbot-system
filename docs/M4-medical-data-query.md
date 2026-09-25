@@ -87,7 +87,7 @@ _finalize_chat_response → AnswerGenerator (LLM) sinh câu trả lời tiếng 
 - **Dispatch:** [chat_routes.py:209-303](chatbot-service/api/chat_routes.py#L209-L303).
 - **Answerers + resolve patient:** [resource_answerers.py](chatbot-service/chat/resource_answerers.py) (`_resolve_patient_id_for_tool`, `_patient_selection_payload`).
 - **Normalize:** [fhir/normalizer.py](chatbot-service/fhir/normalizer.py).
-- **Quyền truy cập:** [chat_routes.py:103-161](chatbot-service/api/chat_routes.py#L103-L161); phía Spring [UserPatientScopeService.java](spring-backend/src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java).
+- **Quyền truy cập:** [chat_routes.py:103-161](chatbot-service/api/chat_routes.py#L103-L161); phía Spring [UserPatientScopeService.java](backend/src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java).
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -97,4 +97,4 @@ _finalize_chat_response → AnswerGenerator (LLM) sinh câu trả lời tiếng 
 | Dispatch tool | `chatbot-service/api/chat_routes.py` |
 | Answerers theo resource | `chatbot-service/chat/resource_answerers.py` |
 | Normalize FHIR | `chatbot-service/fhir/normalizer.py` |
-| Quyền truy cập (Spring) | `spring-backend/.../service/UserPatientScopeService.java` |
+| Quyền truy cập (Spring) | `backend/.../service/UserPatientScopeService.java` |

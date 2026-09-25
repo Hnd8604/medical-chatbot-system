@@ -81,21 +81,21 @@ Trang con: AdminAuditLogsPage (/api/audit-logs), AdminUsageCostPage (/api/admin/
 
 ## Luồng trong code
 
-- **Frontend tổng hợp:** `AdminDashboardPage.loadDashboard()` ([AdminDashboardPage.tsx:388-393](frontend-react/src/routes/AdminDashboardPage.tsx#L388-L393)); tải chart ([L305-327](frontend-react/src/routes/AdminDashboardPage.tsx#L305-L327)); resolve alert ([L373](frontend-react/src/routes/AdminDashboardPage.tsx#L373)).
+- **Frontend tổng hợp:** `AdminDashboardPage.loadDashboard()` ([AdminDashboardPage.tsx:388-393](frontend/src/routes/AdminDashboardPage.tsx#L388-L393)); tải chart ([L305-327](frontend/src/routes/AdminDashboardPage.tsx#L305-L327)); resolve alert ([L373](frontend/src/routes/AdminDashboardPage.tsx#L373)).
 - **Backend analytics:** `AnalyticsService` + `AdminAnalyticsController` (`/api/admin/analytics/*`) — [M24](M24-M26-analytics-backup.md).
 - **Backend KPI/khác:** `AdminUserController` (`/api/admin/users`), `MetricsController` (`/api/metrics/cache`), `AdminAlertController` (`/api/admin/alerts` + resolve), `AdminCostController` / `CostManagementService` (usage/cost).
-- **Nguồn dữ liệu thô:** mọi lượt chat ghi `UsageLog` + `AuditLog` trong `ChatApplicationService` ([saveUsage/saveAuditLog](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L180-L320)).
+- **Nguồn dữ liệu thô:** mọi lượt chat ghi `UsageLog` + `AuditLog` trong `ChatApplicationService` ([saveUsage/saveAuditLog](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L180-L320)).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Trang dashboard | `frontend-react/src/routes/AdminDashboardPage.tsx` |
-| Trang con | `frontend-react/src/routes/{AdminAuditLogsPage,AdminUsageCostPage,AdminUsersPage,AdminConfigPage}.tsx` |
-| Analytics (KPI request + chart) | `spring-backend/.../service/AnalyticsService.java`, `.../controller/AdminAnalyticsController.java` |
-| KPI user | `spring-backend/.../controller/AdminUserController.java` |
-| Audit | `spring-backend/.../controller/AuditLogController.java` |
-| Cost theo user/model | `spring-backend/.../controller/AdminCostController.java`, `.../service/CostManagementService.java` |
-| Cache metrics | `spring-backend/.../controller/MetricsController.java` |
-| Alert + resolve | `spring-backend/.../controller/AdminAlertController.java` |
-| Nguồn usage thô | `spring-backend/.../service/ChatApplicationService.java` (UsageLog/AuditLog) |
+| Trang dashboard | `frontend/src/routes/AdminDashboardPage.tsx` |
+| Trang con | `frontend/src/routes/{AdminAuditLogsPage,AdminUsageCostPage,AdminUsersPage,AdminConfigPage}.tsx` |
+| Analytics (KPI request + chart) | `backend/.../service/AnalyticsService.java`, `.../controller/AdminAnalyticsController.java` |
+| KPI user | `backend/.../controller/AdminUserController.java` |
+| Audit | `backend/.../controller/AuditLogController.java` |
+| Cost theo user/model | `backend/.../controller/AdminCostController.java`, `.../service/CostManagementService.java` |
+| Cache metrics | `backend/.../controller/MetricsController.java` |
+| Alert + resolve | `backend/.../controller/AdminAlertController.java` |
+| Nguồn usage thô | `backend/.../service/ChatApplicationService.java` (UsageLog/AuditLog) |

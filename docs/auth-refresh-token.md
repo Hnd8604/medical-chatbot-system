@@ -1,6 +1,6 @@
 # Auth: Access Token + Refresh Token (rotation, Redis)
 
-Tài liệu này mô tả cơ chế xác thực JWT của `spring-backend`: access token ngắn hạn +
+Tài liệu này mô tả cơ chế xác thực JWT của `backend`: access token ngắn hạn +
 refresh token có **rotation**, lưu trong **Redis**. Áp dụng cho dữ liệu y tế nên ưu tiên
 TTL ngắn và khả năng thu hồi phiên.
 
@@ -12,8 +12,8 @@ TTL ngắn và khả năng thu hồi phiên.
 | **Refresh token** | Opaque `{jti}.{secret}` | `RefreshTokenService` khi gọi `/refresh` | 7 ngày (`jwt.refresh-expiration-minutes`) | xóa khỏi Redis / `token_version` |
 
 - Access token mang claim: `sub`=userId, `username`, `token_version`, `exp`. Không đụng tới
-  flow validate sẵn có ([JwtTokenService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/JwtTokenService.java),
-  [JwtAuthenticationFilter](../spring-backend/src/main/java/com/medicalchatbot/backend/config/JwtAuthenticationFilter.java)).
+  flow validate sẵn có ([JwtTokenService](../backend/src/main/java/com/medicalchatbot/backend/service/JwtTokenService.java),
+  [JwtAuthenticationFilter](../backend/src/main/java/com/medicalchatbot/backend/config/JwtAuthenticationFilter.java)).
 - Refresh token **không phải JWT** — là chuỗi ngẫu nhiên opaque, Redis chỉ lưu **hash SHA-256**
   của phần secret.
 
@@ -165,7 +165,7 @@ logout               → token_version++ ; revokeAllForUser ⇒ mọi access & r
 
 ## 5. Cấu hình
 
-`application.yml` (`spring-backend`):
+`application.yml` (`backend`):
 ```yaml
 jwt:
   secret: ${JWT_SECRET:...}                 # KHÔNG commit secret thật
@@ -179,17 +179,17 @@ Phụ thuộc Redis đã có sẵn (`spring-boot-starter-data-redis`, `spring.da
 
 | File | Vai trò |
 |---|---|
-| [RefreshTokenService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/RefreshTokenService.java) | issue / rotate / revokeAllForUser; hash SHA-256; Redis |
-| [JwtProperties](../spring-backend/src/main/java/com/medicalchatbot/backend/config/JwtProperties.java) | thêm `refreshExpirationMinutes` |
-| [AuthService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/AuthService.java) | `login` (cấp 2 token), `refresh` (rotation), `logout` (revoke all) |
-| [AuthController](../spring-backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) | thêm `POST /api/auth/refresh` |
-| [SecurityConfig](../spring-backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java) | whitelist `/api/auth/refresh` |
+| [RefreshTokenService](../backend/src/main/java/com/medicalchatbot/backend/service/RefreshTokenService.java) | issue / rotate / revokeAllForUser; hash SHA-256; Redis |
+| [JwtProperties](../backend/src/main/java/com/medicalchatbot/backend/config/JwtProperties.java) | thêm `refreshExpirationMinutes` |
+| [AuthService](../backend/src/main/java/com/medicalchatbot/backend/service/AuthService.java) | `login` (cấp 2 token), `refresh` (rotation), `logout` (revoke all) |
+| [AuthController](../backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) | thêm `POST /api/auth/refresh` |
+| [SecurityConfig](../backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java) | whitelist `/api/auth/refresh` |
 | DTO | `AuthLoginResponse` (+`refresh_token`), `AuthRefreshRequest`, `AuthRefreshResponse` |
 
 ## 7. Frontend (đã triển khai)
 
-`frontend-react` dùng `fetch` (không Axios). Logic refresh nằm tập trung trong
-[services/api.ts](../frontend-react/src/services/api.ts):
+`frontend` dùng `fetch` (không Axios). Logic refresh nằm tập trung trong
+[services/api.ts](../frontend/src/services/api.ts):
 
 - **Lưu token**: cả access và refresh token lưu trong `sessionStorage`
   (`ACCESS_TOKEN_KEY`, `REFRESH_TOKEN_KEY`). Các helper `getAccessToken`/`setTokens`/
@@ -199,7 +199,7 @@ Phụ thuộc Redis đã có sẵn (`spring-boot-starter-data-redis`, `spring.da
 - **Single-flight**: nhiều request 401 đồng thời chỉ kích hoạt **một** lần gọi `/refresh`
   (biến `refreshPromise`), tránh "refresh storm" và việc rotation hủy nhầm token mới.
 - **Phiên hết hiệu lực**: nếu `/refresh` cũng thất bại → `clearTokens()` và phát sự kiện
-  `SESSION_EXPIRED_EVENT`. [hooks/useAuth.tsx](../frontend-react/src/hooks/useAuth.tsx) lắng nghe
+  `SESSION_EXPIRED_EVENT`. [hooks/useAuth.tsx](../frontend/src/hooks/useAuth.tsx) lắng nghe
   sự kiện này để xóa `user`/`token` ⇒ router tự đưa về trang đăng nhập.
 - **Login**: lưu cả `access_token` + `refresh_token` (`AuthLoginResponse.refresh_token`).
 - **Logout**: gọi `POST /api/auth/logout` rồi `clearTokens()`.
@@ -208,12 +208,12 @@ Phụ thuộc Redis đã có sẵn (`spring-boot-starter-data-redis`, `spring.da
 
 ## 8. Kiểm thử
 
-`spring-backend`, chạy `./mvnw.cmd test` (JAVA_HOME = JDK 21):
+`backend`, chạy `./mvnw.cmd test` (JAVA_HOME = JDK 21):
 
-- [RefreshTokenServiceTest](../spring-backend/src/test/java/com/medicalchatbot/backend/service/RefreshTokenServiceTest.java):
+- [RefreshTokenServiceTest](../backend/src/test/java/com/medicalchatbot/backend/service/RefreshTokenServiceTest.java):
   issue lưu hash; rotate trả đúng chủ sở hữu + xóa token cũ; dùng lại token đã xoay → 401;
   token sai định dạng → 401; secret bị giả mạo → 401.
-- [AuthServiceTest](../spring-backend/src/test/java/com/medicalchatbot/backend/service/AuthServiceTest.java):
+- [AuthServiceTest](../backend/src/test/java/com/medicalchatbot/backend/service/AuthServiceTest.java):
   login trả cả refresh token; refresh xoay token cho user active; refresh bị từ chối khi
   `token_version` lệch (kèm revoke); refresh bị từ chối khi tài khoản LOCKED; logout revoke all.
 

@@ -65,7 +65,7 @@ class LayerDependencyTest {
         if (Files.isDirectory(moduleRoot)) {
             return moduleRoot;
         }
-        Path repositoryRoot = Path.of("spring-backend", "src", "main", "java", "com", "medicalchatbot", "backend");
+        Path repositoryRoot = Path.of("backend", "src", "main", "java", "com", "medicalchatbot", "backend");
         assertTrue(Files.isDirectory(repositoryRoot), "Cannot locate Spring backend source root");
         return repositoryRoot;
     }

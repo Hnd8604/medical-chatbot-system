@@ -18,7 +18,7 @@ LOG_FILE="$PROJECT_ROOT/logs/backup_cron.log"
 APP_FILE="${1:-}"
 HAPI_FILE="${2:-}"
 
-ENV_FILE="$PROJECT_ROOT/spring-backend/.env"
+ENV_FILE="$PROJECT_ROOT/backend/.env"
 if [ -f "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"

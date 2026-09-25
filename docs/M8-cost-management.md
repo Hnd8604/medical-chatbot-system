@@ -69,18 +69,18 @@ Xem chi phí:
 
 ## Luồng trong code
 
-- **Tính cost:** `CostEstimationService.estimateUsd()` / `calculate()` ([CostEstimationService.java:20-47](spring-backend/src/main/java/com/medicalchatbot/backend/service/CostEstimationService.java#L20-L47)).
-- **Gọi khi ghi usage:** [ChatApplicationService.saveUsage()](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L188-L211).
-- **Summary:** `CostManagementService` (API `cost-summary`, `ChatbotController` [L123-129](spring-backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L123-L129)).
+- **Tính cost:** `CostEstimationService.estimateUsd()` / `calculate()` ([CostEstimationService.java:20-47](backend/src/main/java/com/medicalchatbot/backend/service/CostEstimationService.java#L20-L47)).
+- **Gọi khi ghi usage:** [ChatApplicationService.saveUsage()](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L188-L211).
+- **Summary:** `CostManagementService` (API `cost-summary`, `ChatbotController` [L123-129](backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L123-L129)).
 - **Admin cost:** `AdminCostController` (`/api/admin/costs`).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Tính cost | `spring-backend/.../service/CostEstimationService.java` |
-| Summary cost | `spring-backend/.../service/CostManagementService.java` |
-| Admin cost API | `spring-backend/.../controller/AdminCostController.java` |
-| Pricing entity/admin | `spring-backend/.../entity/ModelPricing.java`, `.../service/ModelPricingAdminService.java` |
-| Usage & Cost UI | `frontend-react/src/routes/AdminUsageCostPage.tsx` |
+| Tính cost | `backend/.../service/CostEstimationService.java` |
+| Summary cost | `backend/.../service/CostManagementService.java` |
+| Admin cost API | `backend/.../controller/AdminCostController.java` |
+| Pricing entity/admin | `backend/.../entity/ModelPricing.java`, `.../service/ModelPricingAdminService.java` |
+| Usage & Cost UI | `frontend/src/routes/AdminUsageCostPage.tsx` |
 | Migration giá | `db/migration/V1__baseline_schema_and_seed.sql` (bảng `model_pricing` + seed giá) |

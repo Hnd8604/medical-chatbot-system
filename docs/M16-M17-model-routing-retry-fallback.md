@@ -109,7 +109,7 @@ MODEL_ROUTER=gpt-4o-mini  # model rẻ chuyên phân loại
 **Hành vi:**
 - Không hallucinate: fallback chỉ dùng dữ liệu evidence có sẵn.
 - Lỗi FHIR → `502` với message tiếng Việt; lỗi chatbot-service down → `502 CHATBOT_UNAVAILABLE` (xem [M11](M11-logging-error-handling.md)).
-- Frontend render lỗi tại chỗ (message role `error`) không phá layout ([ChatPage.tsx](frontend-react/src/routes/ChatPage.tsx#L302-L316)).
+- Frontend render lỗi tại chỗ (message role `error`) không phá layout ([ChatPage.tsx](frontend/src/routes/ChatPage.tsx#L302-L316)).
 
 **Tiêu chí hoàn thành:** Lỗi service ngoài không làm app crash.
 
@@ -154,7 +154,7 @@ M17 fallback (khi sinh câu trả lời):
 - **LLM Router (hybrid):** `LLMModelRouter.route()` / `_llm_classify()` + cache ([model_router.py](chatbot-service/agents/model_router.py#L127-L230)); factory `build_model_router()` chọn router theo `enable_llm_router` ([model_router.py](chatbot-service/agents/model_router.py#L248-L265)).
 - **Áp routing vào pipeline:** `asyncio.gather(intent, route)` + `routing_kwargs` ([chat_routes.py](chatbot-service/api/chat_routes.py#L151-L177)); gộp `router_usage` và gắn `routing_source` ([response_builder.py](chatbot-service/chat/response_builder.py#L48-L125)).
 - **Template fallback:** [answer_generator.py:104-145](chatbot-service/agents/answer_generator.py#L104-L145).
-- **Phân loại lỗi service (Spring):** [ApiExceptionHandler.java:82-131](spring-backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L82-L131).
+- **Phân loại lỗi service (Spring):** [ApiExceptionHandler.java:82-131](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L82-L131).
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -163,5 +163,5 @@ M17 fallback (khi sinh câu trả lời):
 | Model router | `chatbot-service/agents/model_router.py` |
 | Answer fallback | `chatbot-service/agents/answer_generator.py` |
 | Cấu hình model | `chatbot-service/app/config.py` |
-| Xử lý lỗi service (Spring) | `spring-backend/.../exception/ApiExceptionHandler.java` |
-| Bảng giá/model admin | `spring-backend/.../service/ModelPricingAdminService.java` |
+| Xử lý lỗi service (Spring) | `backend/.../exception/ApiExceptionHandler.java` |
+| Bảng giá/model admin | `backend/.../service/ModelPricingAdminService.java` |

@@ -7,8 +7,8 @@ hệ thống lấy dữ liệu y tế có cấu trúc qua **FHIR REST** rồi LL
 
 | Service | Thư mục | Port | Vai trò |
 |---|---|---|---|
-| Frontend (React + Vite) | `frontend-react` | 5174 | Chat UI, lịch sử hội thoại, panel bệnh nhân. Không gọi FHIR trực tiếp. |
-| Spring Boot backend | `spring-backend` | 8081 | Backend chính: auth, quota, session/message, audit/usage, gọi chatbot-service. |
+| Frontend (React + Vite) | `frontend` | 5174 | Chat UI, lịch sử hội thoại, panel bệnh nhân. Không gọi FHIR trực tiếp. |
+| Spring Boot backend | `backend` | 8081 | Backend chính: auth, quota, session/message, audit/usage, gọi chatbot-service. |
 | chatbot-service (FastAPI) | `chatbot-service` | 8000 | Hiểu intent, áp policy theo role, gọi FHIR, sinh câu trả lời LLM, semantic cache. |
 | HAPI FHIR | `infra/hapi-fhir` | 8080 | Nguồn sự thật dữ liệu y tế (REST `/fhir`). |
 | Hạ tầng | `infra/` | — | Postgres app `5433`, HAPI Postgres `5434`, Redis, Qdrant — qua Docker Compose. |
@@ -26,12 +26,12 @@ Luồng: Frontend → Spring `/api/chat` → chatbot-service `/chat` → FHIR �
 |---|---|---|
 | Bật cả stack | `.\run-dev.ps1` | gốc |
 | Tắt cả stack | `.\run-dev.ps1 -Stop` | gốc |
-| Test Spring | `.\mvnw.cmd test` | `spring-backend` |
-| Run Spring | `.\mvnw.cmd spring-boot:run` | `spring-backend` |
+| Test Spring | `.\mvnw.cmd test` | `backend` |
+| Run Spring | `.\mvnw.cmd spring-boot:run` | `backend` |
 | Test chatbot | `python -m unittest discover tests` | `chatbot-service` |
 | Run chatbot | `uvicorn app.main:app --reload --port 8000` | `chatbot-service` |
-| Typecheck frontend | `npm run typecheck` | `frontend-react` |
-| Run frontend | `npm run dev` | `frontend-react` |
+| Typecheck frontend | `npm run typecheck` | `frontend` |
+| Run frontend | `npm run dev` | `frontend` |
 
 > **JAVA_HOME bắt buộc** cho mọi lệnh `mvnw.cmd`: `C:\Program Files\Java\jdk-21.0.10`
 > (Java 21). `.claude/settings.json` đã đặt sẵn env này.
@@ -55,5 +55,5 @@ Luồng: Frontend → Spring `/api/chat` → chatbot-service `/chat` → FHIR �
 - `docs/` — thiết kế từng module (vd `docs/M2-conversation-management.md`).
 
 > Mỗi thư mục con có `CLAUDE.md` riêng (Claude tự nạp khi làm việc trong đó):
-> `spring-backend/CLAUDE.md`, `chatbot-service/CLAUDE.md`,
+> `backend/CLAUDE.md`, `chatbot-service/CLAUDE.md`,
 > `infra/hapi-fhir/CLAUDE.md`, `infra/app-postgres/CLAUDE.md`.

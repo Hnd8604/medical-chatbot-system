@@ -80,10 +80,10 @@ Mỗi lượt /api/chat (ChatApplicationService.chat):
 
 ## Luồng trong code
 
-- **Recent messages:** `findRecentMessagesForContext()` / native query `findRecentMessageViewsForContext()` ([ChatSessionRepository.java:44-73](spring-backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L44-L73)); hằng số limit ([ChatApplicationService.java:40](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L40)).
-- **Đóng gói context gửi đi:** `conversationContext()` ([ChatApplicationService.java:322-335](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L322-L335)).
-- **Tính memory mới (giữ active patient khi all-patients):** `nextSessionMemory()` ([ChatApplicationService.java:377-420](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L377-L420)).
-- **Đọc/ghi memory trên entity:** `ChatSession.memory()` / `applyMemory()` ([ChatSession.java:76-95](spring-backend/src/main/java/com/medicalchatbot/backend/entity/ChatSession.java#L76-L95)); persistence qua `updateMemory()` ([ChatSessionRepository.java:39-42](spring-backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L39-L42)).
+- **Recent messages:** `findRecentMessagesForContext()` / native query `findRecentMessageViewsForContext()` ([ChatSessionRepository.java:44-73](backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L44-L73)); hằng số limit ([ChatApplicationService.java:40](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L40)).
+- **Đóng gói context gửi đi:** `conversationContext()` ([ChatApplicationService.java:322-335](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L322-L335)).
+- **Tính memory mới (giữ active patient khi all-patients):** `nextSessionMemory()` ([ChatApplicationService.java:377-420](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L377-L420)).
+- **Đọc/ghi memory trên entity:** `ChatSession.memory()` / `applyMemory()` ([ChatSession.java:76-95](backend/src/main/java/com/medicalchatbot/backend/entity/ChatSession.java#L76-L95)); persistence qua `updateMemory()` ([ChatSessionRepository.java:39-42](backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L39-L42)).
 - **Sinh summary (rule-based) phía Python:** `_memory_summary()` và `_build_memory_update()` ([response_builder.py:141-159](chatbot-service/chat/response_builder.py#L141-L159)).
 - **Dùng context để suy ra bệnh nhân khi câu hỏi mơ hồ:** `_apply_selected_patient_context()` / `_apply_context_reference_context()` trong [chat_routes.py](chatbot-service/api/chat_routes.py#L187-L190).
 
@@ -91,11 +91,11 @@ Mỗi lượt /api/chat (ChatApplicationService.chat):
 
 | Vai trò | File |
 |---|---|
-| Điều phối đọc/ghi context | `spring-backend/.../service/ChatApplicationService.java` |
-| Query recent messages | `spring-backend/.../repository/ChatSessionRepository.java` |
-| Entity + trường memory | `spring-backend/.../entity/ChatSession.java` |
-| DTO memory | `spring-backend/.../dto/response/ChatSessionMemory.java` |
-| DTO context gửi đi | `spring-backend/.../dto/request/ConversationContext.java` |
-| Migration session memory | `spring-backend/.../db/migration/V1__baseline_schema_and_seed.sql` (memory fields trên `chat_sessions`) |
+| Điều phối đọc/ghi context | `backend/.../service/ChatApplicationService.java` |
+| Query recent messages | `backend/.../repository/ChatSessionRepository.java` |
+| Entity + trường memory | `backend/.../entity/ChatSession.java` |
+| DTO memory | `backend/.../dto/response/ChatSessionMemory.java` |
+| DTO context gửi đi | `backend/.../dto/request/ConversationContext.java` |
+| Migration session memory | `backend/.../db/migration/V1__baseline_schema_and_seed.sql` (memory fields trên `chat_sessions`) |
 | Sinh summary + memory_update | `chatbot-service/chat/response_builder.py` |
 | Áp context suy luận bệnh nhân | `chatbot-service/chat/context_memory.py`, `chatbot-service/api/chat_routes.py` |

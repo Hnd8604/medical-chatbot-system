@@ -1,21 +1,21 @@
 # Tài liệu nghiệp vụ — Medical Agent System
 
-Mô tả chức năng + luồng chương trình + luồng trong code cho từng module (M*), bám theo `module_nghiep_vu_chatbot_y_te_moscow_chi_tiet.md` và mã nguồn thực tế (`spring-backend`, `chatbot-service`, `frontend-react`, `infra`).
+Mô tả chức năng + luồng chương trình + luồng trong code cho từng module (M*), bám theo `module_nghiep_vu_chatbot_y_te_moscow_chi_tiet.md` và mã nguồn thực tế (`backend`, `chatbot-service`, `frontend`, `infra`).
 
 > **Mô tả đề tài & hướng chuyên sâu:** [mo-ta-de-tai.md](mo-ta-de-tai.md) — nội dung sản phẩm, các phân hệ, và hướng tối ưu vận hành (token/quota/cache/routing).
 
 ## Kiến trúc tổng quan
 
 ```
-frontend-react (React)  ──HTTP──►  spring-backend (Spring Boot)  ──HTTP──►  chatbot-service (FastAPI)
+frontend (React)  ──HTTP──►  backend (Spring Boot)  ──HTTP──►  chatbot-service (FastAPI)
                                         │                                        │
                                         ▼                                        ▼
                                  App PostgreSQL                            HAPI FHIR + PostgreSQL
                                  (Flyway, JPA)                            Qdrant (semantic cache)
 ```
 
-- **frontend-react:** UI chat, lịch sử, panel bệnh nhân, admin dashboard.
-- **spring-backend:** auth, session/message, quota/cost/usage, audit/alert/notification, export, gọi chatbot-service.
+- **frontend:** UI chat, lịch sử, panel bệnh nhân, admin dashboard.
+- **backend:** auth, session/message, quota/cost/usage, audit/alert/notification, export, gọi chatbot-service.
 - **chatbot-service:** intent extraction, tool execution (FHIR), answer generation (LLM), semantic cache.
 
 ## Mục lục module

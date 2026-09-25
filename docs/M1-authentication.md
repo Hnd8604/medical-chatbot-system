@@ -82,10 +82,10 @@ Chat (USER): UserPatientScopeService.resolve → chặn patient_id ngoài hồ s
 
 ## Luồng trong code
 
-- **Đăng nhập/đăng ký/onboarding/logout:** [AuthService.java](spring-backend/src/main/java/com/medicalchatbot/backend/service/AuthService.java).
-- **Endpoint:** [AuthController.java](spring-backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) — `login`, `register`, `me`, `link-patient`, `logout`.
-- **Phân quyền:** [SecurityConfig.java](spring-backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java); xác thực token: `config/JwtAuthenticationFilter.java`, `config/JwtProperties.java`, `service/JwtTokenService.java`.
-- **Scope hồ sơ USER:** [UserPatientScopeService.java](spring-backend/src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java); link repo: `repository/UserPatientLinkRepository.java`.
+- **Đăng nhập/đăng ký/onboarding/logout:** [AuthService.java](backend/src/main/java/com/medicalchatbot/backend/service/AuthService.java).
+- **Endpoint:** [AuthController.java](backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) — `login`, `register`, `me`, `link-patient`, `logout`.
+- **Phân quyền:** [SecurityConfig.java](backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java); xác thực token: `config/JwtAuthenticationFilter.java`, `config/JwtProperties.java`, `service/JwtTokenService.java`.
+- **Scope hồ sơ USER:** [UserPatientScopeService.java](backend/src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java); link repo: `repository/UserPatientLinkRepository.java`.
 - **User hiện tại:** `service/CurrentUserService.java`.
 - **FE:** `routes/LoginPage.tsx`, `routes/RegisterPage.tsx`, `routes/OnboardingPage.tsx`, `lib/auth.tsx`.
 

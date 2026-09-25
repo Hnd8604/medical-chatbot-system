@@ -56,17 +56,17 @@ RateLimitInterceptor.preHandle()   (trước controller / business logic)
 
 ## Luồng trong code
 
-- **Interceptor + Lua script:** [RateLimitInterceptor.java:30-79](spring-backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java#L30-L79); lấy IP ([L82-92](spring-backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java#L82-L92)).
-- **Limit theo user:** `QuotaService.getRateLimitForUser()` ([QuotaService.java:150-157](spring-backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L150-L157)) — `@Cacheable("rateLimitConfig")`.
-- **429 + alert:** `ApiExceptionHandler.rateLimitExceeded()` ([L147-159](spring-backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L147-L159)).
+- **Interceptor + Lua script:** [RateLimitInterceptor.java:30-79](backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java#L30-L79); lấy IP ([L82-92](backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java#L82-L92)).
+- **Limit theo user:** `QuotaService.getRateLimitForUser()` ([QuotaService.java:150-157](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L150-L157)) — `@Cacheable("rateLimitConfig")`.
+- **429 + alert:** `ApiExceptionHandler.rateLimitExceeded()` ([L147-159](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L147-L159)).
 - **Đăng ký interceptor:** `WebConfig`.
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Rate limit interceptor | `spring-backend/.../config/RateLimitInterceptor.java` |
-| Đăng ký interceptor | `spring-backend/.../config/WebConfig.java` |
-| Limit theo user | `spring-backend/.../service/QuotaService.java` (`getRateLimitForUser`) |
-| Exception + 429 | `spring-backend/.../exception/RateLimitExceededException.java`, `ApiExceptionHandler.java` |
+| Rate limit interceptor | `backend/.../config/RateLimitInterceptor.java` |
+| Đăng ký interceptor | `backend/.../config/WebConfig.java` |
+| Limit theo user | `backend/.../service/QuotaService.java` (`getRateLimitForUser`) |
+| Exception + 429 | `backend/.../exception/RateLimitExceededException.java`, `ApiExceptionHandler.java` |
 | Migration rate limit | `db/migration/V1__baseline_schema_and_seed.sql` (cột `rate_limit_per_minute` trên `quota_policies`) |

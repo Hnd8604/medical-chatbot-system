@@ -1,6 +1,6 @@
 # Auth: Quên mật khẩu (OTP email) & Đổi mật khẩu
 
-Tài liệu mô tả hai luồng mật khẩu của `spring-backend`:
+Tài liệu mô tả hai luồng mật khẩu của `backend`:
 
 1. **Quên mật khẩu** (public): người dùng nhập email → nhận **mã OTP 6 số** qua email →
    xác thực mã lấy **reset ticket** ngắn hạn → đặt lại mật khẩu mới. Mã và ticket lưu trong
@@ -87,7 +87,7 @@ không làm mất ticket.
 - Email được chuẩn hóa `lower(strip(...))` trước khi làm khóa.
 - Chỉ lưu hash ⇒ lộ Redis cũng không tái tạo được mã/ticket. So sánh **constant-time**
   (`MessageDigest.isEqual`). Mỗi key tự hết hạn ⇒ **không cần job dọn dẹp**.
-- Tái dùng nguyên tắc của [RefreshTokenService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/RefreshTokenService.java)
+- Tái dùng nguyên tắc của [RefreshTokenService](../backend/src/main/java/com/medicalchatbot/backend/service/RefreshTokenService.java)
   (`StringRedisTemplate`, hash, TTL).
 
 ## 4. Luồng trong code
@@ -114,12 +114,12 @@ reset-password → PasswordResetService.resetPassword
     audit PASSWORD_RESET_SUCCESS
 ```
 
-Luật mật khẩu được tách vào [PasswordPolicy](../spring-backend/src/main/java/com/medicalchatbot/backend/service/PasswordPolicy.java)
+Luật mật khẩu được tách vào [PasswordPolicy](../backend/src/main/java/com/medicalchatbot/backend/service/PasswordPolicy.java)
 và dùng chung với `AuthService.register()`.
 
 ## 5. Gửi email & dev fallback
 
-[EmailService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/EmailService.java)
+[EmailService](../backend/src/main/java/com/medicalchatbot/backend/service/EmailService.java)
 nhận `ObjectProvider<JavaMailSender>`:
 
 - `spring.mail.host` có giá trị ⇒ Spring Boot tạo bean `JavaMailSender` ⇒ gửi `SimpleMailMessage`
@@ -130,7 +130,7 @@ nhận `ObjectProvider<JavaMailSender>`:
 
 ## 6. Cấu hình
 
-`application.yml` (`spring-backend`):
+`application.yml` (`backend`):
 ```yaml
 spring:
   mail:
@@ -153,42 +153,42 @@ password-reset:
   from-name: ${PASSWORD_RESET_FROM_NAME:Medical Chatbot}
 ```
 Redis đã có sẵn (`spring-boot-starter-data-redis`); chỉ thêm `spring-boot-starter-mail`.
-Biến môi trường SMTP/`PASSWORD_RESET_*` được ghi (comment) trong `spring-backend/.env.example`.
+Biến môi trường SMTP/`PASSWORD_RESET_*` được ghi (comment) trong `backend/.env.example`.
 Endpoint được whitelist `permitAll()` trong `SecurityConfig` cùng nhóm `login/register/refresh`.
 
 ## 7. Frontend (đã triển khai)
 
-- [ForgotPasswordPage](../frontend-react/src/pages/ForgotPasswordPage.tsx): một trang quản lý
+- [ForgotPasswordPage](../frontend/src/pages/ForgotPasswordPage.tsx): một trang quản lý
   **3 bước nội bộ** bằng state (`email` → `code` → `password`), giữ `email` và `reset_ticket`
   trong bộ nhớ (không để trên URL). Gọi `apiPost` từ `services/api.ts`, bắt lỗi qua `ApiError.detail`.
   Bước nhập mã có nút "Gửi lại mã". Thành công → điều hướng `/login` kèm thông báo.
-- [App.tsx](../frontend-react/src/App.tsx): route công khai `/forgot-password`.
-- [LoginPage](../frontend-react/src/pages/LoginPage.tsx): link "Quên mật khẩu?".
+- [App.tsx](../frontend/src/App.tsx): route công khai `/forgot-password`.
+- [LoginPage](../frontend/src/pages/LoginPage.tsx): link "Quên mật khẩu?".
 - Chuỗi tiếng Việt trong `lib/constants.ts` (`TEXT`).
 
 ## 8. Thành phần code
 
 | File | Vai trò |
 |---|---|
-| [PasswordResetOtpService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/PasswordResetOtpService.java) | issueCode / verifyCode / consumeTicket; OTP + ticket trong Redis |
-| [PasswordResetService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/PasswordResetService.java) | điều phối 3 bước; đổi hash + revoke phiên; audit |
-| [EmailService](../spring-backend/src/main/java/com/medicalchatbot/backend/service/EmailService.java) | gửi SMTP / dev fallback log |
-| [PasswordPolicy](../spring-backend/src/main/java/com/medicalchatbot/backend/service/PasswordPolicy.java) | luật mật khẩu dùng chung với register |
-| [PasswordResetProperties](../spring-backend/src/main/java/com/medicalchatbot/backend/config/PasswordResetProperties.java) | config `password-reset.*` |
-| [AuthController](../spring-backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) | 3 endpoint mới |
-| [SecurityConfig](../spring-backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java) | whitelist 3 path |
-| [UserRepository](../spring-backend/src/main/java/com/medicalchatbot/backend/repository/UserRepository.java) | `findByEmailIgnoreCase` |
+| [PasswordResetOtpService](../backend/src/main/java/com/medicalchatbot/backend/service/PasswordResetOtpService.java) | issueCode / verifyCode / consumeTicket; OTP + ticket trong Redis |
+| [PasswordResetService](../backend/src/main/java/com/medicalchatbot/backend/service/PasswordResetService.java) | điều phối 3 bước; đổi hash + revoke phiên; audit |
+| [EmailService](../backend/src/main/java/com/medicalchatbot/backend/service/EmailService.java) | gửi SMTP / dev fallback log |
+| [PasswordPolicy](../backend/src/main/java/com/medicalchatbot/backend/service/PasswordPolicy.java) | luật mật khẩu dùng chung với register |
+| [PasswordResetProperties](../backend/src/main/java/com/medicalchatbot/backend/config/PasswordResetProperties.java) | config `password-reset.*` |
+| [AuthController](../backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) | 3 endpoint mới |
+| [SecurityConfig](../backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java) | whitelist 3 path |
+| [UserRepository](../backend/src/main/java/com/medicalchatbot/backend/repository/UserRepository.java) | `findByEmailIgnoreCase` |
 | DTO | `ForgotPasswordRequest`, `VerifyResetCodeRequest`, `ResetPasswordRequest`; `ForgotPasswordResponse`, `VerifyResetCodeResponse`, `ResetPasswordResponse` |
 | Frontend | `pages/ForgotPasswordPage.tsx`, `App.tsx`, `pages/LoginPage.tsx`, `lib/constants.ts` |
 
 ## 9. Kiểm thử
 
-`spring-backend`, chạy `.\mvnw.cmd test` (JAVA_HOME = JDK 21):
+`backend`, chạy `.\mvnw.cmd test` (JAVA_HOME = JDK 21):
 
-- [PasswordResetOtpServiceTest](../spring-backend/src/test/java/com/medicalchatbot/backend/service/PasswordResetOtpServiceTest.java):
+- [PasswordResetOtpServiceTest](../backend/src/test/java/com/medicalchatbot/backend/service/PasswordResetOtpServiceTest.java):
   issueCode lưu hash 6 số + cooldown; đang cooldown → empty; round-trip verify→consume ticket;
   không có mã → 400; mã sai tăng attempts giữ TTL; chạm max-attempts xóa mã; ticket sai/thiếu → 400.
-- [PasswordResetServiceTest](../spring-backend/src/test/java/com/medicalchatbot/backend/service/PasswordResetServiceTest.java):
+- [PasswordResetServiceTest](../backend/src/test/java/com/medicalchatbot/backend/service/PasswordResetServiceTest.java):
   email không tồn tại → 404 (không gửi mã); user LOCKED → 403; verify trả ticket; reset đổi hash
   + `token_version++` + `revokeAllForUser`; mật khẩu yếu không tiêu thụ ticket; ticket đúng nhưng
   user biến mất → 400.
@@ -241,33 +241,33 @@ change-password → AuthService.changePassword
 
 Giống bước cuối của reset-password: `token_version++` + `revokeAllForUser()` ⇒ **mọi phiên cũ
 hết hiệu lực** (kể cả thiết bị đang thao tác), nên frontend đăng xuất và yêu cầu đăng nhập lại.
-Luật mật khẩu dùng chung [PasswordPolicy](../spring-backend/src/main/java/com/medicalchatbot/backend/service/PasswordPolicy.java).
+Luật mật khẩu dùng chung [PasswordPolicy](../backend/src/main/java/com/medicalchatbot/backend/service/PasswordPolicy.java).
 Endpoint nằm trong nhóm `.authenticated()` của `SecurityConfig` — **bắt buộc** vì cấu hình có
 `anyRequest().permitAll()`, bỏ sót sẽ mở công khai.
 
 ### Frontend
 
-- [ChangePasswordPage](../frontend-react/src/pages/ChangePasswordPage.tsx): form 3 trường
+- [ChangePasswordPage](../frontend/src/pages/ChangePasswordPage.tsx): form 3 trường
   (mật khẩu hiện tại / mới / xác nhận). Thành công → `logout()` (dọn token cục bộ đã bị thu hồi)
   → điều hướng `/login` kèm thông báo.
-- [App.tsx](../frontend-react/src/App.tsx): route **được bảo vệ** `/change-password` (ProtectedRoute).
-- Điểm truy cập: nút chìa khóa ở footer [HistorySidebar](../frontend-react/src/components/chat/HistorySidebar.tsx)
-  (user) và link ở [DashboardLayout](../frontend-react/src/components/dashboard/DashboardLayout.tsx) (admin).
+- [App.tsx](../frontend/src/App.tsx): route **được bảo vệ** `/change-password` (ProtectedRoute).
+- Điểm truy cập: nút chìa khóa ở footer [HistorySidebar](../frontend/src/components/chat/HistorySidebar.tsx)
+  (user) và link ở [DashboardLayout](../frontend/src/components/dashboard/DashboardLayout.tsx) (admin).
 - Chuỗi tiếng Việt `changePassword*` trong `lib/constants.ts` (`TEXT`).
 
 ### Thành phần code (đổi mật khẩu)
 
 | File | Vai trò |
 |---|---|
-| [AuthService.changePassword](../spring-backend/src/main/java/com/medicalchatbot/backend/service/AuthService.java) | xác thực mật khẩu hiện tại; đổi hash + revoke phiên; audit |
-| [AuthController](../spring-backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) | endpoint `POST /api/auth/change-password` |
-| [SecurityConfig](../spring-backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java) | thêm path vào nhóm `.authenticated()` |
+| [AuthService.changePassword](../backend/src/main/java/com/medicalchatbot/backend/service/AuthService.java) | xác thực mật khẩu hiện tại; đổi hash + revoke phiên; audit |
+| [AuthController](../backend/src/main/java/com/medicalchatbot/backend/controller/AuthController.java) | endpoint `POST /api/auth/change-password` |
+| [SecurityConfig](../backend/src/main/java/com/medicalchatbot/backend/config/SecurityConfig.java) | thêm path vào nhóm `.authenticated()` |
 | DTO | `ChangePasswordRequest`, `ChangePasswordResponse` |
 | Frontend | `pages/ChangePasswordPage.tsx`, `App.tsx`, `components/chat/HistorySidebar.tsx`, `components/dashboard/DashboardLayout.tsx`, `lib/constants.ts` |
 
 ### Kiểm thử (đổi mật khẩu)
 
-[AuthServiceTest](../spring-backend/src/test/java/com/medicalchatbot/backend/service/AuthServiceTest.java):
+[AuthServiceTest](../backend/src/test/java/com/medicalchatbot/backend/service/AuthServiceTest.java):
 đổi thành công (hash mới + `token_version++` + `revokeAllForUser`); sai mật khẩu hiện tại → 400;
 mật khẩu mới trùng mật khẩu cũ → 400.
 

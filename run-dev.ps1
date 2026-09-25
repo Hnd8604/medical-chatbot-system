@@ -25,9 +25,9 @@ $RedisCompose = Join-Path $RootDir "infra\redis\docker-compose.yml"
 $QdrantCompose = Join-Path $RootDir "infra\qdrant\docker-compose.yml"
 $LiteLLMCompose = Join-Path $RootDir "infra\litellm\docker-compose.yml"
 $LiteLLMEnv = Join-Path $RootDir "infra\litellm\.env"
-$FrontendDir = Join-Path $RootDir "frontend-react"
+$FrontendDir = Join-Path $RootDir "frontend"
 $ChatbotDir = Join-Path $RootDir "chatbot-service"
-$SpringDir = Join-Path $RootDir "spring-backend"
+$SpringDir = Join-Path $RootDir "backend"
 
 New-Item -ItemType Directory -Force -Path $RunDir, $LogDir | Out-Null
 

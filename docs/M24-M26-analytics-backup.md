@@ -59,7 +59,7 @@
 
 **Hành vi:**
 - Backup cả **app DB** (`medical_chatbot_app`) và **HAPI DB** (`hapi`).
-- File backup lưu tại `logs/backups/`, định dạng `*.sql.gz`; **không** backup secrets vào repo (đọc credential từ `spring-backend/.env`).
+- File backup lưu tại `logs/backups/`, định dạng `*.sql.gz`; **không** backup secrets vào repo (đọc credential từ `backend/.env`).
 - Retention **7 ngày** (xóa file cũ hơn tự động).
 
 **Tiêu chí hoàn thành:** Có lịch backup rõ ràng.
@@ -99,7 +99,7 @@ M24 Analytics (AnalyticsService — JdbcTemplate, /api/admin/analytics/*):
 
 M26 Backup:
    cron → backup.sh
-      đọc credential từ spring-backend/.env
+      đọc credential từ backend/.env
       perform_backup "app"  → pg_dump medical_chatbot_app | gzip → logs/backups/app_db_*.sql.gz
       perform_backup "hapi" → pg_dump hapi               | gzip → logs/backups/hapi_db_*.sql.gz
          lỗi → xóa file hỏng + Telegram BACKUP_ERROR (CRITICAL)
@@ -115,20 +115,20 @@ M26 Restore:
 
 - **Backup:** [infra/scripts/backup.sh](infra/scripts/backup.sh) — `perform_backup()` ([L25-51](infra/scripts/backup.sh#L25-L51)), retention ([L56-57](infra/scripts/backup.sh#L56-L57)).
 - **Restore:** [infra/scripts/restore.sh](infra/scripts/restore.sh) — kiểm tra + xác nhận ([L32-50](infra/scripts/restore.sh#L32-L50)), phục hồi ([L55](infra/scripts/restore.sh#L55)).
-- **Analytics service:** `AnalyticsService` — intent ([AnalyticsService.java:29-66](spring-backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L29-L66)), error ([L68-104](spring-backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L68-L104)), performance ([L106-130](spring-backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L106-L130)), request summary ([L132-148](spring-backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L132-L148)).
-- **Analytics API:** [AdminAnalyticsController.java](spring-backend/src/main/java/com/medicalchatbot/backend/controller/AdminAnalyticsController.java) (`/api/admin/analytics/*`).
-- **Ghi `question_intent`:** [ChatApplicationService.java:294-307](spring-backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L294-L307).
+- **Analytics service:** `AnalyticsService` — intent ([AnalyticsService.java:29-66](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L29-L66)), error ([L68-104](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L68-L104)), performance ([L106-130](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L106-L130)), request summary ([L132-148](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L132-L148)).
+- **Analytics API:** [AdminAnalyticsController.java](backend/src/main/java/com/medicalchatbot/backend/controller/AdminAnalyticsController.java) (`/api/admin/analytics/*`).
+- **Ghi `question_intent`:** [ChatApplicationService.java:294-307](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L294-L307).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Analytics service | `spring-backend/.../service/AnalyticsService.java` |
-| Analytics API | `spring-backend/.../controller/AdminAnalyticsController.java` |
-| Analytics DTO | `spring-backend/.../dto/response/{Intent,Error,Performance}AnalyticsResponse.java`, `RequestAnalyticsSummaryResponse.java` |
-| Dashboard UI | `frontend-react/src/routes/AdminDashboardPage.tsx` |
+| Analytics service | `backend/.../service/AnalyticsService.java` |
+| Analytics API | `backend/.../controller/AdminAnalyticsController.java` |
+| Analytics DTO | `backend/.../dto/response/{Intent,Error,Performance}AnalyticsResponse.java`, `RequestAnalyticsSummaryResponse.java` |
+| Dashboard UI | `frontend/src/routes/AdminDashboardPage.tsx` |
 | Backup script | `infra/scripts/backup.sh` |
 | Restore script | `infra/scripts/restore.sh` |
-| Latency/usage nguồn | `spring-backend/.../service/ChatApplicationService.java`, `.../repository/UsageLogRepository.java` |
-| Error nguồn (alerts) | `spring-backend/.../service/AlertService.java` |
-| Dashboard analytics | `frontend-react/src/routes/{AdminDashboardPage,UsagePage}.tsx` |
+| Latency/usage nguồn | `backend/.../service/ChatApplicationService.java`, `.../repository/UsageLogRepository.java` |
+| Error nguồn (alerts) | `backend/.../service/AlertService.java` |
+| Dashboard analytics | `frontend/src/routes/{AdminDashboardPage,UsagePage}.tsx` |

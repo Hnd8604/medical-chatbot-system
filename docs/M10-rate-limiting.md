@@ -56,9 +56,9 @@ RateLimitInterceptor.preHandle()   (trước controller / business logic)
 
 ## Luồng trong code
 
-- **Interceptor + Lua script:** [RateLimitInterceptor.java:30-79](backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java#L30-L79); lấy IP ([L82-92](backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java#L82-L92)).
-- **Limit theo user:** `QuotaService.getRateLimitForUser()` ([QuotaService.java:150-157](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L150-L157)) — `@Cacheable("rateLimitConfig")`.
-- **429 + alert:** `ApiExceptionHandler.rateLimitExceeded()` ([L147-159](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L147-L159)).
+- **Interceptor + Lua script:** [RateLimitInterceptor.java](../backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java); lấy IP ([RateLimitInterceptor.java](../backend/src/main/java/com/medicalchatbot/backend/config/RateLimitInterceptor.java)).
+- **Limit theo user:** `QuotaService.getRateLimitForUser()` ([QuotaService.java](../backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java)) — `@Cacheable("rateLimitConfig")`.
+- **429 + alert:** `ApiExceptionHandler.rateLimitExceeded()` ([ApiExceptionHandler.java](../backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java)).
 - **Đăng ký interceptor:** `WebConfig`.
 
 ## Thành phần liên quan trong mã nguồn

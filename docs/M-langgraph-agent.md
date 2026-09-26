@@ -5,7 +5,7 @@
 > (router → planner → validator → executor → answer), tham chiếu bản
 > `Medical-Chatbot-develop/chatbot-service/langgraph_agent/`.
 >
-> **Trạng thái: M-LG1–M-LG3 đã code, 280 test xanh.** Endpoint `POST /chat/langgraph`
+> **Trạng thái: M-LG1–M-LG3 đã được triển khai và có automated test.** Endpoint `POST /chat/langgraph`
 > sau cờ `ENABLE_LANGGRAPH_AGENT` (mặc định tắt). Chi tiết ở §2; việc còn lại ở §5.
 >
 > Nguyên tắc: **giữ nguyên các thế mạnh riêng của repo này** (LiteLLM gateway, semantic
@@ -89,7 +89,7 @@ prepare_context → memory_load → request_route_agent
 
 ## 2. Đã triển khai gì trong repo này
 
-> Trạng thái: **M-LG1 → M-LG3 đã code và có test** (280 test của `chatbot-service` xanh).
+> Trạng thái: **M-LG1 → M-LG3 đã được triển khai và có automated test**.
 > M-LG4 (checkpointer Postgres) và M-LG6 (chạy số liệu thật) chưa làm — xem §5.
 
 ### 2.1 Graph thực tế
@@ -109,25 +109,25 @@ prepare ─ cache_lookup ──hit──> END                            (0 LLM 
 
 ### 2.2 File đã thêm
 
-| File | Vai trò | Dòng |
-|---|---|---|
-| `fhir/tool_registry.py` | 13 tool, mỗi tool là wrapper mỏng quanh answerer sẵn có | 335 |
-| `langgraph_agent/graph.py` | StateGraph + 9 node + `run_agent()` | 549 |
-| `langgraph_agent/state.py` | `AgentState` — 18 key, hằng số route/status | 70 |
-| `langgraph_agent/prompts.py` | Toàn bộ prompt, có version | 147 |
-| `langgraph_agent/llm.py` | Cửa LLM duy nhất (gateway + `metadata.stage`) | 163 |
-| `langgraph_agent/request_router.py` | LLM #1 + parse + LRU cache route | 209 |
-| `langgraph_agent/planner.py` | LLM #2 + parse + fallback từ `IntentPlan` | 188 |
-| `langgraph_agent/plan_validator.py` | **Điểm enforce chính sách duy nhất**, thuần tuý | 217 |
-| `langgraph_agent/plan_executor.py` | Chạy step (song song), gộp payload, guard runtime | 393 |
-| `langgraph_agent/evidence_budget.py` | Cắt evidence tất định trước prompt answer | 132 |
-| `langgraph_agent/plan_cache.py` | Cache plan (không PHI, TTL dài, dùng chung user) | 239 |
-| `langgraph_agent/simple_answers.py` | 3 nhánh không chạm FHIR | 146 |
-| `langgraph_agent/finalize.py` | Cầu nối sang `_finalize_chat_response` + fast-path | 144 |
-| `langgraph_agent/errors.py` | `PolicyError` (403), `PlanError` (400), `AgentLlmError` | 44 |
-| `tests/test_langgraph_agent.py` | 52 test | 821 |
-| `tests/eval/questions.jsonl` | 42 câu có nhãn | — |
-| `tests/eval/run_eval.py` | Bộ đo before/after | 345 |
+| File | Vai trò |
+|---|---|
+| `fhir/tool_registry.py` | Registry tool; mỗi tool là wrapper mỏng quanh answerer sẵn có |
+| `langgraph_agent/graph.py` | StateGraph, các node và `run_agent()` |
+| `langgraph_agent/state.py` | `AgentState` và các hằng số route/status |
+| `langgraph_agent/prompts.py` | Toàn bộ prompt, có version |
+| `langgraph_agent/llm.py` | Cửa LLM duy nhất (gateway + `metadata.stage`) |
+| `langgraph_agent/request_router.py` | LLM router, parse và LRU cache route |
+| `langgraph_agent/planner.py` | LLM planner, parse và fallback từ `IntentPlan` |
+| `langgraph_agent/plan_validator.py` | **Điểm enforce chính sách duy nhất**, thuần tuý |
+| `langgraph_agent/plan_executor.py` | Chạy step (song song), gộp payload và guard runtime |
+| `langgraph_agent/evidence_budget.py` | Cắt evidence tất định trước prompt answer |
+| `langgraph_agent/plan_cache.py` | Cache plan (không PHI, TTL dài, dùng chung user) |
+| `langgraph_agent/simple_answers.py` | Các nhánh không chạm FHIR |
+| `langgraph_agent/finalize.py` | Cầu nối sang `_finalize_chat_response` và fast-path |
+| `langgraph_agent/errors.py` | `PolicyError` (403), `PlanError` (400), `AgentLlmError` |
+| `tests/test_langgraph_agent.py` | Test policy, routing, execution và fallback |
+| `tests/eval/questions.jsonl` | Bộ câu hỏi eval có nhãn |
+| `tests/eval/run_eval.py` | Bộ đo before/after |
 
 Sửa: `app/config.py` (14 setting mới), `app/main.py` (init plan cache), `api/chat_routes.py`
 (endpoint `/chat/langgraph`), `requirements.txt`, `.env.example`.
@@ -252,7 +252,7 @@ Ba cái đáng chú ý:
 
 ```powershell
 cd chatbot-service
-python -m unittest discover tests            # 280 test, gồm 52 test agent
+python -m unittest discover tests
 python -m unittest tests.test_langgraph_agent
 ```
 
@@ -272,7 +272,7 @@ mỗi câu có cả biến thể tiếng Việt có dấu và không dấu ở c
 
 ## 4. Kiểm thử đã có
 
-52 test trong `tests/test_langgraph_agent.py`, tập trung vào hai thứ dễ hỏng nhất của một
+Các test trong `tests/test_langgraph_agent.py` tập trung vào hai thứ dễ hỏng nhất của một
 agent nhiều bước: **enforce chính sách** và **đường lui khi LLM lỗi**.
 
 | Nhóm | Ví dụ khẳng định |

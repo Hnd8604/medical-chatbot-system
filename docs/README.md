@@ -1,8 +1,20 @@
 # Tài liệu nghiệp vụ — Medical Agent System
 
-Mô tả chức năng + luồng chương trình + luồng trong code cho từng module (M*), bám theo `module_nghiep_vu_chatbot_y_te_moscow_chi_tiet.md` và mã nguồn thực tế (`backend`, `chatbot-service`, `frontend`, `infra`).
+Mô tả chức năng, luồng chương trình và luồng trong code cho từng module (M*),
+được đối chiếu trực tiếp với mã nguồn hiện tại (`backend`, `chatbot-service`,
+`frontend`, `infra`).
 
 > **Mô tả đề tài & hướng chuyên sâu:** [mo-ta-de-tai.md](mo-ta-de-tai.md) — nội dung sản phẩm, các phân hệ, và hướng tối ưu vận hành (token/quota/cache/routing).
+
+## Tài liệu nền tảng
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Product specification](product-spec.md) | Phạm vi sản phẩm, vai trò, quy tắc dữ liệu và tiêu chí chấp nhận |
+| [Mô tả đề tài](mo-ta-de-tai.md) | Bối cảnh, mục tiêu và các phân hệ của đề tài |
+| [Hướng tối ưu](optimization-direction.md) | Token, chi phí, cache, routing và chỉ số đánh giá |
+| [Database ERD](../backend/docs/m12-database-erd.md) | ERD và data dictionary của app PostgreSQL |
+| [Patient link](../backend/docs/patient-link.md) | Liên kết tài khoản ứng dụng với hồ sơ FHIR |
 
 ## Kiến trúc tổng quan
 
@@ -37,6 +49,9 @@ frontend (React)  ──HTTP──►  backend (Spring Boot)  ──HTTP──�
 ### Vận hành AI
 | Module | Mô tả |
 |---|---|
+| [LiteLLM Gateway](M-litellm-gateway.md) | Gateway duy nhất tới provider, virtual key và budget |
+| [LangGraph Agent](M-langgraph-agent.md) | Graph tùy chọn cho routing, multi-step plan và policy validation |
+| [Terminology Enrichment](M-terminology-enrichment.md) | Giải thích mã y khoa từ LOINC, RxNorm và MedlinePlus |
 | [M7 — Usage Tracking](M7-usage-tracking.md) | Ghi token/model/latency mỗi lượt chat |
 | [M8 — Cost Management](M8-cost-management.md) | Bảng giá model, tính & thống kê chi phí |
 | [M9 — Quota Management](M9-quota-management.md) | Hạn mức/ngày, chặn 429 khi vượt |
@@ -52,11 +67,13 @@ frontend (React)  ──HTTP──►  backend (Spring Boot)  ──HTTP──�
 | [M13 — Admin Dashboard](M13-admin-dashboard.md) | KPI, usage analytics, error monitoring, filters |
 | [M18 / M19 — Audit Log & Alert](M18-M19-audit-alert.md) | Nhật ký truy cập + cảnh báo sự cố |
 | [M20 / M22 — System Config & Feedback](M20-M22-system-config-feedback.md) | Cấu hình hệ thống + phản hồi người dùng |
+| [Notification SSE](notification-sse-stream.md) | Luồng thông báo thời gian thực bằng Server-Sent Events |
 
 ### Tiện ích & dữ liệu
 | Module | Mô tả |
 |---|---|
 | [M21 / M23 / M25 — Search / Export / Notification](M21-M23-M25-utilities.md) | Tìm kiếm, xuất hội thoại, thông báo |
 | [M24 / M26 — Advanced Analytics & Backup/Restore](M24-M26-analytics-backup.md) | Phân tích nâng cao + sao lưu/phục hồi |
+| [Backup lên Google Drive](M-backup-gdrive.md) | Lịch backup, script và cấu hình lưu trữ ngoài máy |
 
 > Thư mục `docs/` được track trong git — tài liệu kỹ thuật (kiến trúc, thiết kế DB, API, hướng dẫn triển khai) là một phần deliverable của đề tài.

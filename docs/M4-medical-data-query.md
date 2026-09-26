@@ -7,9 +7,14 @@ Phân loại ý định (intent) câu hỏi y tế và tra cứu dữ liệu b�
 **Mục tiêu:** Xác định user đang hỏi loại dữ liệu y tế nào.
 
 **Hành vi:**
-- `IntentExtractor.extract()` phân câu hỏi ra `IntentPlan` với `tool_name` ổn định: `search_patients`, `get_patient_by_id`, `get_encounters`, `get_medication_requests`, `get_observations`, `get_conditions`.
+- `IntentExtractor.extract()` phân câu hỏi ra `IntentPlan` với `tool_name` ổn định:
+  `fhir_status`, `search_patients`, `get_patient_by_id`, `get_resource_by_id`,
+  `get_encounters`, `get_medication_requests`, `get_observations`,
+  `get_conditions`, `explain_concept` hoặc `unsupported_question`. Các alias
+  `get_all_patient_*` được chuẩn hóa về tool resource tương ứng với
+  `all_patients=true`.
 - Hỗ trợ tiếng Việt **có dấu và không dấu** (rule extractor + vocabulary).
-- **Fallback khi LLM không khả dụng:** có `rule_extractor` chạy độc lập với `openai_extractor` (xem [M6.5](M6-ai-integration.md)).
+- **Fallback khi LLM không khả dụng:** có `rule_extractor` chạy độc lập với `llm_extractor` (xem [M6.5](M6-ai-integration.md)).
 
 **Tiêu chí hoàn thành:** Câu hỏi phổ biến route đúng tool.
 
@@ -71,23 +76,31 @@ IntentExtractor.extract() → IntentPlan { tool_name, patient_id, observation_ty
 Áp policy quyền: _apply_user_patient_scope / _ensure_role_can_access_plan
         ▼
 Dispatch theo tool_name:
+   fhir_status            → _answer_fhir_status
+   get_resource_by_id     → _answer_resource_by_id
+   explain_concept        → _answer_explain_concept
    search_patients        → _answer_patients
    get_patient_by_id      → _answer_patient
    get_encounters         → _answer_encounters       ┐
    get_medication_requests→ _answer_medications      │ resolve patient_id;
    get_observations       → _answer_observations     │ nếu mơ hồ → needs_patient_selection
    get_conditions         → _answer_conditions       ┘
-        ▼ (mỗi answerer gọi FhirClient → normalize → evidence)
+   all_patients=true      → _answer_all_patient_* tương ứng
+        ▼ (FHIR tool gọi FhirClient → normalize → evidence;
+           explain_concept dùng terminology enrichment)
 _finalize_chat_response → AnswerGenerator (LLM) sinh câu trả lời tiếng Việt + usage
 ```
 
 ## Luồng trong code
 
-- **Intent:** `IntentExtractor.extract()` ([intent_extractor.py](chatbot-service/agents/intent_extractor.py)), rule vs LLM ([agents/intent/rule_extractor.py](chatbot-service/agents/intent/rule_extractor.py), [openai_extractor.py](chatbot-service/agents/intent/openai_extractor.py)), tool names ([constants.py](chatbot-service/agents/intent/constants.py)).
-- **Dispatch:** [chat_routes.py:209-303](chatbot-service/api/chat_routes.py#L209-L303).
-- **Answerers + resolve patient:** [resource_answerers.py](chatbot-service/chat/resource_answerers.py) (`_resolve_patient_id_for_tool`, `_patient_selection_payload`).
-- **Normalize:** [fhir/normalizer.py](chatbot-service/fhir/normalizer.py).
-- **Quyền truy cập:** [chat_routes.py:103-161](chatbot-service/api/chat_routes.py#L103-L161); phía Spring [UserPatientScopeService.java](backend/src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java).
+- **Intent:** `IntentExtractor.extract()` ([intent_extractor.py](../chatbot-service/agents/intent_extractor.py)),
+  rule vs LLM ([rule_extractor.py](../chatbot-service/agents/intent/rule_extractor.py),
+  [llm_extractor.py](../chatbot-service/agents/intent/llm_extractor.py)), tool names
+  ([constants.py](../chatbot-service/agents/intent/constants.py)).
+- **Dispatch:** [chat_routes.py](../chatbot-service/api/chat_routes.py).
+- **Answerers + resolve patient:** [resource_answerers.py](../chatbot-service/chat/resource_answerers.py) (`_resolve_patient_id_for_tool`, `_patient_selection_payload`).
+- **Normalize:** [fhir/normalizer.py](../chatbot-service/fhir/normalizer.py).
+- **Quyền truy cập:** [chat_routes.py](../chatbot-service/api/chat_routes.py); phía Spring [UserPatientScopeService.java](../backend/src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java).
 
 ## Thành phần liên quan trong mã nguồn
 

@@ -21,27 +21,13 @@ Password: app_password
 
 ## Current Scope
 
-Created the database container and persistent volume.
-
-Spring Boot now owns Flyway migrations for the app tables.
-Spring Boot also seeds a demo user and quota policy for local chat testing.
-
-## Verification Result
-
-Last checked on 2026-05-31:
-
-```text
-docker compose config: passed
-app-postgres container: healthy
-host port mapping: 0.0.0.0:5433->5432/tcp verified
-psql current_user/current_database check: passed
-Spring Flyway migration V1: passed
-Spring Flyway migration V2: passed
-Spring Flyway migration V3: passed
-Created app tables: app_users, quota_policies, chat_sessions, chat_messages, usage_logs, cache_entries, audit_logs
-usage_logs enhanced fields: llm_provider, llm_model, operation, status, latency_ms, error_message
-POST /api/chat persistence check: 1 session, 1 user message, 1 assistant message, 1 enhanced usage log, 1 audit log
-```
+- This folder owns only the PostgreSQL container and persistent volume.
+- Spring Boot owns the application schema through Flyway `V1` through `V9` in
+  `backend/src/main/resources/db/migration/`.
+- `backend/src/main/resources/db/devmigration/` contains development-only repeatable
+  migration logic for demo accounts.
+- `cache_entries` was removed by `V5`; semantic response caching is stored in Qdrant.
+- The current schema also includes LiteLLM virtual keys and backup/restore history.
 
 ## Rule
 
@@ -53,5 +39,12 @@ Use this database for application data:
 - usage logs
 - quota policies
 - audit logs
+- alerts and notifications
+- feedback and model pricing
+- LiteLLM virtual keys
+- backup and restore history
 
 Do not store this application data inside the HAPI FHIR PostgreSQL database.
+
+When the schema changes, add a new forward-only Flyway migration. Do not rewrite a
+migration that may already have been applied.

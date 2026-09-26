@@ -23,7 +23,7 @@ Frontend (5174) → Spring Backend (8081) → chatbot-service (8000) → HAPI FH
 | Redis | `localhost:6379` — refresh token, OTP reset mật khẩu, rate limit |
 | chatbot-service | `http://localhost:8000` |
 | LiteLLM Gateway | `http://localhost:4000` — cấp virtual key LLM theo user |
-| Swagger UI | `http://localhost:8081/swagger-ui/index.html` |
+| Swagger UI | `http://localhost:8081/swagger-ui.html` |
 
 Tài khoản demo (chỉ active ở profile `dev`; profile `prod` vô hiệu hóa các
 credential công khai này):
@@ -82,9 +82,6 @@ docker build -t medical-backend .
 docker run --env-file .env.prod -p 8081:8081 medical-backend
 ```
 
-CI tại `.github/workflows/ci.yml` chạy unit test, kiểm tra Flyway trên PostgreSQL
-rỗng, build frontend và kiểm tra Docker image.
-
 ## API chính
 
 Mọi response JSON thành công dùng contract ổn định:
@@ -103,7 +100,8 @@ Tài liệu đầy đủ (tham số, schema) xem tại Swagger UI. Nhóm endpoin
 
 - `POST /login`, `POST /register`, `POST /logout`
 - `POST /refresh` — cấp access token mới bằng refresh token (rotation)
-- `GET /me`, `POST /link-patient` — liên kết tài khoản với FHIR Patient
+- `GET /me`, `PUT /me` — xem/cập nhật profile
+- `POST /link-patient` — liên kết tài khoản với FHIR Patient
 - `POST /change-password`
 - `POST /forgot-password` → `POST /verify-reset-code` → `POST /reset-password` (OTP qua email, hash lưu Redis)
 
@@ -125,6 +123,7 @@ Tài liệu đầy đủ (tham số, schema) xem tại Swagger UI. Nhóm endpoin
 - `GET /api/quota/status` — quota còn lại trong ngày (request/token/cost)
 - `GET /api/usage/cost-summary` · `GET /api/model-pricing`
 - `GET /api/notifications` · `GET /api/notifications/stream` (SSE realtime) · `POST /api/notifications/{id}/read`, `/read-all`
+- `GET /api/me/patient/profile` — hồ sơ FHIR của USER hiện tại
 - `GET /api/metrics/cache` — chỉ số cache hit/miss
 
 ### Admin — `/api/admin/**` (role `ADMIN`)
@@ -134,6 +133,7 @@ Tài liệu đầy đủ (tham số, schema) xem tại Swagger UI. Nhóm endpoin
 - `quotas`, `costs` — tra cứu usage/chi phí theo user
 - `analytics` — `/requests`, `/intents`, `/errors`, `/performance`
 - `alerts` — cảnh báo hệ thống (resolve được), kèm `GET /api/audit-logs`
+- `backup` — chạy backup, xem lịch sử, khôi phục và xem lịch sử restore
 
 ### Khác
 
@@ -156,9 +156,10 @@ Flyway sở hữu schema (Hibernate chạy `ddl-auto: validate`). **Đổi schem
 migration `VN__...sql`**, không sửa migration cũ hay sửa DB trực tiếp.
 
 Bảng chính: `app_users`, `quota_policies`, `chat_sessions`, `chat_messages`,
-`usage_logs`, `cache_entries`, `audit_logs`, `model_pricing`, `alerts`,
-`message_feedback`, `notifications`, `app_user_patient_links`,
-`llm_virtual_keys`.
+`usage_logs`, `audit_logs`, `model_pricing`, `alerts`, `message_feedback`,
+`notifications`, `app_user_patient_links`, `llm_virtual_keys`,
+`backup_history`, `restore_history`. Bảng `cache_entries` cũ đã bị xóa ở V5;
+semantic cache hiện nằm trong Qdrant.
 
 Seed data gồm 3 user demo ở trên, quota policy mặc định, bảng giá model, và
 liên kết `user_demo ↔ Patient BN2026-00001`. Migration production vô hiệu hóa
@@ -171,14 +172,16 @@ src/main/java/com/medicalchatbot/backend/
   config/       security filter chain, JWT, rate limit interceptor, HTTP client, OpenAPI
   controller/   REST controller theo nhóm API ở trên
   dto/          request/response payload
-  domain/       model nghiệp vụ độc lập với HTTP và persistence projection
+  domain/       model nghiệp vụ độc lập với REST API
   entity/       JPA entity (map với bảng Flyway)
   enums/        UserRole, UserStatus, AlertSeverity, ...
   exception/    global exception handler, QuotaExceeded, RateLimitExceeded
   integration/  outbound adapter: chatbot/LiteLLM client, backup script, notification provider
   mapper/       chuyển entity/projection/domain model sang API response
-  repository/   Spring Data JPA và query contract; SQL/JDBC nằm trong repository/jdbc
-  service/      orchestration và nghiệp vụ ứng dụng, không chứa SQL hay HTTP client trực tiếp
+  repository/   Spring Data JPA và query contract
+    projection/ read model tối giản nhận kết quả query; không phải REST DTO hay JPA entity
+    jdbc/       implementation cho custom SQL/JdbcTemplate
+  service/      orchestration và nghiệp vụ ứng dụng; không chứa SQL hoặc RestClient
 ```
 
 ## Quy tắc kiến trúc
@@ -189,8 +192,11 @@ src/main/java/com/medicalchatbot/backend/
    qua application service rồi mới tới adapter trong `integration/`.
 3. SQL và `JdbcTemplate` thuộc tầng repository; service chỉ xử lý use case và
    mapping kết quả. Các rule này được kiểm tra bởi `LayerDependencyTest`.
-4. Frontend chỉ gọi backend này; backend gọi chatbot-service — **không** gọi
+4. Service dùng `AppException` + `ErrorCode`, không ném exception HTTP của Spring
+   để biểu diễn lỗi nghiệp vụ.
+5. Adapter outbound trong `integration/` không phụ thuộc ngược vào service.
+6. Frontend chỉ gọi backend này; backend gọi chatbot-service — **không** gọi
    thẳng HAPI PostgreSQL hay bảng `hfj_*`.
-5. Provider key LLM chỉ nằm ở LiteLLM Gateway; backend quản lý virtual key theo
+7. Provider key LLM chỉ nằm ở LiteLLM Gateway; backend quản lý virtual key theo
    user, không giữ key provider.
-6. Chạy `.\mvnw.cmd test` sau mỗi thay đổi.
+8. Chạy `.\mvnw.cmd test` sau mỗi thay đổi.

@@ -102,23 +102,25 @@ ChatApplicationService.chat(request)
    │
    ├─ 1. requireCurrentUser()              → lấy user đang đăng nhập
    ├─ 2. quotaService.assertQuotaAvailable() → chặn nếu user hết quota
-   ├─ 3. Nếu có session_id → load ChatSession + memory đã lưu
-   │     Nếu không có      → tạo ChatSession mới (title = câu hỏi đầu tiên)
+   ├─ 3. Nếu có session_id → xác minh ownership, load ChatSession + memory đã lưu
+   │     Nếu không có      → giữ session/memory rỗng ở bước này
    ├─ 4. userPatientScopeService.resolve()  → xác định patient_id hiệu lực
    │     (ưu tiên patient_id trong request, fallback active_patient_id trong memory,
    │      đồng thời áp giới hạn theo quyền user — patient scope)
-   ├─ 5. Lấy recent messages (tối đa 6) trong session để build ConversationContext
+   ├─ 5. Nếu chưa có session → tạo mới (title = câu hỏi đầu tiên), sau đó lấy
+   │     recent messages (tối đa 8) và tổng số message để build ConversationContext
    ├─ 6. Lưu user message vào chat_messages
-   ├─ 7. ChatbotServiceClient.chat(...)      → gọi sang chatbot-service (Python, /chat)
+   ├─ 7. integration/client/ChatbotServiceClient.chat(...)
+   │       → gọi sang chatbot-service (Python, /chat)
    │       payload: user_id, role, session_id, message, patient_id,
    │                allowed_patient_ids, patient_scope, conversation_context
    ├─ 8. Nhận response từ chatbot-service: answer, intent, tool_name, evidence,
    │       patient_candidates / needs_patient_selection, usage, memory_update...
    ├─ 9. Lưu assistant message vào chat_messages
-   ├─ 10. Tính session memory mới (active_patient_id, last_intent, last_tool_name,
-   │       last_resource_type/id, memory_summary) → cập nhật vào ChatSession
-   ├─ 11. saveUsage()      → ghi UsageLog (token, cost, latency)
-   ├─ 12. saveAuditLog()   → ghi AuditLog (hành động truy cập dữ liệu bệnh nhân)
+   ├─ 10. ChatbotResponseMapper tính memory/metadata; ChatMapper + repository
+   │        cập nhật session rồi map ChatResponse
+   ├─ 11. ChatInteractionRecorder.record()
+   │       → ghi UsageLog (token, cost, latency) + AuditLog
    ▼
 ChatResponse trả về Controller → trả về Frontend
    ▼
@@ -129,8 +131,10 @@ Frontend render answer, evidence, usage; nếu needs_patient_selection=true
 
 ### Luồng tạo session mới vs. tiếp tục session cũ
 
-- **Không có `session_id`:** `ChatApplicationService.chat()` luôn tạo `ChatSession` mới trước khi gọi chatbot-service (bước 3), memory rỗng → `userPatientScopeService.resolve()` không có active patient để fallback.
-- **Có `session_id`:** `requireSessionForUser()` xác nhận session thuộc user hiện tại (nếu không → 404). Memory của session (`active_patient_id`, `last_intent`, `last_tool_name`, `last_resource_type/id`, `memory_summary`) được nạp lại và dùng làm context, đồng thời lịch sử message gần nhất (tối đa 6) được đính kèm trong `ConversationContext` gửi sang chatbot-service.
+- **Không có `session_id`:** `ChatApplicationService.chat()` resolve patient scope
+  với memory rỗng, sau đó tạo `ChatSession` mới trước khi lưu message và gọi
+  chatbot-service.
+- **Có `session_id`:** `requireSessionForUser()` xác nhận session thuộc user hiện tại (nếu không → 404). Memory của session (`active_patient_id`, `last_intent`, `last_tool_name`, `last_resource_type/id`, `memory_summary`) được nạp lại và dùng làm context, đồng thời lịch sử message gần nhất (tối đa 8) được đính kèm trong `ConversationContext` gửi sang chatbot-service.
 
 ### Luồng xem lịch sử / danh sách hội thoại
 
@@ -160,7 +164,7 @@ ChatApplicationService.sessionMessages()
 
 ### 1. Frontend — `ChatPage.tsx`
 
-`submitMessage(message, options)` ([ChatPage.tsx:254-320](frontend/src/routes/ChatPage.tsx#L254-L320)):
+`submitMessage(message, options)` ([ChatPage.tsx](../frontend/src/pages/ChatPage.tsx)):
 
 1. Đẩy ngay 1 message "user" + 1 message "assistant" tạm (`pending: true`, nội dung "Đang xử lý câu hỏi...") vào state `messages` để UI phản hồi tức thì.
 2. Build `payload: ChatRequestBody = { session_id: currentSessionId, patient_id, message }`.
@@ -171,15 +175,23 @@ ChatApplicationService.sessionMessages()
 6. Luôn refetch `loadSessions()`, `loadUsage()`, `loadNotifications()` song song để đồng bộ sidebar/quota.
 7. Nếu lỗi (network/4xx/5xx) → message tạm chuyển role `"error"` hiển thị lỗi tại chỗ.
 
-`selectPatientCandidate(candidate, pendingQuestion)` ([ChatPage.tsx:322-340](frontend/src/routes/ChatPage.tsx#L322-L340)): khi `ChatResponse.needs_patient_selection = true`, UI hiển thị `patient_candidates`; user click 1 candidate → gọi lại `submitMessage(pendingQuestion, { patientIdOverride: candidate.id })`, tức gửi lại đúng câu hỏi cũ kèm `patient_id` đã chốt.
+`selectPatientCandidate(candidate, pendingQuestion)` ([ChatPage.tsx](../frontend/src/pages/ChatPage.tsx)): khi `ChatResponse.needs_patient_selection = true`, UI hiển thị `patient_candidates`; user click 1 candidate → gọi lại `submitMessage(pendingQuestion, { patientIdOverride: candidate.id })`, tức gửi lại đúng câu hỏi cũ kèm `patient_id` đã chốt.
 
-`selectSession(session)` ([ChatPage.tsx:234-246](frontend/src/routes/ChatPage.tsx#L234-L246)): set `currentSessionId`, gọi `GET /api/chat/sessions/{id}/messages`, map response qua `mapHistoryMessage()` vào state `messages`.
+`selectSession(session)` trong
+[`ChatPage.tsx`](../frontend/src/pages/ChatPage.tsx) đặt `currentSessionId`, gọi
+`GET /api/chat/sessions/{id}/messages` và map response qua `mapHistoryMessage()`
+vào state `messages`.
 
 ### 2. Spring Backend — nhận request, điều phối
 
-`ChatbotController.chat()` ([ChatbotController.java:100-103](backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L100-L103)) chỉ forward `ChatRequest` (đã `@Valid`) sang `chatApplicationService.chat(request)` — không chứa logic nghiệp vụ.
+`ChatbotController.chat()` trong
+[`ChatbotController.java`](../backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java)
+chỉ forward `ChatRequest` (đã `@Valid`) sang
+`chatApplicationService.chat(request)` — không chứa logic nghiệp vụ.
 
-`ChatApplicationService.chat()` ([ChatApplicationService.java:54-137](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L54-L137)) là nơi điều phối chính, chạy trong `@Transactional`:
+`ChatApplicationService.chat()` trong
+[`ChatApplicationService.java`](../backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java)
+là nơi điều phối chính, chạy trong `@Transactional`:
 
 ```java
 User user = currentUserService.requireCurrentUser();
@@ -201,29 +213,42 @@ JsonNode chatbotResponse = chatbotServiceClient.chat(new ChatbotChatRequest(
     allowedPatientIds, patientScope, conversationContext));          // gọi sang Python service
 
 chatMessageRepository.saveAndReturn(session, ASSISTANT, answer, ...); // lưu assistant message
-chatSessionRepository.updateMemory(session, nextSessionMemory(...));  // cập nhật memory phiên
-saveUsage(...); saveAuditLog(...);                                    // ghi token/cost + audit trail
-return new ChatResponse(...);                                         // map sang DTO trả về controller
+ChatSessionMemory nextMemory = chatbotResponseMapper.nextSessionMemory(...);
+chatSessionRepository.updateMemory(session, chatMapper.toDomain(nextMemory));
+chatInteractionRecorder.record(...);                                  // usage + audit
+return chatbotResponseMapper.toResponse(...);                          // API DTO
 ```
 
-`ChatbotServiceClient.chat()` ([ChatbotServiceClient.java:94-101](backend/src/main/java/com/medicalchatbot/backend/service/ChatbotServiceClient.java#L94-L101)) thực hiện `POST {chatbot-service}/chat` qua `RestClient`, body là `ChatbotChatRequest`, không xử lý logic — chỉ là HTTP client thuần.
+[`integration/client/ChatbotServiceClient`](../backend/src/main/java/com/medicalchatbot/backend/integration/client/ChatbotServiceClient.java)
+thực hiện `POST {chatbot-service}/chat` qua `RestClient`, body là
+`ChatbotChatRequest`; đây là outbound HTTP adapter, không chứa nghiệp vụ.
 
-`nextSessionMemory()` ([ChatApplicationService.java:377-420](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L377-L420)) đọc field `memory_update` trong response của chatbot-service để tính `active_patient_id`, `last_intent`, `last_tool_name`, `last_resource_type/id`, `memory_summary` mới — đây là cơ chế giữ context giữa các lượt chat trong cùng session.
+`ChatbotResponseMapper.nextSessionMemory()` trong
+[`ChatbotResponseMapper.java`](../backend/src/main/java/com/medicalchatbot/backend/mapper/ChatbotResponseMapper.java)
+đọc `memory_update` để tính `active_patient_id`, `last_intent`, `last_tool_name`,
+`last_resource_type/id`, `memory_summary` mới. `ChatMapper` chuyển giá trị này
+thành domain model trước khi repository cập nhật session.
 
 ### 3. Chatbot-service (Python/FastAPI) — xử lý ngôn ngữ tự nhiên & truy vấn FHIR
 
-Endpoint `POST /chat` trong `chat_routes.py` ([chat_routes.py:164-324](chatbot-service/api/chat_routes.py#L164-L324)):
+Endpoint `POST /chat` trong `chat_routes.py` ([chat_routes.py](../chatbot-service/api/chat_routes.py)):
 
-1. **Cache check** — `get_cached_chat_payload(request, cache_service)` ([L176-180](chatbot-service/api/chat_routes.py#L176-L180)): nếu câu hỏi khớp semantic cache, trả ngay kết quả đã cache (không gọi LLM/FHIR).
-2. **Intent extraction** — `intent_extractor.extract(message, provided_patient_id)` ([L183-186](chatbot-service/api/chat_routes.py#L183-L186)): phân tích câu hỏi tự nhiên ra một `plan` gồm `tool_name` (ví dụ `get_observations`, `get_medications`, `search_patients`...), `patient_id`, `observation_type`, `all_patients`, `limit`.
+1. **Cache check** — `get_cached_chat_payload(request, cache_service)` ([chat_routes.py](../chatbot-service/api/chat_routes.py)): nếu câu hỏi khớp semantic cache, trả ngay kết quả đã cache (không gọi LLM/FHIR).
+2. **Context + intent extraction** — `_patient_id_hint()` lấy patient từ request
+   hoặc session memory; `compact_conversation_for_llm()` nén lịch sử rồi
+   `intent_extractor.extract(...)` tạo `plan` gồm `tool_name`, `patient_id`,
+   `observation_type`, `all_patients`, `limit`. LLM extractor đọc context để hiểu
+   câu nối tiếp; rule fallback chỉ dùng patient hint.
 3. **Áp policy theo role**:
-   - `_apply_user_patient_scope()` ([L103-149](chatbot-service/api/chat_routes.py#L103-L149)): nếu `user_role == "USER"`, ép `patient_id` phải thuộc `allowed_patient_ids` của chính user đó, cấm `search_patients`/`all_patients`.
-   - `_apply_selected_patient_context()` / `_apply_context_reference_context()`: dùng `active_patient_id`/`last_resource_*` từ `ConversationContext` (gửi từ Spring backend) để suy ra bệnh nhân đang nói tới khi câu hỏi không nêu rõ (ví dụ "còn thuốc thì sao?").
-   - `_ensure_role_can_access_plan()` ([L152-161](chatbot-service/api/chat_routes.py#L152-L161)): chốt lại, ném `403` nếu vượt quyền.
-4. **Model routing** — `model_router.route(message, plan)` chọn LLM model theo độ phức tạp câu hỏi (`complexity`).
-5. **Dispatch theo `tool_name`** ([L209-303](chatbot-service/api/chat_routes.py#L209-L303)): mỗi nhánh gọi đúng resource answerer tương ứng (`_answer_patients`, `_answer_medications`, `_answer_observations`, `_answer_conditions`, `_answer_encounters`, `_answer_patient`), các answerer này gọi `FhirClient` để lấy dữ liệu FHIR thật.
+   - `_apply_user_patient_scope()` ([chat_routes.py](../chatbot-service/api/chat_routes.py)): nếu `user_role == "USER"`, ép `patient_id` phải thuộc `allowed_patient_ids` của chính user đó, cấm `search_patients`/`all_patients`.
+   - `_ensure_role_can_access_plan()` ([chat_routes.py](../chatbot-service/api/chat_routes.py)): chốt lại, ném `403` nếu vượt quyền.
+4. **Model routing** — `model_router.route(message, quota_used_ratio)` chạy song
+   song với intent extraction và chọn model theo độ phức tạp/quota.
+5. **Dispatch theo `tool_name`** ([chat_routes.py](../chatbot-service/api/chat_routes.py)): mỗi nhánh gọi đúng resource answerer tương ứng (`_answer_patients`, `_answer_medications`, `_answer_observations`, `_answer_conditions`, `_answer_encounters`, `_answer_patient`), các answerer này gọi `FhirClient` để lấy dữ liệu FHIR thật.
    - Nếu thiếu `patient_id` cụ thể và có nhiều khả năng khớp → `_resolve_patient_id_for_tool()` trả về dict chứa `needs_patient_selection=true` + `patient_candidates` thay vì gọi FHIR.
-6. **Sinh câu trả lời** — `_finalize_chat_response(payload, message, plan, answer_generator, model=..., query_complexity=...)`: đưa dữ liệu FHIR thô qua `AnswerGenerator` (LLM) để sinh câu trả lời tiếng Việt tự nhiên kèm `evidence`, tính `usage` (token/cost), build `memory_update` để trả ngược cho Spring backend lưu vào session memory.
+6. **Sinh câu trả lời** — `_finalize_chat_response(...)` đưa evidence FHIR đã
+   normalize qua `AnswerGenerator`, gắn `evidence`, cộng usage của các stage và
+   build `memory_update` để Spring lưu vào session memory.
 7. Nếu `FhirClientError` → trả `502` cho Spring backend (Spring sẽ propagate lỗi lên frontend).
 
 ### Tóm tắt trách nhiệm theo tầng
@@ -231,7 +256,7 @@ Endpoint `POST /chat` trong `chat_routes.py` ([chat_routes.py:164-324](chatbot-s
 | Tầng | Trách nhiệm |
 |---|---|
 | Frontend (`ChatPage.tsx`) | UI state, optimistic update, gửi `session_id`/`patient_id`, hiển thị candidate khi mơ hồ |
-| Spring Backend (`ChatApplicationService`) | Auth, quota, session/message persistence, patient scope theo quyền user, audit/usage logging, giữ session memory |
+| Spring Backend (`ChatApplicationService`) | Điều phối auth/quota/session/patient scope; mapper xử lý response/memory và recorder ghi usage/audit |
 | Chatbot-service (Python) | Hiểu ý định câu hỏi (intent extraction), áp policy truy cập FHIR theo role, gọi FHIR, sinh câu trả lời bằng LLM, semantic cache |
 
 ## Thành phần liên quan trong mã nguồn
@@ -240,10 +265,13 @@ Endpoint `POST /chat` trong `chat_routes.py` ([chat_routes.py:164-324](chatbot-s
 |---|---|
 | API endpoints | `backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java` |
 | Nghiệp vụ chính | `backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java` |
+| Gọi chatbot-service | `backend/src/main/java/com/medicalchatbot/backend/integration/client/ChatbotServiceClient.java` |
+| Map response/memory | `backend/src/main/java/com/medicalchatbot/backend/mapper/ChatbotResponseMapper.java`, `mapper/ChatMapper.java` |
+| Ghi usage/audit | `backend/src/main/java/com/medicalchatbot/backend/service/ChatInteractionRecorder.java` |
 | Entity session | `backend/src/main/java/com/medicalchatbot/backend/entity/ChatSession.java` |
 | Entity message | `backend/src/main/java/com/medicalchatbot/backend/entity/ChatMessage.java` |
 | Repository session | `backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java` |
 | Repository message | `backend/src/main/java/com/medicalchatbot/backend/repository/ChatMessageRepository.java` |
 | Session memory | `backend/src/main/resources/db/migration/V1__baseline_schema_and_seed.sql` (memory fields trên `chat_sessions`) |
-| Frontend chat page | `frontend/src/routes/ChatPage.tsx` |
+| Frontend chat page | `frontend/src/pages/ChatPage.tsx` |
 | Frontend history sidebar | `frontend/src/components/chat/HistorySidebar.tsx` |

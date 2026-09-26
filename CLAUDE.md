@@ -45,7 +45,8 @@ Luồng: Frontend → Spring `/api/chat` → chatbot-service `/chat` → FHIR �
 3. **LLM chỉ trả lời từ evidence đã normalize**, không bịa dữ liệu/chẩn đoán; câu
    trả lời cuối là **tiếng Việt**.
 4. Chạy **test của service liên quan sau mỗi thay đổi** (xem bảng trên).
-5. Hoàn thành milestone → **cập nhật `MILESTONES.md`** theo định dạng có sẵn.
+5. Hoàn thành module → cập nhật tài liệu tương ứng trong `docs/`; thay đổi
+   kiến trúc, port hoặc lệnh chạy → cập nhật README liên quan.
 
 ## Tài liệu sâu hơn (import khi cần)
 

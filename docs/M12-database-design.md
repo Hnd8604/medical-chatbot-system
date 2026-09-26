@@ -2,8 +2,8 @@
 
 Thiết kế schema database ứng dụng (tách hoàn toàn khỏi HAPI FHIR database), quản lý bằng Flyway migration và JPA entity với `ddl-auto=validate`. Đây là nền tảng lưu trữ cho toàn hệ thống.
 
-> Lịch sử migration V1→V17 cũ đã được **gộp (squash) thành baseline `V1`**;
-> `V2` bổ sung bảng `llm_virtual_keys` cho AI Gateway (LiteLLM).
+> Lịch sử migration V1→V17 cũ đã được **gộp (squash) thành baseline `V1`**.
+> Schema hiện tại được tiến hóa tiếp bằng migration V2→V9; không sửa lại baseline.
 > ERD chi tiết (Mermaid + DBML): [backend/docs/m12-database-erd.md](../backend/docs/m12-database-erd.md).
 
 ## M12.1 - Core application schema
@@ -11,9 +11,12 @@ Thiết kế schema database ứng dụng (tách hoàn toàn khỏi HAPI FHIR da
 **Mục tiêu:** Schema app database tách khỏi HAPI database.
 
 **Hành vi:**
-- App DB chứa: user, session, message, usage, quota, audit, cache, pricing, alert, notification, feedback, user-patient link, LLM virtual key.
+- App DB chứa: user, session, message, usage, quota, audit, pricing, alert,
+  notification, feedback, user-patient link, LLM virtual key và lịch sử
+  backup/restore. Semantic cache nằm trong Qdrant, không nằm trong app DB.
 - Dùng **UUID** làm khóa chính (`gen_random_uuid()`), mọi bảng có timestamp (`created_at`/`updated_at` kiểu `timestamptz`). Ngoại lệ: `llm_virtual_keys` dùng `user_id` làm khóa chính (quan hệ 1–1 với `app_users`).
-- Quản lý bằng **Flyway** (`V1` baseline + `V2`); Hibernate `ddl-auto=validate` (entity phải khớp schema migration, không tự tạo bảng).
+- Quản lý bằng **Flyway** (`V1`→`V9`); Hibernate `ddl-auto=validate`
+  (entity phải khớp schema migration, không tự tạo bảng).
 
 **Tiêu chí hoàn thành:** Spring start được và validate schema pass.
 
@@ -40,12 +43,15 @@ Thiết kế schema database ứng dụng (tách hoàn toàn khỏi HAPI FHIR da
 - **Index:** `idx_usage_logs_user_id_created_at`, `idx_usage_logs_session_id_created_at`, `idx_usage_logs_model_created_at`, `idx_usage_logs_status_created_at`; `numeric` precision cho cost.
 - **Tiêu chí:** Quota/cost summary chạy đúng ([M7](M7-usage-tracking.md), [M8](M8-cost-management.md), [M9](M9-quota-management.md)).
 
-## M12.5 - Audit/cache schema
+## M12.5 - Audit, cảnh báo và vận hành
 
 - `audit_logs` (action/resource_type/resource_id/user/session + `metadata_json` JSONB) — [M18](M18-M19-audit-alert.md).
-- `cache_entries` (`cache_key` unique, `value_json` JSONB, `expires_at`) + `idx_cache_entries_expires_at` ([M14](M14-cache-management.md)).
 - `alerts` (source/alert_type/severity/status + resolved_at/by), `notifications` (type/title/content/is_read), `message_feedback` (rating 1–5 + comment).
-- **Tiêu chí:** Tra cứu được audit và cache entry.
+- `backup_history` và `restore_history` lưu trạng thái, thời gian, kết quả từng
+  database và lỗi của tác vụ backup/restore.
+- `cache_entries` từng được tạo trong baseline nhưng bị drop ở `V5`; semantic
+  cache hiện lưu tại Qdrant ([M14](M14-cache-management.md)).
+- **Tiêu chí:** Tra cứu được audit, alert và lịch sử backup/restore.
 
 ## Danh sách migration (Flyway)
 
@@ -54,6 +60,15 @@ Thiết kế schema database ứng dụng (tách hoàn toàn khỏi HAPI FHIR da
 | V1 | **Baseline** (gộp V1→V17 cũ): toàn bộ 12 bảng + index + seed — 3 quota policy, 13 demo user (USER/DOCTOR/ADMIN, mật khẩu bcrypt), bảng giá 4 model (openai + groq), liên kết user ↔ FHIR Patient (SELF/CAREGIVER) |
 | V2 | `llm_virtual_keys` — mapping user → LiteLLM virtual key + budget |
 | V3 | Đổi tên 3 quota policy theo role (`free`→`user_standard`, `pro`→`doctor_standard`, `enterprise`→`admin`) và gán mỗi user về gói khớp role |
+| V4 | Đồng bộ `display_name` của user demo với hồ sơ FHIR đã liên kết |
+| V5 | Xóa `cache_entries`; cache runtime dùng Qdrant/Redis thay vì app PostgreSQL |
+| V6 | Thêm `backup_history` |
+| V7 | Thêm `restore_history` và liên kết tùy chọn tới bản backup nguồn |
+| V8 | Dọn feedback trùng và thêm unique index `(message_id, user_id)` |
+| V9 | Vô hiệu hóa credential demo trong migration production |
+
+Profile `dev` nạp thêm repeatable migration `db/devmigration/R__enable_demo_accounts.sql`
+để bật lại ba tài khoản demo cục bộ. Profile production chỉ chạy `db/migration`.
 
 > Baseline áp dụng trên database rỗng; các bước backfill cost lịch sử của
 > migration cũ được bỏ qua vì `usage_logs` khởi tạo rỗng.
@@ -63,7 +78,7 @@ Thiết kế schema database ứng dụng (tách hoàn toàn khỏi HAPI FHIR da
 ```
 Khởi động Spring Boot
    ▼
-Flyway chạy migration V1..V2 (theo thứ tự version) trên app PostgreSQL
+Flyway chạy migration V1..V9 (theo thứ tự version) trên app PostgreSQL
    ▼
 Hibernate ddl-auto=validate
    ├─ entity ⟷ schema khớp  → app start OK
@@ -71,8 +86,8 @@ Hibernate ddl-auto=validate
    ▼
 Repository (Spring Data JPA) đọc/ghi qua entity:
    User, ChatSession, ChatMessage, UsageLog, QuotaPolicy, ModelPricing,
-   AuditLog, CacheEntry, Alert, Notification, MessageFeedback,
-   UserPatientLink, LlmVirtualKey
+   AuditLog, Alert, Notification, MessageFeedback, UserPatientLink,
+   LlmVirtualKey, BackupHistory, RestoreHistory
 ```
 
 App DB hoàn toàn tách biệt HAPI FHIR DB (hai PostgreSQL khác nhau — xem [M5](M5-fhir-integration.md)).
@@ -81,7 +96,7 @@ App DB hoàn toàn tách biệt HAPI FHIR DB (hai PostgreSQL khác nhau — xem 
 
 | Vai trò | File / thư mục |
 |---|---|
-| Migrations | `backend/src/main/resources/db/migration/V1__baseline_schema_and_seed.sql`, `V2__llm_virtual_keys.sql` |
+| Migrations | `backend/src/main/resources/db/migration/` (V1→V9), `db/devmigration/` (dev-only) |
 | Entities | `backend/.../entity/*.java` |
 | Repositories | `backend/.../repository/*.java` |
 | ERD chi tiết | `backend/docs/m12-database-erd.md` |

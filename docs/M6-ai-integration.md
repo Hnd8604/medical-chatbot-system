@@ -7,7 +7,7 @@ Kết nối LLM (OpenAI-compatible) cho hai nhiệm vụ: hiểu ý định câu
 **Mục tiêu:** Hiểu câu hỏi user và chọn tool phù hợp.
 
 **Hành vi:**
-- Ưu tiên **structured tool call** (`openai_extractor`), có **rule fallback** (`rule_extractor`).
+- Ưu tiên **structured tool call** (`llm_extractor`), có **rule fallback** (`rule_extractor`).
 - Không tự trả lời dữ liệu y tế nếu chưa retrieve (intent chỉ chọn tool, không sinh nội dung y tế).
 - Schema tool call định nghĩa trong `agents/intent/fhir_tools.py` + `models.py`.
 
@@ -28,7 +28,10 @@ Kết nối LLM (OpenAI-compatible) cho hai nhiệm vụ: hiểu ý định câu
 **Mục tiêu:** Tạo câu trả lời tiếng Việt từ evidence đã retrieve.
 
 **Hành vi:**
-- `OpenAIAnswerGenerator.generate()` — system prompt quy định: chỉ trả lời dựa trên evidence FHIR, **không bịa** thông tin, không đưa chẩn đoán/lời khuyên vượt dữ liệu, nói rõ khi thiếu dữ liệu, trả lời tiếng Việt không Markdown đậm.
+- `LLMAnswerGenerator.generate()` — dùng OpenAI-compatible client trỏ tới LiteLLM;
+  system prompt quy định chỉ trả lời dựa trên evidence FHIR, **không bịa** thông
+  tin, không đưa chẩn đoán/lời khuyên vượt dữ liệu, nói rõ khi thiếu dữ liệu và
+  trả lời tiếng Việt không Markdown đậm.
 - `temperature=0.2`; làm sạch Markdown bằng `clean_llm_answer()`.
 - Khi LLM thật được gọi: `answer_source = "llm"`, `usage` có token (`prompt_tokens`/`completion_tokens`).
 
@@ -51,40 +54,50 @@ Kết nối LLM (OpenAI-compatible) cho hai nhiệm vụ: hiểu ý định câu
 
 **Hành vi:**
 - Intent: rule fallback khi không có/không gọi được LLM.
-- Answer: `TemplateAnswerGenerator` sinh câu trả lời template từ evidence; `OpenAIAnswerGenerator` bắt mọi `Exception` từ OpenAI API → trả `source="template_fallback"` (không lộ lỗi kỹ thuật cho user).
+- Answer: `TemplateAnswerGenerator` sinh câu trả lời template từ evidence;
+  `LLMAnswerGenerator` chuyển lỗi provider thông thường thành
+  `source="template_fallback"` (không lộ lỗi kỹ thuật cho user). Riêng lỗi budget
+  do gateway trả về được chuyển tiếp thành HTTP 429 để Spring xử lý đúng ngữ nghĩa.
 - Khi không có evidence → `source="template_no_evidence"`.
-- Chọn generator theo cấu hình: `use_llm_answer = enable_llm_answer AND openai_api_key` → **tắt API key vẫn demo được flow cơ bản**.
+- Chọn generator theo cấu hình: `use_llm_answer = enable_llm_answer AND use_llm`,
+  trong đó `use_llm` chỉ bật khi có `LITELLM_MASTER_KEY` → **không cấu hình gateway
+  vẫn demo được flow cơ bản bằng rule/template**.
 
-**Tiêu chí hoàn thành:** Tắt API key vẫn demo được flow cơ bản.
+**Tiêu chí hoàn thành:** Không cấu hình gateway key vẫn demo được flow cơ bản.
 
 ## Luồng chương trình
 
 ```
 Câu hỏi → IntentExtractor
-            ├─ OpenAI structured tool call  (nếu có API key)
-            └─ rule fallback                 (luôn sẵn sàng)
+            ├─ structured tool call qua LiteLLM  (nếu có gateway key)
+            └─ rule fallback                     (luôn sẵn sàng)
         ▼ IntentPlan
 Tool execution (chat_routes) → FhirClient → evidence (normalized)
         ▼
 AnswerGenerator.generate(question, intent, tool, patient_id, evidence, fallback_answer, model)
    compact_evidence_for_llm()  → cắt theo MAX_EVIDENCE_ITEMS / MAX_EVIDENCE_JSON_CHARS
         ▼
-   OpenAI chat.completions (temperature=0.2)
+   LiteLLM OpenAI-compatible chat.completions (temperature=0.2)
         ├─ thành công → answer_source="llm", usage=token
-        ├─ exception   → answer_source="template_fallback" (dùng fallback_answer)
+        ├─ lỗi provider thông thường → answer_source="template_fallback"
+        ├─ gateway báo hết budget    → HTTP 429
         └─ rỗng        → answer_source="template_fallback"
-   (không có API key → TemplateAnswerGenerator: answer_source="template")
+   (không có gateway key → TemplateAnswerGenerator: answer_source="template")
         ▼
 ChatResponse.answer + usage  → Spring lưu UsageLog (M7)
 ```
 
 ## Luồng trong code
 
-- **Answer generator + fallback:** [answer_generator.py:57-145](chatbot-service/agents/answer_generator.py#L57-L145).
-- **Prompt/context control:** `compact_evidence_for_llm()` + hằng số ([answer_generator.py:9-10](chatbot-service/agents/answer_generator.py#L9-L10), [148-233](chatbot-service/agents/answer_generator.py#L148-L233)).
-- **Cấu hình bật/tắt LLM:** `use_llm_answer` / `use_openai_llm` ([config.py:37-43](chatbot-service/app/config.py#L37-L43)).
-- **Intent (LLM vs rule):** [agents/intent/openai_extractor.py](chatbot-service/agents/intent/openai_extractor.py), [rule_extractor.py](chatbot-service/agents/intent/rule_extractor.py).
-- **Gắn vào pipeline:** `_finalize_chat_response()` trong [chat_routes.py](chatbot-service/api/chat_routes.py#L199-L324).
+- **Answer generator + fallback:** [answer_generator.py](../chatbot-service/agents/answer_generator.py).
+- **Prompt/context control:** `compact_evidence_for_llm()` + các hằng số giới hạn
+  ([answer_generator.py](../chatbot-service/agents/answer_generator.py)).
+- **Cấu hình bật/tắt LLM:** `use_llm` / `use_llm_answer`
+  ([config.py](../chatbot-service/app/config.py)).
+- **Intent (LLM vs rule):**
+  [agents/intent/llm_extractor.py](../chatbot-service/agents/intent/llm_extractor.py),
+  [rule_extractor.py](../chatbot-service/agents/intent/rule_extractor.py).
+- **Gắn vào pipeline:** `_finalize_chat_response()` trong [chat_routes.py](../chatbot-service/api/chat_routes.py).
 
 ## Thành phần liên quan trong mã nguồn
 

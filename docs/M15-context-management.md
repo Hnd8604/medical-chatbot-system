@@ -9,7 +9,9 @@ Quản lý ngữ cảnh hội thoại để chatbot trả lời được các c�
 **Hành vi:**
 - Limit cố định: `RECENT_CONTEXT_MESSAGE_LIMIT = 8` trong `ChatApplicationService`.
 - `findRecentMessagesForContext()` lấy 8 message mới nhất rồi **sắp xếp lại ASC** (subquery `order by created_at desc limit :limit`, ngoài cùng `order by createdAt asc`) để LLM đọc đúng trình tự thời gian.
-- Không gửi toàn bộ lịch sử — chỉ phần gần nhất, đóng gói vào `ConversationContext.recentMessages`.
+- Spring đóng gói tối đa 8 message vào `ConversationContext.recentMessages`;
+  `chatbot-service/agents/context_payload.py` tiếp tục compact còn tối đa 6 message,
+  mỗi nội dung tối đa 400 ký tự, trước khi đưa vào prompt.
 
 **Tiêu chí hoàn thành:** Chatbot hiểu câu hỏi nối tiếp ngắn (vd "còn thuốc thì sao?").
 
@@ -17,11 +19,14 @@ Quản lý ngữ cảnh hội thoại để chatbot trả lời được các c�
 
 **Mục tiêu:** Lưu memory nhẹ cho phiên chat (không cần đọc lại toàn bộ message).
 
-**Các trường memory** (cột trên bảng `chat_sessions`, ánh xạ qua `ChatSessionMemory`):
+**Các trường memory** (cột trên bảng `chat_sessions`, ánh xạ qua domain value
+object `ChatSessionMemoryState` và response DTO `ChatSessionMemory`):
 - `active_patient_id`, `memory_summary`, `last_intent`, `last_tool_name`, `last_resource_type`, `last_resource_id`.
 
 **Hành vi:**
-- Cập nhật sau **mỗi** lượt chat qua `nextSessionMemory()` → `chatSessionRepository.updateMemory()`.
+- Cập nhật sau **mỗi** lượt chat qua
+  `ChatbotResponseMapper.nextSessionMemory()` → `ChatMapper.toDomain()` →
+  `chatSessionRepository.updateMemory()`.
 - **Không overwrite active patient khi hỏi all-patients**: `nextSessionMemory()` chỉ cập nhật `active_patient_id`/`last_resource_*` khi `concretePatientResponse = !allPatients && !needsPatientSelection`.
 
 **Tiêu chí hoàn thành:** Refresh trang / mở session cũ vẫn hỏi tiếp được (memory được nạp lại từ DB).
@@ -31,8 +36,14 @@ Quản lý ngữ cảnh hội thoại để chatbot trả lời được các c�
 **Mục tiêu:** Tóm tắt hội thoại để tiết kiệm token, không cần gửi full history.
 
 **Hành vi (V2 - LLM rolling summary, thay thế hoàn toàn V1 rule-based):**
-- Chatbot-service sinh `memory_summary` bằng **LLM rolling summary** (`agents/summary_generator.py`): summary cũ + 6 recent messages + câu hỏi mới → summary mới ≤120 từ tiếng Việt.
-- Chỉ trigger khi `total_message_count >= 6` (hội thoại vượt cửa sổ recent); chạy **song song** với answer generation nên latency cộng thêm ≈ 0.
+- Chatbot-service sinh `memory_summary` bằng **LLM rolling summary**
+  (`agents/summary_generator.py`): summary cũ + tối đa 6 message sau compact +
+  câu hỏi mới → summary mới ≤120 từ tiếng Việt.
+- Mặc định chỉ trigger khi `total_message_count >= 8` (Spring đếm trước khi lưu
+  câu hỏi hiện tại); chạy **song song** với answer generation nên không cộng tuần
+  tự toàn bộ latency. Do Spring gửi 8 message nhưng prompt chỉ giữ 6, lần summary
+  đầu tiên có thể chưa bao phủ hai message cũ nhất; xem phần giới hạn hiện tại
+  trong [M-context-rolling-summary.md](M-context-rolling-summary.md).
 - Summary được trả về trong `memory_update.summary` kèm `summary_usage`, Spring lưu vào `chat_sessions.memory_summary` và gửi lại ở lượt sau qua `ConversationContext.memorySummary`.
 - `memory_summary` + `recent_messages` được inject vào prompt của intent extractor và answer generator — câu follow-up ("cái đó", "thuốc đó") do LLM tự resolve, keyword matching cũ đã gỡ bỏ.
 - Chi tiết: [M-context-rolling-summary.md](M-context-rolling-summary.md).
@@ -44,7 +55,8 @@ Quản lý ngữ cảnh hội thoại để chatbot trả lời được các c�
 **Mục tiêu:** Tránh prompt vượt token limit.
 
 **Hành vi:**
-- Giới hạn **recent messages** ở 6 (M15.1) — chặn trên cho phần history.
+- Giới hạn **recent messages** ở 8 tại Spring và 6 trong prompt Python; mỗi
+  message trong prompt bị cắt ở 400 ký tự.
 - Giới hạn **evidence**: `evidenceRefs()` chỉ giữ `{resource_type, resource_id, summary}` thay vì raw bundle.
 - `memory_summary` thay cho việc nhồi toàn bộ lịch sử.
 - Model routing (M16) chọn model theo độ phức tạp, tránh lãng phí context cho câu hỏi đơn giản.
@@ -63,14 +75,14 @@ Mỗi lượt /api/chat (ChatApplicationService.chat):
    │        ▼
    │   ConversationContext { memorySummary, activePatientId, lastIntent,
    │                         lastToolName, lastResourceType/Id, recentMessages }
-   │        → ChatbotServiceClient.chat(...)
+   │        → ChatbotServiceClient.chat(...) → compact_conversation_for_llm(max 6)
    │
    └─ GHI context (sau khi chatbot trả lời)
        chatbotResponse.memory_update { summary, active_patient_id,
                                        last_intent, last_tool_name,
                                        last_resource_type/id, evidence_refs }
             ▼
-       nextSessionMemory(current, effectivePatientId, chatbotResponse)
+       ChatbotResponseMapper.nextSessionMemory(current, effectivePatientId, response)
             │  nếu all_patients hoặc needs_patient_selection
             │      → GIỮ NGUYÊN active_patient_id & last_resource_*
             │  ngược lại → cập nhật từ memory_update / evidence
@@ -80,12 +92,19 @@ Mỗi lượt /api/chat (ChatApplicationService.chat):
 
 ## Luồng trong code
 
-- **Recent messages:** `findRecentMessagesForContext()` / native query `findRecentMessageViewsForContext()` ([ChatSessionRepository.java:44-73](backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L44-L73)); hằng số limit ([ChatApplicationService.java:40](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L40)).
-- **Đóng gói context gửi đi:** `conversationContext()` ([ChatApplicationService.java:322-335](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L322-L335)).
-- **Tính memory mới (giữ active patient khi all-patients):** `nextSessionMemory()` ([ChatApplicationService.java:377-420](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L377-L420)).
-- **Đọc/ghi memory trên entity:** `ChatSession.memory()` / `applyMemory()` ([ChatSession.java:76-95](backend/src/main/java/com/medicalchatbot/backend/entity/ChatSession.java#L76-L95)); persistence qua `updateMemory()` ([ChatSessionRepository.java:39-42](backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L39-L42)).
-- **Sinh summary (rule-based) phía Python:** `_memory_summary()` và `_build_memory_update()` ([response_builder.py:141-159](chatbot-service/chat/response_builder.py#L141-L159)).
-- **Dùng context để suy ra bệnh nhân khi câu hỏi mơ hồ:** `_apply_selected_patient_context()` / `_apply_context_reference_context()` trong [chat_routes.py](chatbot-service/api/chat_routes.py#L187-L190).
+- **Recent messages:** `ChatSessionRepository.findRecentMessagesForContext()` trả
+  `ChatContextMessageProjection`; `ChatMapper` chuyển sang request DTO. Hằng số
+  limit nằm trong `ChatApplicationService`.
+- **Đóng gói context gửi đi:** `ChatApplicationService.conversationContext()`.
+- **Tính memory mới:** `ChatbotResponseMapper.nextSessionMemory()` giữ active
+  patient khi response là all-patients hoặc đang chờ chọn bệnh nhân.
+- **Đọc/ghi memory:** `ChatSession.memory()` / `applyMemory()` dùng
+  `domain/model/ChatSessionMemoryState`; persistence qua repository `updateMemory()`.
+- **Sinh summary phía Python:** `agents/summary_generator.py`; `response_builder.py`
+  chờ task, cộng usage và đưa summary vào `memory_update`.
+- **Dùng context:** `chat_routes.py` lấy structural patient hint qua
+  `_patient_id_hint()` và truyền context đã compact vào `LLMIntentExtractor` /
+  `LLMAnswerGenerator`. `RuleBasedIntentExtractor` không diễn giải hội thoại.
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -94,8 +113,11 @@ Mỗi lượt /api/chat (ChatApplicationService.chat):
 | Điều phối đọc/ghi context | `backend/.../service/ChatApplicationService.java` |
 | Query recent messages | `backend/.../repository/ChatSessionRepository.java` |
 | Entity + trường memory | `backend/.../entity/ChatSession.java` |
+| Domain memory | `backend/.../domain/model/ChatSessionMemoryState.java` |
+| Mapper context/memory | `backend/.../mapper/ChatMapper.java`, `.../mapper/ChatbotResponseMapper.java` |
+| Projection recent messages | `backend/.../repository/projection/ChatContextMessageProjection.java` |
 | DTO memory | `backend/.../dto/response/ChatSessionMemory.java` |
 | DTO context gửi đi | `backend/.../dto/request/ConversationContext.java` |
 | Migration session memory | `backend/.../db/migration/V1__baseline_schema_and_seed.sql` (memory fields trên `chat_sessions`) |
-| Sinh summary + memory_update | `chatbot-service/chat/response_builder.py` |
-| Áp context suy luận bệnh nhân | `chatbot-service/chat/context_memory.py`, `chatbot-service/api/chat_routes.py` |
+| Sinh summary + memory_update | `chatbot-service/agents/summary_generator.py`, `chatbot-service/chat/response_builder.py` |
+| Compact/patient hint | `chatbot-service/agents/context_payload.py`, `chatbot-service/chat/context_memory.py`, `chatbot-service/api/chat_routes.py` |

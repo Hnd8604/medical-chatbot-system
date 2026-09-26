@@ -7,8 +7,10 @@ Quản lý chi phí vận hành AI: bảng giá theo model, tính cost từng re
 **Mục tiêu:** Lưu giá token theo model.
 
 **Hành vi:**
-- Bảng `model_pricing` (`V5`), entity `ModelPricing`: provider/model (unique khi active), giá input/output **per 1M tokens**, currency.
-- Seed giá cho model đang dùng; `V13` bổ sung giá cho **Groq `llama-3.1-8b-instant`** (vô hiệu hóa bản trùng cũ rồi insert bản mới active).
+- Bảng `model_pricing` trong baseline V1, entity `ModelPricing`: provider/model
+  (unique khi active), giá input/output **per 1M tokens**, currency.
+- Baseline V1 seed giá cho các model OpenAI và Groq đang dùng, gồm
+  `llama-3.1-8b-instant`.
 - API `GET /api/model-pricing` (active pricing); admin quản trị qua `ModelPricingAdminController`/`ModelPricingAdminService`.
 
 **Tiêu chí hoàn thành:** Spring tìm được pricing cho model hiện tại.
@@ -54,7 +56,7 @@ cost = input_tokens  * input_price_per_1m  / 1_000_000
 ## Luồng chương trình
 
 ```
-Mỗi lượt chat (saveUsage — M7):
+Mỗi lượt chat (`ChatInteractionRecorder` — M7):
    CostEstimationService.estimateUsd(provider, model, inTok, outTok, fallback)
       findActiveByProviderAndModel(provider, model)
         ├─ có pricing → cost = inTok*inPrice/1e6 + outTok*outPrice/1e6  (scale 6)
@@ -69,9 +71,12 @@ Xem chi phí:
 
 ## Luồng trong code
 
-- **Tính cost:** `CostEstimationService.estimateUsd()` / `calculate()` ([CostEstimationService.java:20-47](backend/src/main/java/com/medicalchatbot/backend/service/CostEstimationService.java#L20-L47)).
-- **Gọi khi ghi usage:** [ChatApplicationService.saveUsage()](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L188-L211).
-- **Summary:** `CostManagementService` (API `cost-summary`, `ChatbotController` [L123-129](backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L123-L129)).
+- **Tính cost:** `CostEstimationService.estimateUsd()` / `calculate()` trong
+  [CostEstimationService.java](../backend/src/main/java/com/medicalchatbot/backend/service/CostEstimationService.java).
+- **Gọi khi ghi usage:**
+  [ChatInteractionRecorder.java](../backend/src/main/java/com/medicalchatbot/backend/service/ChatInteractionRecorder.java).
+- **Summary:** `UsageLogRepository` trả các projection tổng hợp;
+  `CostMapper` chuyển chúng thành API DTO cho `CostManagementService`.
 - **Admin cost:** `AdminCostController` (`/api/admin/costs`).
 
 ## Thành phần liên quan trong mã nguồn
@@ -80,7 +85,8 @@ Xem chi phí:
 |---|---|
 | Tính cost | `backend/.../service/CostEstimationService.java` |
 | Summary cost | `backend/.../service/CostManagementService.java` |
+| Projection/mapper | `backend/.../repository/projection/Cost*Projection.java`, `.../mapper/CostMapper.java` |
 | Admin cost API | `backend/.../controller/AdminCostController.java` |
 | Pricing entity/admin | `backend/.../entity/ModelPricing.java`, `.../service/ModelPricingAdminService.java` |
-| Usage & Cost UI | `frontend/src/routes/AdminUsageCostPage.tsx` |
+| Usage & Cost UI | `frontend/src/pages/AdminUsageCostPage.tsx` |
 | Migration giá | `db/migration/V1__baseline_schema_and_seed.sql` (bảng `model_pricing` + seed giá) |

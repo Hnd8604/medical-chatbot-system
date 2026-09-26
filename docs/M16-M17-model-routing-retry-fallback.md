@@ -73,7 +73,10 @@ MODEL_ROUTER=gpt-4o-mini  # model rẻ chuyên phân loại
 
 **Hành vi hiện tại:**
 - Cấu hình qua **env** (`MODEL_SIMPLE`, `MODEL_COMPLEX`, `LLM_PROVIDER`, `LITELLM_BASE_URL` — `app/config.py`). Đa provider (vd **Groq**) khai ở LiteLLM gateway (`infra/litellm/config.yaml`), không trỏ trực tiếp từ chatbot-service.
-- Bảng giá theo model + admin API (`model_pricing`, `/api/model-pricing`, `ModelPricingAdminController`) cho phép quản trị giá/model — đã seed giá cho Groq `llama-3.1-8b-instant` (`V13`, [M8](M8-cost-management.md)). (V2 hướng tới full admin routing UI.)
+- Bảng `model_pricing` có API đọc `GET /api/model-pricing` và CRUD dành cho admin
+  tại `/api/admin/model-pricing` (`ModelPricingAdminController`) — baseline V1 đã
+  seed giá cho Groq `llama-3.1-8b-instant` ([M8](M8-cost-management.md)).
+  (V2 của tính năng hướng tới full admin routing UI, không phải Flyway V2.)
 
 **Tiêu chí hoàn thành:** Admin đổi model routing được an toàn (qua env/config).
 
@@ -109,7 +112,7 @@ MODEL_ROUTER=gpt-4o-mini  # model rẻ chuyên phân loại
 **Hành vi:**
 - Không hallucinate: fallback chỉ dùng dữ liệu evidence có sẵn.
 - Lỗi FHIR → `502` với message tiếng Việt; lỗi chatbot-service down → `502 CHATBOT_UNAVAILABLE` (xem [M11](M11-logging-error-handling.md)).
-- Frontend render lỗi tại chỗ (message role `error`) không phá layout ([ChatPage.tsx](frontend/src/routes/ChatPage.tsx#L302-L316)).
+- Frontend render lỗi tại chỗ (message role `error`) không phá layout ([ChatPage.tsx](../frontend/src/pages/ChatPage.tsx)).
 
 **Tiêu chí hoàn thành:** Lỗi service ngoài không làm app crash.
 
@@ -137,11 +140,12 @@ M16 routing (mỗi request, chạy song song với intent extraction qua asyncio
 
 M17 fallback (khi sinh câu trả lời):
    LLMAnswerGenerator.generate(model)
-      try OpenAI
+      gọi model qua LiteLLM gateway
         ├─ OK            → answer_source="llm", usage=token
-        ├─ Exception     → answer_source="template_fallback" (fallback_answer)
+        ├─ lỗi provider  → answer_source="template_fallback" (fallback_answer)
+        ├─ budget 429    → chuyển tiếp 429, không fallback che mất trạng thái quota
         └─ answer rỗng   → answer_source="template_fallback"
-   (không API key → TemplateAnswerGenerator: answer_source="template")
+   (không gateway key → TemplateAnswerGenerator: answer_source="template")
 
    Lỗi tầng service (Spring ApiExceptionHandler):
       FHIR/chatbot 5xx → 502 + alert CRITICAL (M18/M19)
@@ -150,11 +154,11 @@ M17 fallback (khi sinh câu trả lời):
 
 ## Luồng trong code
 
-- **Routing (keyword):** `ModelRouter.route()` / `_classify()` / `_pick_model()` ([model_router.py](chatbot-service/agents/model_router.py#L64-L92)); model từ settings ([config.py](chatbot-service/app/config.py#L11-L18)).
-- **LLM Router (hybrid):** `LLMModelRouter.route()` / `_llm_classify()` + cache ([model_router.py](chatbot-service/agents/model_router.py#L127-L230)); factory `build_model_router()` chọn router theo `enable_llm_router` ([model_router.py](chatbot-service/agents/model_router.py#L248-L265)).
-- **Áp routing vào pipeline:** `asyncio.gather(intent, route)` + `routing_kwargs` ([chat_routes.py](chatbot-service/api/chat_routes.py#L151-L177)); gộp `router_usage` và gắn `routing_source` ([response_builder.py](chatbot-service/chat/response_builder.py#L48-L125)).
-- **Template fallback:** [answer_generator.py:104-145](chatbot-service/agents/answer_generator.py#L104-L145).
-- **Phân loại lỗi service (Spring):** [ApiExceptionHandler.java:82-131](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L82-L131).
+- **Routing (keyword):** `ModelRouter.route()` / `_classify()` / `_pick_model()` ([model_router.py](../chatbot-service/agents/model_router.py)); model từ settings ([config.py](../chatbot-service/app/config.py)).
+- **LLM Router (hybrid):** `LLMModelRouter.route()` / `_llm_classify()` + cache ([model_router.py](../chatbot-service/agents/model_router.py)); factory `build_model_router()` chọn router theo `enable_llm_router` ([model_router.py](../chatbot-service/agents/model_router.py)).
+- **Áp routing vào pipeline:** `asyncio.gather(intent, route)` + `routing_kwargs` ([chat_routes.py](../chatbot-service/api/chat_routes.py)); gộp `router_usage` và gắn `routing_source` ([response_builder.py](../chatbot-service/chat/response_builder.py)).
+- **Template fallback:** [answer_generator.py](../chatbot-service/agents/answer_generator.py).
+- **Phân loại lỗi service (Spring):** [ApiExceptionHandler.java](../backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java).
 
 ## Thành phần liên quan trong mã nguồn
 

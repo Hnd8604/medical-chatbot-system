@@ -132,7 +132,9 @@ unmount → close()                              // đóng EventSource
 - [NotificationControllerTest](../backend/src/test/java/com/medicalchatbot/backend/controller/NotificationControllerTest.java):
   list/mark-read giữ nguyên hành vi (mock thêm `NotificationStreamService`).
 
-Kết quả gần nhất: **65 test pass, BUILD SUCCESS**; `frontend` `npm run typecheck` sạch.
+Sau khi thay đổi luồng SSE, chạy `./mvnw.cmd test` trong `backend/` và
+`npm run typecheck` trong `frontend/`; không ghi cố định số lượng test vì bộ test
+tiếp tục được mở rộng.
 
 ## 9. Giới hạn hiện tại / hướng mở rộng
 
@@ -142,5 +144,3 @@ Kết quả gần nhất: **65 test pass, BUILD SUCCESS**; `frontend` `npm run t
   Muốn scale ngang: đẩy sự kiện qua Redis Pub/Sub để mọi instance cùng fan-out tới emitter của mình.
 - **Bù trừ mất kết nối**: hiện dựa vào `connected` → full reload để resync. Có thể tối ưu bằng
   `Last-Event-ID` để chỉ gửi phần thiếu (chưa cần thiết ở quy mô hiện tại).
-```
-

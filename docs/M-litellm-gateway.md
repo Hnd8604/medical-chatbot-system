@@ -112,12 +112,20 @@ Key chảy per-request: Spring gắn `llm_key` vào request → chatbot-service 
 | B. Gateway nhưng mọi người xài chung master key | Có logging + failover | Không tách spend/budget theo user |
 | **C. 3-tier virtual key (dự án chọn)** | Least-privilege, budget + attribution per-user, thu hồi được | Nặng hơn: thêm DB `litellm`, key lifecycle, network hop |
 
-Lý do chọn **C**: bài toán **đa người dùng có quota/cost per-user** (AGENTS.md §7) → buộc phải có credential per-user để chặn tiền đúng người; phần lớn là **cấu hình tool có sẵn** (LiteLLM lo mã hóa/thu hồi key) chứ không code tay. Đánh đổi thành thật: đây là lựa chọn **trên mức phạm vi demo tối thiểu** (AGENTS.md §17) một cách có chủ đích để hiện thực đầy đủ trụ cột gateway, đổi lấy chút overhead vận hành — không bắt buộc cho demo 1 người dùng. Lập luận bảo vệ mạnh nhất khi bị hỏi *"sao không dùng 1 key cho gọn"*: **least privilege + blast radius** — lộ key 1 user chỉ mất budget/ngày của người đó và thu hồi được, còn 1-key-cho-tất-cả thì lộ là mất sạch.
+Lý do chọn **C**: bài toán **đa người dùng có quota/cost per-user**
+([product-spec §7](product-spec.md#7-quản-lý-usage-chi-phí-và-quota)) cần
+credential per-user để chặn tiền đúng người; phần lớn là cấu hình LiteLLM có sẵn
+chứ không tự code key lifecycle. Đây là lựa chọn có chủ đích vượt phạm vi demo
+tối thiểu ([product-spec §17](product-spec.md#17-phạm-vi-demo-tối-thiểu)) để có
+least privilege và giới hạn blast radius: lộ key một user chỉ ảnh hưởng budget
+của người đó và có thể thu hồi, thay vì lộ key chung của toàn hệ thống.
 
 ### 2. Logging — 2 lớp
 
 - **Gateway-native**: mỗi request LLM ghi `LiteLLM_SpendLogs` (DB `litellm`): model, token, cost, latency, **gắn đúng end-user** nhờ tham số `user=user_id` ở mỗi completion call. Xem trực quan tại Admin UI `/ui` (tab Logs/Usage).
-- **App-side** (audit/analytics, có từ trước): Spring ghi `usage_logs` (token, cost ước tính, latency, `answer_source`) + `audit_logs` mỗi lượt chat (`ChatApplicationService.saveUsage/saveAuditLog`).
+- **App-side** (audit/analytics): Spring ghi `usage_logs` (token, cost ước tính,
+  latency, `answer_source`) + `audit_logs` mỗi lượt chat qua
+  `ChatInteractionRecorder`.
 
 **Vì sao giữ 2 lớp (không gộp về 1):** hai lớp **không trùng lặp** — chúng ghi những chiều dữ liệu khác nhau, gộp lại sẽ mất năng lực chứ không tiết kiệm.
 
@@ -367,7 +375,7 @@ Lần đầu user chat:
     └─ Gateway auth key → ghi spend log
   
 Admin thay đổi policy:
-  Spring admin API /api/admin/policies/{id}
+  Spring admin API PUT /api/admin/quota-policies/{id}
     ├─ Update daily_cost_limit_usd
     └─ LlmGatewayKeyService.syncBudgetForPolicy()
        → Tìm mọi user thuộc policy
@@ -404,7 +412,7 @@ User bị khóa / Admin thu hồi key:
 | `chatbot-service/agents/gateway_context.py` | contextvar `current_llm_key`/`current_end_user`; `gateway_call_kwargs()` (extra_headers+user); `GatewayBudgetExceededError` |
 | `agents/intent/llm_extractor.py`, `agents/answer_generator.py`, `agents/model_router.py` | 3 call site LLM: `**gateway_call_kwargs()` + `raise_if_budget_exceeded` |
 | `chat/response_builder.py` | `AnswerResult.model` đọc `response.model`; map alias→(provider, pricing-model) cho analytics |
-| Spring `service/LiteLLMAdminClient.java` | Quản virtual key qua master key: `/key/generate`, `/key/update`, `/key/info`, `/key/block` |
+| Spring `integration/client/LiteLLMAdminClient.java` | Outbound adapter quản virtual key qua master key: `/key/generate`, `/key/update`, `/key/info`, `/key/block` |
 | Spring `service/LlmGatewayKeyService.java` | Cấp key lazy khi chat + `syncBudgetForPolicy` khi admin sửa quota |
 | Spring `service/LiteLLMSpendService.java` | Đọc spend/budget cost từ `/key/info` (cache ngắn) cho `QuotaService` |
 | Spring `entity/LlmVirtualKey.java` + migration `V2__llm_virtual_keys.sql` | Map `app_user` → virtual key + budget |

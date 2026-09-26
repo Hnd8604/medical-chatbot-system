@@ -2,7 +2,7 @@
 
 ## What Was Built
 
-This folder contains the first FastAPI chatbot/FHIR service slice for the Medical Chatbot project.
+This folder contains the FastAPI chatbot/FHIR orchestration service for the Medical Chatbot project.
 Claude tự động nạp file này khi làm việc trong `chatbot-service/`.
 
 Implemented:
@@ -19,16 +19,21 @@ Implemented:
 - LLM final answer generation from normalized FHIR evidence when `ENABLE_LLM_ANSWER=true`.
 - Template fallback answer generation when LLM answer generation is disabled or fails.
 - Model routing (M16): keyword classifier + cost-aware quota downgrade, plus optional hybrid LLM Router (`ENABLE_LLM_ROUTER=true`, `MODEL_ROUTER`) that confirms SIMPLE cases with a cheap model via the LiteLLM gateway, runs in parallel with intent extraction, caches classifications, and falls back to the keyword result on errors. Response exposes `query_complexity` and `routing_source`; router token usage is added to the combined `usage`. See `docs/M16-M17-model-routing-retry-fallback.md`.
-- Context compression (M15.3 V2): LLM rolling summary (`agents/summary_generator.py`, plain async single LLM call) — runs in parallel with answer generation, triggers only when `conversation_context.total_message_count >= SUMMARY_TRIGGER_MESSAGE_COUNT` (default 8), returns `memory_update.summary` + `summary_usage` (added to combined `usage`). `memory_summary` + `recent_messages` are injected into the LLM intent extractor and answer generator prompts (`agents/context_payload.py`); the old keyword follow-up logic in `chat/context_memory.py` was removed (only `_patient_id_hint` remains). Summary errors (incl. budget) are swallowed with a warning; cache hits skip summarization. See `docs/M-context-rolling-summary.md`.
+- Context compression (M15.3 V2): LLM rolling summary (`agents/summary_generator.py`, plain async single LLM call) — runs in parallel with answer generation, triggers only when `conversation_context.total_message_count >= SUMMARY_TRIGGER_MESSAGE_COUNT` (default 8), returns `memory_update.summary` + `summary_usage` (added to combined `usage`). `memory_summary` + `recent_messages` are injected into the LLM intent extractor and answer generator prompts; `agents/context_payload.py` caps that prompt window at 6 messages × 400 characters. The old keyword follow-up logic in `chat/context_memory.py` was removed (only `_patient_id_hint` remains). Summary errors (incl. budget) are swallowed with a warning; cache hits skip summarization. See `docs/M-context-rolling-summary.md`.
 - Terminology enrichment (`terminology/`): explains medical codes via LOINC (`CodeSystem/$lookup` on `fhir.loinc.org`, Basic Auth), RxNorm (`rxnav.nlm.nih.gov`, no key), and MedlinePlus Connect (`connect.medlineplus.gov`, no key). Pure data-fetch layer (no LLM); the three sources fan out concurrently via `asyncio.gather`, each gated by its own flag (`LOINC_ENABLED`/`RXNORM_ENABLED`/`MEDLINEPLUS_ENABLED`), cached globally by code (not patient), capped at 5 requests/source, and degrading to `[]` on error. LOINC is skipped when `LOINC_USERNAME/PASSWORD` are absent (`has_credentials` gate). **Enrichment runs only for explanation-type questions**: the LLM intent extractor sets `IntentPlan.explain=true` (rule fallback uses keywords like "là gì", "ý nghĩa") when the user asks the meaning/purpose of retrieved data; `_finalize_chat_response` then attaches `external_knowledge` (top-level, beside `evidence`) which the answer generator summarizes into Vietnamese. Plain data questions skip terminology entirely (no external calls). Standalone concept questions ("HbA1c là gì", "Metformin dùng để làm gì") route to the new `explain_concept` tool/intent. See `docs/M-terminology-enrichment.md`.
 - **LangGraph agent (M-LG)**: endpoint thứ hai `POST /chat/langgraph` sau cờ `ENABLE_LANGGRAPH_AGENT` (mặc định `false`). Graph: `prepare → cache_lookup → route → {general_chat | conversation_meta | unsupported | plan → validate → execute} → finalize`. Hai tầng quyết định LLM (router rẻ chọn route + `safety_flag`, rồi planner sinh **plan nhiều bước** với biến `"$resolve_patient.patient_id"`), `plan_validator` là **điểm enforce chính sách duy nhất** (thuần tuý, không I/O), `plan_executor` chạy các step độc lập bằng `asyncio.gather` và kiểm quyền lần hai sau khi resolve patient. Mọi LLM call đi qua `langgraph_agent/llm.py` → LiteLLM gateway, kèm `extra_body.metadata.stage` để spend log tách theo stage. **Tái dùng, không fork**: mỗi tool trong `fhir/tool_registry.py` là wrapper mỏng quanh `chat/resource_answerers._answer_*`, và bước cuối gọi thẳng `_finalize_chat_response` (nên thừa hưởng terminology, semantic cache, pricing, rolling summary, `memory_update`). Cải tiến riêng của bản này: **plan cache** (`langgraph_agent/plan_cache.py` — cache ý định đã validate, không chứa PHI, TTL dài, dùng chung mọi user → hit bỏ được cả router lẫn planner), **evidence budget** (`evidence_budget.py` — cắt tất định trước prompt answer), **template fast-path** (`AGENT_TEMPLATE_FAST_PATH`), **fallback theo stage** (planner lỗi → `RuleBasedIntentExtractor`; router lỗi → mặc định route `fhir`; chat lỗi → template — không stage nào trả 503), **low-cost mode** theo `quota_used_ratio`. Response giữ nguyên shape cũ, thêm `agent_route`, `response_status`, `plan_steps`, `stage_usage`, `evidence_pruning`, `prompt_versions`. Bộ eval 42 câu có nhãn ở `tests/eval/` (`python -m tests.eval.run_eval --endpoint both`). Xem `docs/M-langgraph-agent.md`.
 - Central FHIR HTTP client using HAPI FHIR REST APIs.
 - Normalizers that convert raw FHIR resources/Bundles into compact JSON for app and future LLM usage.
 - Unit tests for normalizers, FHIR client behavior with mocked HTTP transport, intent extraction behavior, and terminology enrichment (foundation, 3-source fan-out, conditional gating).
 
-Not implemented yet:
+Security boundary:
 
-- Authentication/access control.
+- Spring Security authenticates end users and verifies chat-session ownership.
+- FastAPI receives the resolved `user_id`, `user_role`, `allowed_patient_ids`, and
+  optional per-user `llm_key`; it must still enforce the supplied patient scope
+  before executing FHIR tools.
+- FastAPI endpoints are intended to run behind Spring or on a trusted internal
+  network; do not expose them publicly as an alternative login surface.
 
 Cost estimation: `usage.estimated_cost_usd` in the chat response is now filled by
 `agents/pricing.py` (mirrors Spring's `model_pricing` seed; same token×price formula
@@ -74,7 +79,8 @@ message + optional patient_id
   -> FHIR retrieval function
 ```
 
-When configured, the OpenAI extractor asks the model to select one of these tools:
+When configured, `agents/intent/llm_extractor.py` asks the model behind the LiteLLM
+gateway to select one of these tools:
 
 ```text
 fhir_status
@@ -89,6 +95,7 @@ get_all_patient_observations
 get_all_patient_encounters
 get_all_patient_conditions
 get_all_patient_medication_requests
+explain_concept
 unsupported_question
 ```
 
@@ -97,6 +104,8 @@ Notes:
 - `fhir_status` checks HAPI FHIR availability via `GET /fhir/metadata`; if the server is down the chat answer reports it instead of failing.
 - `get_resource_by_id` fetches one resource by `resource_type` + `resource_id` (whitelist: Patient, Encounter, Observation, Condition, MedicationRequest). USER role is always denied for this tool.
 - The four `get_all_patient_*` tools are normalized to their base tool with `all_patients=True` inside `plan_from_tool_call`, so they share the existing multi-patient answerers and role policy (USER role denied).
+- `explain_concept` handles general medical concepts without patient data and can
+  enrich the answer from terminology providers.
 
 Without `LITELLM_MASTER_KEY`, `RuleBasedIntentExtractor` keeps local demo behavior working
 (including `fhir_status` keywords and explicit `Encounter|Observation|Condition|MedicationRequest/{id}` references).
@@ -109,7 +118,10 @@ After FHIR retrieval, `agents/answer_generator.py` receives:
 question + intent + tool_name + patient_id + evidence.data + fallback_answer
 ```
 
-If OpenAI answer generation is enabled, the model writes the final Vietnamese answer using only the normalized evidence. It must not invent patient data, create new diagnoses, or query any data source. If the LLM call fails or evidence is empty, the service returns the template answer.
+If LLM answer generation is enabled, the selected model behind LiteLLM writes the
+final Vietnamese answer using only the normalized evidence. It must not invent
+patient data, create new diagnoses, or query any data source. If the LLM call fails
+or evidence is empty, the service returns the template answer.
 
 Relevant response fields:
 
@@ -190,42 +202,21 @@ Quyết định bảo mật **đang chờ chốt**: `AGENT_ALLOW_USER_RESOURCE_L
 `plan_executor._enforce_resource_ownership()` loại resource không thuộc USER sau khi fetch.
 Bật cái này thì USER mới hỏi nối được "chỉ số này có ý nghĩa gì".
 
-## Verification Result
+## Verification
 
-Last checked on 2026-05-30:
+Run the automated suite after changing routing, FHIR normalization, policy, cache,
+or prompt behavior:
 
-```text
-python -m unittest discover tests: 52 tests passed
-python -m py_compile agents\intent_extractor.py api\chat_routes.py api\fhir_routes.py fhir\client.py agents\answer_generator.py: passed
-app import: passed
-GET /health: passed
-GET /fhir/status: passed
-GET /patients?name=Nguyen&limit=5: passed
-GET /patients/BN2026-00001: passed
-GET /patients/BN2026-00001/observations?limit=5: passed
-GET /patients/BN2026-00001/conditions: passed
-GET /patients/BN2026-00001/medications: passed
-POST /chat medication demo: passed
-LLM/tool-call intent extraction fallback: passed
-Chatbot service dev server: http://localhost:8000
-Detailed evidence passthrough via POST /chat: passed
-LLM final answer via POST /chat: passed
-Spring passthrough of answer_source and answer_usage: passed
-Encounter direct endpoint and chat flow: passed
-Patient search direct endpoint and chat flow: passed
-Ambiguous patient candidate payload unit test: passed
-Selected patient_id clears search criteria before resource retrieval: passed
+```powershell
+cd chatbot-service
+python -m unittest discover tests
 ```
 
-LangGraph agent (M-LG), kiểm ngày 2026-08-28:
+The real-model evaluation is separate because it needs HAPI FHIR data and a running
+LiteLLM gateway:
 
-```text
-python -m unittest discover tests: 280 tests passed (52 test agent)
-app import + AgentGraph.compile(): passed
-graph e2e voi LLM gia lap: fhir / general_chat / unsupported / cache hit: passed
-fallback: planner loi -> rule extractor, router loi -> route fhir: passed
-policy: USER bi chan search_patients / get_all_patient_* / benh nhan khac: passed
-tests/eval/questions.jsonl: 42 case, nhan hop le voi tool registry: passed
-CHUA chay: tests/eval/run_eval.py voi LLM that (can HAPI FHIR co du lieu + gateway)
-CHUA lam: M-LG4 checkpointer Postgres, M-LG6 so lieu before/after
+```powershell
+python -m tests.eval.run_eval --endpoint both
 ```
+
+Do not record a fixed test count here; discovery grows as modules are added.

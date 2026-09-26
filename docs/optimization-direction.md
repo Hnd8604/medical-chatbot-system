@@ -19,7 +19,7 @@ Mục tiêu định lượng:
 | Theo dõi token / lượt gọi / chi phí | Theo user, model, thời gian | `usage_logs` (Spring), `usage` trong response chatbot-service |
 | Quota | Theo user hoặc nhóm user | `quota_policies`, `QuotaService`, `QuotaPolicyAdminService` |
 | Rate limit + budget limit | Giới hạn tần suất và ngân sách | một phần trong QuotaService |
-| Cache câu trả lời / kết quả truy vấn | Exact + **semantic cache** | `cache_entries`; semantic cache = việc cần làm |
+| Cache câu trả lời / kết quả truy vấn | **Semantic cache** có TTL, scope user/bệnh nhân | Đã triển khai bằng Qdrant (`services/semantic_cache.py`); app DB không giữ `cache_entries` |
 | Context pruning / summary hội thoại | Rút gọn hội thoại cũ | LLM rolling summary — `docs/M-context-rolling-summary.md` |
 | Model routing | Câu đơn giản → model rẻ; phức tạp → model mạnh | `agents/model_router.py` (M16), LLM Router |
 | Retry / fallback | Khi AI service lỗi | M17 (retry/fallback), xem docs bên dưới |

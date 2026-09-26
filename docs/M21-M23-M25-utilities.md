@@ -161,16 +161,16 @@ Tiêu thụ (realtime, xem notification-sse-stream.md):
 
 | Module | Điểm vào | File:hàm |
 |---|---|---|
-| M21 | API search/list | [ChatApplicationService.sessions()](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L143-L150) |
-| M21 | SQL ILIKE | [ChatSessionRepository.findSearchSessionViewsForUser()](backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L167-L210) |
-| M21 | UI search box | [ChatPage.tsx loadSessions()](frontend/src/routes/ChatPage.tsx#L125-L137) |
-| M23 | API export | [ExportController](backend/src/main/java/com/medicalchatbot/backend/controller/ExportController.java) |
-| M23 | PDF/CSV + audit | [ExportService](backend/src/main/java/com/medicalchatbot/backend/service/ExportService.java) |
-| M23 | UI | [ChatPage.exportSession()](frontend/src/routes/ChatPage.tsx#L355-L367), `components/chat/ExportModal.tsx` |
-| M25 | API notification + SSE stream | [NotificationController](backend/src/main/java/com/medicalchatbot/backend/controller/NotificationController.java) |
-| M25 | Tạo/đọc + mock email + push SSE | [NotificationService](backend/src/main/java/com/medicalchatbot/backend/service/NotificationService.java) |
-| M25 | Registry emitter realtime | [NotificationStreamService](backend/src/main/java/com/medicalchatbot/backend/service/NotificationStreamService.java) — xem [notification-sse-stream.md](notification-sse-stream.md) |
-| M25 | Phát quota warning | [QuotaService](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L254-L268) |
+| M21 | API search/list | [ChatApplicationService.sessions()](../backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java) |
+| M21 | SQL ILIKE | [ChatSessionRepository.findSearchSessionViewsForUser()](../backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java) |
+| M21 | UI search box | [ChatPage.tsx loadSessions()](../frontend/src/pages/ChatPage.tsx) |
+| M23 | API export | [ExportController](../backend/src/main/java/com/medicalchatbot/backend/controller/ExportController.java) |
+| M23 | PDF/CSV + audit | [ExportService](../backend/src/main/java/com/medicalchatbot/backend/service/ExportService.java) |
+| M23 | UI | [ChatPage.exportSession()](../frontend/src/pages/ChatPage.tsx), `components/chat/ExportModal.tsx` |
+| M25 | API notification + SSE stream | [NotificationController](../backend/src/main/java/com/medicalchatbot/backend/controller/NotificationController.java) |
+| M25 | Tạo/đọc + mock email + push SSE | [NotificationService](../backend/src/main/java/com/medicalchatbot/backend/service/NotificationService.java) |
+| M25 | Registry emitter realtime | [NotificationStreamService](../backend/src/main/java/com/medicalchatbot/backend/service/NotificationStreamService.java) — xem [notification-sse-stream.md](notification-sse-stream.md) |
+| M25 | Phát quota warning | [QuotaService](../backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java) |
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -181,4 +181,4 @@ Tiêu thụ (realtime, xem notification-sse-stream.md):
 | Notification controller/service/entity | `backend/.../controller/NotificationController.java`, `.../service/NotificationService.java`, `.../entity/Notification.java`, `.../enums/NotificationType.java` |
 | Realtime SSE (stream + client) | `backend/.../service/NotificationStreamService.java`, `frontend/src/services/api.ts` (`openNotificationStream`) — xem `docs/notification-sse-stream.md` |
 | Phát notification (quota) | `backend/.../service/QuotaService.java` |
-| UI search / export / notification | `frontend/src/routes/ChatPage.tsx`, `.../components/chat/{HistorySidebar,ExportModal}.tsx` |
+| UI search / export / notification | `frontend/src/pages/ChatPage.tsx`, `.../components/chat/{HistorySidebar,ExportModal}.tsx` |

@@ -173,7 +173,7 @@ thuộc tính của `IntentPlan` nội bộ.
 
 ```powershell
 cd chatbot-service
-python -m unittest discover tests    # 214 tests
+python -m unittest discover tests
 ```
 
 | File | Phủ |

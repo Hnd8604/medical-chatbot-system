@@ -8,7 +8,8 @@ Quản lý hạn mức sử dụng theo ngày cho mỗi user (request/token/cost
 
 **Hành vi:**
 - Bảng `quota_policies` (`V1`), entity `QuotaPolicy`: `daily_request_limit`, `daily_token_limit`, `daily_cost_limit_usd`.
-- Gắn policy cho user qua `app_users.quota_policy_id`; seed policy demo (`V2`).
+- Gắn policy cho user qua `app_users.quota_policy_id`; baseline V1 seed policy,
+  V3 đổi tên theo role (`user_standard`, `doctor_standard`, `admin`).
 
 **Tiêu chí hoàn thành:** User có quota policy trước khi chat (`statusForUser` ném 500 nếu thiếu policy).
 
@@ -68,11 +69,11 @@ QuotaService.assertQuotaAvailable(userId)
 
 ## Luồng trong code
 
-- **Chặn quota:** `assertQuotaAvailable()` ([QuotaService.java:133-148](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L133-L148)).
-- **Tính status:** `statusForUser()` ([QuotaService.java:159-199](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L159-L199)); `blockedReason()` ([L209-220](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L209-L220)).
-- **Cảnh báo 80%:** `checkAndTriggerQuotaWarning()` ([QuotaService.java:249-273](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L249-L273)).
-- **429 response:** `ApiExceptionHandler.quotaExceeded()` ([L140-145](backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java#L140-L145)).
-- **API status:** `GET /api/quota/status` ([ChatbotController.java:118-121](backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L118-L121)).
+- **Chặn quota:** `assertQuotaAvailable()` ([QuotaService.java](../backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java)).
+- **Tính status:** `statusForUser()` ([QuotaService.java](../backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java)); `blockedReason()` ([QuotaService.java](../backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java)).
+- **Cảnh báo 80%:** `checkAndTriggerQuotaWarning()` ([QuotaService.java](../backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java)).
+- **429 response:** `ApiExceptionHandler.quotaExceeded()` ([ApiExceptionHandler.java](../backend/src/main/java/com/medicalchatbot/backend/exception/ApiExceptionHandler.java)).
+- **API status:** `GET /api/quota/status` ([ChatbotController.java](../backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java)).
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -81,4 +82,4 @@ QuotaService.assertQuotaAvailable(userId)
 | Quota service | `backend/.../service/QuotaService.java` |
 | Exception 429 | `backend/.../exception/QuotaExceededException.java`, `ApiExceptionHandler.java` |
 | Entity/policy admin | `backend/.../entity/QuotaPolicy.java`, `.../service/QuotaPolicyAdminService.java` |
-| Migration | `db/migration/V1` (policies), `V2` (seed), `V6` (rate limit) |
+| Migration | `V1__baseline_schema_and_seed.sql` (policy, seed, rate limit), `V3__rename_quota_policies_to_roles.sql` |

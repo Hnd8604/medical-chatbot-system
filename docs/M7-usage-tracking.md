@@ -1,13 +1,16 @@
 # M7. Usage Tracking
 
-Ghi nhận mỗi lượt chat có gọi pipeline AI: token in/out, provider/model, latency, status — làm nguồn dữ liệu cho [M8 (Cost)](M8-cost-management.md), [M9 (Quota)](M9-quota-management.md), [M13](M13-admin-dashboard.md), [M24](M24-M26-analytics-backup.md).
+Ghi nhận mỗi lượt chat thành công, kể cả template fallback hoặc semantic-cache
+hit: token in/out, provider/model, latency, status và phần token/cost tiết kiệm —
+làm nguồn dữ liệu cho [M8 (Cost)](M8-cost-management.md), [M9 (Quota)](M9-quota-management.md), [M13](M13-admin-dashboard.md), [M24](M24-M26-analytics-backup.md).
 
 ## M7.1 - Log mỗi request AI
 
-**Mục tiêu:** Ghi nhận mỗi lượt chat có gọi pipeline AI.
+**Mục tiêu:** Ghi nhận mỗi lượt chat đã hoàn tất qua chatbot-service.
 
 **Hành vi:**
-- Entity `UsageLog` (bảng `usage_logs`); mỗi lượt `POST /api/chat` thành công tạo một dòng usage qua `saveUsage()` trong `ChatApplicationService`.
+- Entity `UsageLog` (bảng `usage_logs`); mỗi lượt `POST /api/chat` thành công tạo
+  một dòng usage qua `ChatInteractionRecorder.record()`.
 - Lưu user, session, operation (`"chat"`), status (`"success"`), và **latency** (đo bằng `System.nanoTime()` quanh lời gọi chatbot-service).
 
 **Tiêu chí hoàn thành:** DB có usage row sau mỗi `POST /api/chat` thành công.
@@ -17,14 +20,16 @@ Ghi nhận mỗi lượt chat có gọi pipeline AI: token in/out, provider/mode
 **Mục tiêu:** Lưu token đầu vào và đầu ra.
 
 **Hành vi:**
-- chatbot-service trả `usage.input_tokens` / `usage.output_tokens` (cộng token intent + answer; nếu không gọi LLM → 0).
+- chatbot-service trả `usage.input_tokens` / `usage.output_tokens` (cộng token
+  intent + router + answer + rolling summary; stage không chạy đóng góp 0).
 - Spring đọc và lưu vào `usage_logs`; còn lưu `saved_tokens`/`saved_cost` khi cache hit ([M14](M14-cache-management.md)).
 
 **Tiêu chí hoàn thành:** Quota status hiển thị token đã dùng.
 
 ## M7.3 - Model/provider tracking
 
-- chatbot-service trả `llm_provider`, `llm_model` (từ settings).
+- chatbot-service trả `llm_provider`, `llm_model` theo model answer thực tế mà
+  LiteLLM trả về; nếu không có thì fallback về model đã route/cấu hình.
 - Spring lưu vào `usage_logs` + audit metadata ([M18](M18-M19-audit-alert.md)).
 - **Tiêu chí:** query usage logs thấy model thật (phản ánh model routing — [M16](M16-M17-model-routing-retry-fallback.md)).
 
@@ -52,7 +57,8 @@ POST /api/chat (thành công) — ChatApplicationService.chat (@Transactional)
                                   llm_provider, llm_model, answer_source, saved_usage
    latencyMs = nanos→ms
    ▼
-saveUsage(user, session, chatbotResponse, latencyMs)
+ChatInteractionRecorder.record(user, session, request, patientId, response, latencyMs)
+   ChatbotResponseMapper.usage(response)
    estimatedCostUsd = CostEstimationService.estimateUsd(...)   (M8)
    usageLogRepository.save(user, session, provider, model, "chat", "success",
                            latencyMs, inputTokens, outputTokens, cost,
@@ -66,15 +72,22 @@ Aggregation: summarizeSuccessfulUsage(userId, from, to)
 
 ## Luồng trong code
 
-- **Ghi usage:** `saveUsage()` ([ChatApplicationService.java:180-230](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L180-L230)); đo latency ([L89-100](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L89-L100)).
-- **Aggregate:** `UsageLogRepository.summarizeSuccessfulUsage()` (dùng trong [QuotaService.statusForUser()](backend/src/main/java/com/medicalchatbot/backend/service/QuotaService.java#L159-L199)).
-- **Token nguồn:** `usage` trong response của chatbot-service ([answer_generator.py:128-133](chatbot-service/agents/answer_generator.py#L128-L133)).
+- **Điều phối và đo latency:**
+  [ChatApplicationService.java](../backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java).
+- **Parse và ghi usage:**
+  [ChatbotResponseMapper.java](../backend/src/main/java/com/medicalchatbot/backend/mapper/ChatbotResponseMapper.java) và
+  [ChatInteractionRecorder.java](../backend/src/main/java/com/medicalchatbot/backend/service/ChatInteractionRecorder.java).
+- **Aggregate:** `UsageLogRepository.summarizeSuccessfulUsage()` trả
+  `QuotaUsageProjection`, được `QuotaService` chuyển thành response.
+- **Token nguồn:** `usage` trong response của chatbot-service ([answer_generator.py](../chatbot-service/agents/answer_generator.py)).
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
-| Ghi usage | `backend/.../service/ChatApplicationService.java` (`saveUsage`) |
+| Ghi usage/audit | `backend/.../service/ChatInteractionRecorder.java` |
+| Parse usage upstream | `backend/.../mapper/ChatbotResponseMapper.java` |
 | Entity/repository | `backend/.../entity/UsageLog.java`, `.../repository/UsageLogRepository.java` |
+| Read projections | `backend/.../repository/projection/{QuotaUsage,CostSummary,CostByModel,CostByDay}Projection.java` |
 | Token nguồn (LLM) | `chatbot-service/agents/answer_generator.py` |
-| Migration | `db/migration/V1`, `V3` (status/provider/model/latency), `V7` (cache fields) |
+| Migration | `db/migration/V1__baseline_schema_and_seed.sql` (usage, status, model, latency và cache-observability fields) |

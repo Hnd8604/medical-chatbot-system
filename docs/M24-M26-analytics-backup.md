@@ -7,7 +7,11 @@
 
 # M24. Advanced Analytics
 
-Đã có triển khai riêng: `AnalyticsService` (query bằng `JdbcTemplate`) + `AdminAnalyticsController` expose tại `/api/admin/analytics/*`. Mọi endpoint nhận `from`/`to` (tùy chọn; mặc định 7 ngày gần nhất, **tối đa 90 ngày**) và `limit` (≤ 20).
+`AdminAnalyticsController` expose `/api/admin/analytics/*`;
+`AnalyticsService` chuẩn hóa input và map response, còn custom SQL/`JdbcTemplate`
+nằm trong `repository/jdbc/JdbcAnalyticsQueryRepository`. Mọi endpoint nhận
+`from`/`to` (tùy chọn; mặc định 7 ngày gần nhất, **tối đa 90 ngày**); ba endpoint
+danh sách `/intents`, `/errors`, `/performance` nhận thêm `limit` (tối đa 20).
 
 ## M24.1 - Question analytics
 
@@ -15,7 +19,9 @@
 
 **Hành vi:**
 - `GET /api/admin/analytics/intents` → top intent theo ngày.
-- Nguồn: `audit_logs` nơi `metadata_json ->> 'operation' = 'chat'`, lấy intent từ `metadata_json ->> 'question_intent'` (fallback `intent`). `intent`/`question_intent` được ghi trong `saveAuditLog()` ([M18](M18-M19-audit-alert.md)).
+- Nguồn: `audit_logs` nơi `metadata_json ->> 'operation' = 'chat'`, lấy intent từ
+  `metadata_json ->> 'question_intent'` (fallback `intent`). Metadata này được
+  `ChatInteractionRecorder` ghi qua `ChatbotResponseMapper.audit()` ([M18](M18-M19-audit-alert.md)).
 - SQL: CTE `top_intents` lấy N intent nhiều nhất rồi đếm theo từng ngày → trả `{date, intent, count}`.
 
 **Tiêu chí hoàn thành:** Admin thấy top question categories.
@@ -70,9 +76,11 @@
 
 **Hành vi:**
 - Script `infra/scripts/backup.sh` dùng `docker exec ... pg_dump --clean --if-exists | gzip`.
-- Strict mode (`set -euo pipefail`); ghi log vào `logs/backup_cron.log`.
+- Script dùng `set -uo pipefail` và kiểm tra lỗi từng pipeline để vẫn tổng hợp
+  được kết quả `SUCCESS`/`PARTIAL`/`FAILED`; log nằm ở `logs/backup_cron.log`.
 - **Alert khi fail:** nếu `pg_dump` lỗi → xóa file hỏng + gửi Telegram `BACKUP_ERROR` (CRITICAL) (cùng kênh alert M19).
-- Chạy định kỳ qua cron/scheduled task.
+- Spring `@Scheduled` gọi `BackupService.scheduledBackup()` (mặc định 02:00,
+  `Asia/Ho_Chi_Minh`); manual backup dùng `/api/admin/backup`.
 
 **Tiêu chí hoàn thành:** Backup được tạo định kỳ.
 
@@ -81,24 +89,27 @@
 **Mục tiêu:** Khôi phục dữ liệu khi cần.
 
 **Hành vi:**
-- Script `infra/scripts/restore.sh <file.sql.gz> <app|hapi>`.
-- An toàn: kiểm tra tính toàn vẹn gzip (`gzip -t`), kiểm tra container tồn tại, **xác nhận (y/n)** trước khi ghi đè, dùng `psql -v ON_ERROR_STOP=1` để dừng ngay khi lỗi SQL.
+- Admin UI/API chạy `restore-auto.sh` qua `BackupJobRunner`: khôi phục app + HAPI,
+  tải file từ Drive nếu local thiếu, stop/start HAPI và ghi `restore_history`.
+- CLI thủ công dùng `infra/scripts/restore.sh <file.sql.gz> <app|hapi>`.
+- Cả hai kiểm tra gzip/container và dùng `psql -v ON_ERROR_STOP=1`; bản CLI
+  yêu cầu xác nhận `(y/n)`, còn bản admin đã xác nhận ở UI nên chạy không tương tác.
 
 **Tiêu chí hoàn thành:** Restore được database từ backup đã tạo.
 
 ## Luồng chương trình
 
 ```
-M24 Analytics (AnalyticsService — JdbcTemplate, /api/admin/analytics/*):
+M24 Analytics (controller → service → AnalyticsQueryRepository/JDBC):
    GET /intents      ← audit_logs (operation='chat', question_intent/intent) → top intent/ngày
    GET /errors       ← alerts (source, alert_type)                           → top lỗi/ngày
    GET /performance  ← usage_logs (latency_ms, status='success')             → AVG/P95/P99 theo model
    GET /requests     ← usage_logs (operation='chat', request_count)          → tổng request
-        normalizeRange: mặc định 7 ngày, tối đa 90; limit ≤ 20
-        → chart/KPI trên Admin Dashboard (M13)
+        normalizeRange: mặc định 7 ngày, tối đa 90; limit danh sách ≤ 20
+        → KPI trên Admin Dashboard + biểu đồ trên AdminAnalyticsPage (M13)
 
 M26 Backup:
-   cron → backup.sh
+   BackupService @Scheduled / Admin API → BackupJobRunner → backup.sh
       đọc credential từ backend/.env
       perform_backup "app"  → pg_dump medical_chatbot_app | gzip → logs/backups/app_db_*.sql.gz
       perform_backup "hapi" → pg_dump hapi               | gzip → logs/backups/hapi_db_*.sql.gz
@@ -106,29 +117,37 @@ M26 Backup:
       xóa backup > 7 ngày
 
 M26 Restore:
-   restore.sh <file.sql.gz> <app|hapi>
-      gzip -t (toàn vẹn) → kiểm tra container → xác nhận (y/n)
-      gunzip -c | psql -v ON_ERROR_STOP=1   → ghi đè DB
+   Admin API → BackupService → BackupJobRunner → restore-auto.sh appFile hapiFile
+      tải file từ Drive nếu cần → stop/start HAPI → restore không tương tác
+   CLI thủ công → restore.sh <file.sql.gz> <app|hapi> → có xác nhận y/n
 ```
 
 ## Luồng trong code / script
 
-- **Backup:** [infra/scripts/backup.sh](infra/scripts/backup.sh) — `perform_backup()` ([L25-51](infra/scripts/backup.sh#L25-L51)), retention ([L56-57](infra/scripts/backup.sh#L56-L57)).
-- **Restore:** [infra/scripts/restore.sh](infra/scripts/restore.sh) — kiểm tra + xác nhận ([L32-50](infra/scripts/restore.sh#L32-L50)), phục hồi ([L55](infra/scripts/restore.sh#L55)).
-- **Analytics service:** `AnalyticsService` — intent ([AnalyticsService.java:29-66](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L29-L66)), error ([L68-104](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L68-L104)), performance ([L106-130](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L106-L130)), request summary ([L132-148](backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java#L132-L148)).
-- **Analytics API:** [AdminAnalyticsController.java](backend/src/main/java/com/medicalchatbot/backend/controller/AdminAnalyticsController.java) (`/api/admin/analytics/*`).
-- **Ghi `question_intent`:** [ChatApplicationService.java:294-307](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L294-L307).
+- **Backup:** [backup.sh](../infra/scripts/backup.sh); `BackupService` tạo job,
+  `integration/backup/BackupJobRunner` chạy process và persist kết quả.
+- **Restore UI/backend:** [restore-auto.sh](../infra/scripts/restore-auto.sh);
+  **restore CLI:** [restore.sh](../infra/scripts/restore.sh).
+- **Analytics service:**
+  [AnalyticsService.java](../backend/src/main/java/com/medicalchatbot/backend/service/AnalyticsService.java).
+- **SQL repository:**
+  [JdbcAnalyticsQueryRepository.java](../backend/src/main/java/com/medicalchatbot/backend/repository/jdbc/JdbcAnalyticsQueryRepository.java)
+  implements `AnalyticsQueryRepository`.
+- **Analytics API:** [AdminAnalyticsController.java](../backend/src/main/java/com/medicalchatbot/backend/controller/AdminAnalyticsController.java).
+- **Ghi `question_intent`:** `ChatbotResponseMapper.audit()` →
+  `ChatInteractionRecorder` → `AuditLogRepository`.
 
 ## Thành phần liên quan trong mã nguồn
 
 | Vai trò | File |
 |---|---|
 | Analytics service | `backend/.../service/AnalyticsService.java` |
+| Analytics query/SQL | `backend/.../repository/AnalyticsQueryRepository.java`, `.../repository/jdbc/JdbcAnalyticsQueryRepository.java` |
 | Analytics API | `backend/.../controller/AdminAnalyticsController.java` |
 | Analytics DTO | `backend/.../dto/response/{Intent,Error,Performance}AnalyticsResponse.java`, `RequestAnalyticsSummaryResponse.java` |
-| Dashboard UI | `frontend/src/routes/AdminDashboardPage.tsx` |
-| Backup script | `infra/scripts/backup.sh` |
-| Restore script | `infra/scripts/restore.sh` |
-| Latency/usage nguồn | `backend/.../service/ChatApplicationService.java`, `.../repository/UsageLogRepository.java` |
+| Dashboard UI | `frontend/src/pages/AdminDashboardPage.tsx` |
+| Backup orchestration | `backend/.../service/BackupService.java`, `.../integration/backup/BackupJobRunner.java` |
+| Backup/restore scripts | `infra/scripts/backup.sh`, `restore-auto.sh`, `restore.sh` |
+| Latency/usage nguồn | `backend/.../service/ChatApplicationService.java`, `.../service/ChatInteractionRecorder.java`, `.../repository/UsageLogRepository.java` |
 | Error nguồn (alerts) | `backend/.../service/AlertService.java` |
-| Dashboard analytics | `frontend/src/routes/{AdminDashboardPage,UsagePage}.tsx` |
+| Dashboard analytics | `frontend/src/pages/{AdminDashboardPage,AdminAnalyticsPage}.tsx` |

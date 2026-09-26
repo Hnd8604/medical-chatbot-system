@@ -89,11 +89,17 @@ Ghi (trong mỗi lượt /api/chat — ChatApplicationService.chat, @Transaction
 
 ## Luồng trong code
 
-- **Ghi message:** `ChatApplicationService.chat()` → `chatMessageRepository.save(... USER ...)` ([ChatApplicationService.java:84-87](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L84-L87)) rồi `saveAndReturn(... ASSISTANT ...)` ([L103-108](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L103-L108)). Cả hai gọi `session.touch()` để cập nhật `updated_at`.
-- **Metadata builders:** `userMessageMetadata()` / `assistantMessageMetadata()` / `evidenceRefs()` ([ChatApplicationService.java:337-375](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L337-L375)) — `evidenceRefs()` rút gọn `evidence` thành `{resource_type, resource_id, summary}` thay vì lưu cả bundle.
-- **Entity & repository:** `ChatMessage` ([ChatMessage.java](backend/src/main/java/com/medicalchatbot/backend/entity/ChatMessage.java)), `ChatMessageRepository` ([ChatMessageRepository.java](backend/src/main/java/com/medicalchatbot/backend/repository/ChatMessageRepository.java)).
-- **Query đọc theo thứ tự + quyền:** `findMessageItemViewsForSession()` ([ChatSessionRepository.java:227-256](backend/src/main/java/com/medicalchatbot/backend/repository/ChatSessionRepository.java#L227-L256)).
-- **Frontend render:** `mapHistoryMessage()` và `selectSession()` ([ChatPage.tsx:50-58](frontend/src/routes/ChatPage.tsx#L50-L58), [L234-246](frontend/src/routes/ChatPage.tsx#L234-L246)).
+- **Ghi message:** `ChatApplicationService.chat()` gọi `ChatMessageRepository.save`
+  cho USER rồi `saveAndReturn` cho ASSISTANT. Hai helper đều gọi `session.touch()`.
+- **Metadata builders:** `ChatbotResponseMapper.userMessageMetadata()`,
+  `assistantMessageMetadata()` và `evidenceRefs()` rút gọn evidence thành
+  `{resource_type, resource_id, summary}` thay vì lưu raw FHIR bundle.
+- **Entity & repository:** [ChatMessage.java](../backend/src/main/java/com/medicalchatbot/backend/entity/ChatMessage.java),
+  [ChatMessageRepository.java](../backend/src/main/java/com/medicalchatbot/backend/repository/ChatMessageRepository.java).
+- **Query đọc:** `ChatSessionRepository.findMessageItemViewsForSession()` trả
+  `ChatMessageProjection`; `ChatMapper.toMessageItems()` chuyển projection thành API DTO.
+- **Frontend render:** `mapHistoryMessage()` và `selectSession()` trong
+  [ChatPage.tsx](../frontend/src/pages/ChatPage.tsx).
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -103,5 +109,7 @@ Ghi (trong mỗi lượt /api/chat — ChatApplicationService.chat, @Transaction
 | Enum role (user/assistant/system) | `backend/.../enums/ChatMessageRole.java` |
 | Repository message | `backend/.../repository/ChatMessageRepository.java` |
 | Query đọc + sắp xếp | `backend/.../repository/ChatSessionRepository.java` |
+| Projection + mapper | `backend/.../repository/projection/ChatMessageProjection.java`, `.../mapper/ChatMapper.java` |
 | Ghi message trong luồng chat | `backend/.../service/ChatApplicationService.java` |
-| Frontend render lịch sử | `frontend/src/routes/ChatPage.tsx` |
+| Metadata message | `backend/.../mapper/ChatbotResponseMapper.java` |
+| Frontend render lịch sử | `frontend/src/pages/ChatPage.tsx` |

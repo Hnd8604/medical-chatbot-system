@@ -1,13 +1,17 @@
 # M12 — Database Design / ERD
 
-Tài liệu này mô tả sơ đồ quan hệ thực thể (ERD) của database ứng dụng (PostgreSQL),
-được reverse từ 2 file Flyway migration trong
+Tài liệu này mô tả sơ đồ quan hệ thực thể (ERD) của database ứng dụng
+(PostgreSQL), được đối chiếu với Flyway migration V1→V9 trong
 [`src/main/resources/db/migration/`](../src/main/resources/db/migration/):
 
-- `V1__baseline_schema_and_seed.sql` — baseline gộp (squash) từ 17 migration cũ
-  (V1→V17): 12 bảng + index + seed data (quota policy, demo user, model pricing,
-  liên kết user ↔ FHIR Patient).
-- `V2__llm_virtual_keys.sql` — bảng `llm_virtual_keys` cho AI Gateway (LiteLLM).
+- `V1` là baseline gộp từ 17 migration cũ; `V2` thêm virtual key LiteLLM.
+- `V3`→`V4` cập nhật quota policy và dữ liệu hiển thị của user demo.
+- `V5` xóa bảng `cache_entries`; semantic cache thực tế nằm trong Qdrant.
+- `V6`→`V7` thêm lịch sử backup/restore; `V8` siết unique feedback; `V9`
+  vô hiệu hóa credential demo trong production.
+
+Schema cuối có 14 bảng. Profile `dev` nạp thêm
+`db/devmigration/R__enable_demo_accounts.sql` để bật lại ba tài khoản demo.
 
 > **Phạm vi**: Đây là DB *ứng dụng*. Dữ liệu lâm sàng của bệnh nhân (Patient,
 > Observation, Condition...) **không** lưu ở đây mà nằm trên **HAPI FHIR server**
@@ -32,6 +36,7 @@ erDiagram
     app_users        ||--o{ message_feedback        : "gửi"
     app_users        ||--o{ app_user_patient_links  : "liên kết FHIR"
     app_users        ||--o| llm_virtual_keys        : "có virtual key"
+    backup_history   o|--o{ restore_history         : "nguồn khôi phục"
 
     quota_policies {
         uuid        id PK
@@ -162,15 +167,6 @@ erDiagram
         timestamptz updated_at
     }
 
-    cache_entries {
-        uuid        id PK
-        varchar     cache_key UK
-        jsonb       value_json
-        timestamptz expires_at
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
     alerts {
         uuid        id PK
         varchar     source
@@ -183,10 +179,36 @@ erDiagram
         timestamptz resolved_at
         varchar     resolved_by
     }
+
+    backup_history {
+        uuid        id PK
+        varchar     trigger_type
+        varchar     status
+        varchar     triggered_by
+        timestamptz started_at
+        timestamptz finished_at
+        bigint      total_size_bytes
+        varchar     upload_target
+        jsonb       items_json
+        text        error_message
+        timestamptz created_at
+    }
+
+    restore_history {
+        uuid        id PK
+        uuid        backup_id FK
+        varchar     status
+        varchar     triggered_by
+        timestamptz started_at
+        timestamptz finished_at
+        jsonb       items_json
+        text        error_message
+        timestamptz created_at
+    }
 ```
 
-> `model_pricing`, `cache_entries`, `alerts` là 3 bảng **độc lập** (không có khóa
-> ngoại) nên không nối cạnh trong sơ đồ — chúng tham chiếu logic qua giá trị
+> `model_pricing` và `alerts` là các bảng **độc lập** (không có khóa ngoại) nên
+> không nối cạnh trong sơ đồ — chúng tham chiếu logic qua giá trị
 > (vd `usage_logs.llm_provider/llm_model` ↔ `model_pricing.provider/model`).
 
 ---
@@ -356,18 +378,6 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     }
   }
 
-  Table cache_entries {
-    id         uuid        [pk, default: `gen_random_uuid()`]
-    cache_key  varchar     [not null, unique]
-    value_json jsonb       [not null]
-    expires_at timestamptz
-    created_at timestamptz [not null, default: `now()`]
-    updated_at timestamptz [not null, default: `now()`]
-    Indexes {
-      expires_at
-    }
-  }
-
   Table alerts {
     id            uuid        [pk, default: `gen_random_uuid()`]
     source        varchar     [not null]
@@ -396,6 +406,38 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     updated_at      timestamptz [not null, default: `now()`]
     Note: "V2 — AI Gateway (LiteLLM) DB-backed: ánh xạ app_user → virtual key; gateway là nguồn chặn budget token/cost, bảng này chỉ lưu mapping + budget"
   }
+
+  Table backup_history {
+    id               uuid        [pk, default: `gen_random_uuid()`]
+    trigger_type     varchar     [not null, note: "AUTO | MANUAL"]
+    status           varchar     [not null, default: 'RUNNING']
+    triggered_by     varchar
+    started_at       timestamptz [not null, default: `now()`]
+    finished_at      timestamptz
+    total_size_bytes bigint
+    upload_target    varchar
+    items_json       jsonb       [not null, default: '[]']
+    error_message    text
+    created_at       timestamptz [not null, default: `now()`]
+    Indexes {
+      created_at [name: "idx_backup_history_created_at"]
+    }
+  }
+
+  Table restore_history {
+    id            uuid        [pk, default: `gen_random_uuid()`]
+    backup_id     uuid        [ref: > backup_history.id, note: "ON DELETE SET NULL"]
+    status        varchar     [not null, default: 'RUNNING']
+    triggered_by  varchar
+    started_at    timestamptz [not null, default: `now()`]
+    finished_at   timestamptz
+    items_json    jsonb       [not null, default: '[]']
+    error_message text
+    created_at    timestamptz [not null, default: `now()`]
+    Indexes {
+      created_at [name: "idx_restore_history_created_at"]
+    }
+  }
 ```
 
 ---
@@ -414,9 +456,10 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
 | 8 | `message_feedback` | M22 Feedback | Đánh giá 1–5 sao + bình luận cho 1 tin nhắn |
 | 9 | `app_user_patient_links` | M4, M5 FHIR | Nối user ↔ Patient ID trên HAPI FHIR |
 | 10 | `model_pricing` | M8 Cost, M16 Routing | Bảng giá token theo provider/model |
-| 11 | `cache_entries` | M14 Cache | Cache key–value (JSONB) + TTL |
-| 12 | `alerts` | M19 Alert | Cảnh báo sự cố hệ thống + trạng thái xử lý |
-| 13 | `llm_virtual_keys` | AI Gateway (LiteLLM) | Ánh xạ user ↔ virtual key + budget trên gateway |
+| 11 | `alerts` | M19 Alert | Cảnh báo sự cố hệ thống + trạng thái xử lý |
+| 12 | `llm_virtual_keys` | AI Gateway (LiteLLM) | Ánh xạ user ↔ virtual key + budget trên gateway |
+| 13 | `backup_history` | M26 Backup | Trạng thái và kết quả từng lần sao lưu |
+| 14 | `restore_history` | M26 Restore | Lịch sử khôi phục, có thể tham chiếu bản backup nguồn |
 
 ---
 

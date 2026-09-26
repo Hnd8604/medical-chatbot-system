@@ -20,10 +20,10 @@ Trước thay đổi này:
 
 ```text
 Spring (ChatApplicationService)
-  ├─ ConversationContext: memory_summary, recent_messages (6), total_message_count
+  ├─ ConversationContext: memory_summary, recent_messages (8), total_message_count
   ▼
 chatbot-service POST /chat
-  ├─ compact_conversation_for_llm() — nén context 1 lần cho mọi call site
+  ├─ compact_conversation_for_llm() — giữ tối đa 6 message × 400 ký tự
   ├─ summary_task = asyncio.create_task(SummaryGenerator.summarize(...))   ◄ SONG SONG
   ├─ intent extractor (LLM): prompt có conversation → tự resolve follow-up
   ├─ FHIR retrieval → answer generator (LLM): prompt có conversation
@@ -61,9 +61,12 @@ summarize(context, question, patient_id, total_message_count)
 - Spring gửi `total_message_count` = số message của session **trước khi** lưu
   message hiện tại (đếm cùng thời điểm với `findRecentMessagesForContext`).
 - Chỉ gọi LLM khi `total_message_count >= SUMMARY_TRIGGER_MESSAGE_COUNT` (mặc
-  định 8 = `RECENT_CONTEXT_MESSAGE_LIMIT`). So sánh `>=` (không phải `>`): tại
-  count=8 cửa sổ recent phủ toàn bộ history nên summary đầu tiên không bỏ sót;
-  nếu `>` thì message 1–2 vĩnh viễn không được tóm tắt.
+  định 8 = `RECENT_CONTEXT_MESSAGE_LIMIT` phía Spring).
+- Lưu ý hiện trạng: Spring đọc 8 message nhưng
+  `compact_conversation_for_llm()` chỉ giữ 6 message cuối. Vì vậy ở lần summary
+  đầu tiên, nếu chưa có `previous_summary`, hai message cũ nhất trong nhóm 8
+  không đi vào prompt. Muốn bảo đảm không có khoảng trống phải đồng bộ hai hằng
+  số này trong code.
 - Dưới ngưỡng: `recent_messages` đã đủ ngữ cảnh, summary rỗng, **0 token**.
 
 ## Quyết định thiết kế
@@ -84,7 +87,7 @@ summarize(context, question, patient_id, total_message_count)
   hint `active_patient_id`. Demo không LLM vẫn chạy nhưng không hiểu tham chiếu.
 - **Token mỗi lượt tăng so với hiện trạng cũ** (trước đây không gửi ngữ cảnh nào
   vào prompt). Phép đo đúng của context compression là so **"gửi nguyên văn toàn bộ
-  lịch sử" vs "summary + cửa sổ 6 tin nhắn"** — ở hội thoại dài, rolling summary
+  lịch sử" vs "summary + cửa sổ prompt 6 tin nhắn"** — ở hội thoại dài, rolling summary
   giữ input token gần như hằng số thay vì tăng tuyến tính.
 
 ## Cấu hình
@@ -113,5 +116,7 @@ SUMMARY_TRIGGER_MESSAGE_COUNT=8
 - `chatbot-service/chat/response_builder.py` — await summary task, `summary_usage`, `memory_update.summary`.
 - `chatbot-service/api/chat_routes.py` — tạo summary task song song, inject context vào intent extractor.
 - `chatbot-service/agents/intent/llm_extractor.py`, `agents/answer_generator.py` — prompt nhận `conversation`.
-- `backend/.../ChatApplicationService.java` — gửi `total_message_count`, log `summary_usage`.
+- `backend/.../service/ChatApplicationService.java` — gửi `total_message_count`.
+- `backend/.../mapper/ChatbotResponseMapper.java` và
+  `service/ChatInteractionRecorder.java` — parse/log `summary_usage`, map và persist memory.
 - Tests: `tests/test_summary_generator.py`, `tests/test_chat_routes.py`, `ChatApplicationServiceTest.java`.

@@ -98,7 +98,7 @@ HbA1c của bệnh nhân 12 là bao nhiêu?
 
 ## Backend Connection
 
-When the future backend runs on the host machine:
+When the Spring Boot backend runs on the host machine:
 
 ```env
 FHIR_BASE_URL=http://localhost:8080/fhir

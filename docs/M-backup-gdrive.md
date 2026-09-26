@@ -23,10 +23,10 @@ Hai đường kích hoạt:
 | `infra/scripts/restore.sh` | Khôi phục TƯƠNG TÁC (có xác nhận) — dùng chạy tay 1 DB theo đường dẫn file |
 | `infra/scripts/restore-auto.sh` | Khôi phục KHÔNG tương tác app+hapi (tải từ Drive nếu thiếu, stop/start HAPI) — backend gọi khi bấm nút Khôi phục |
 | `backup_history` (Flyway V6) / `restore_history` (Flyway V7) | Bảng log mỗi lần backup / khôi phục |
-| `SpringBackendApplication` (`@EnableScheduling`) + `BackupService.scheduledBackup()` | Lịch tự động 02:00 do backend xử lý |
+| `SpringBackendApplication` (`@EnableScheduling`) + `BackupService.scheduledBackup()` | Lịch tự động 02:00; validate yêu cầu và tạo bản ghi job |
+| `integration/backup/BackupJobRunner` | Chạy `backup.sh`/`restore-auto.sh`, parse result và cập nhật history |
 | `AdminBackupController` / `BackupService` | `POST /api/admin/backup`, `GET /api/admin/backup/history`, `POST /api/admin/backup/{id}/restore`, `GET /api/admin/backup/restore-history` (chỉ ADMIN) |
-| `AdminBackupPage.tsx` | Nút Backup + nút Khôi phục (modal xác nhận) + lịch sử backup/restore |
-| `AdminBackupPage.tsx` | Trang Admin: nút backup + bảng lịch sử (poll khi đang chạy) |
+| `AdminBackupPage.tsx` | Nút Backup/Khôi phục, modal xác nhận và lịch sử có polling |
 
 ## 1. Cài & cấu hình rclone (một lần)
 
@@ -66,6 +66,7 @@ Phía Spring (nút Admin UI), cấu hình trong `application.yml` (đều có m�
 backup:
   enabled: true
   script-path: ../infra/scripts/backup.sh   # tương đối theo thư mục chạy Spring (backend/)
+  restore-script-path: ../infra/scripts/restore-auto.sh
   bash-path: bash                            # cần Git Bash trong PATH; hoặc trỏ tuyệt đối
   timeout-minutes: 10
 ```
@@ -135,5 +136,6 @@ gunzip -c logs/backups/hapi_db_backup_...sql.gz | docker exec -i medical-chatbot
 
 - Bản sao chứa **dữ liệu bệnh nhân** — Google Drive dùng để lưu phải thuộc tổ chức, hạn chế chia sẻ,
   ưu tiên scope `drive.file`. Cân nhắc mã hóa (`rclone crypt`) nếu cần.
-- Khi backup lỗi, `backup.sh` gửi cảnh báo Telegram (nếu cấu hình `TELEGRAM_BOT_TOKEN`/`CHAT_ID`),
+- Khi backup lỗi, `backup.sh` gửi cảnh báo Telegram (nếu cấu hình
+  `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`),
   giống cơ chế alert hiện có.

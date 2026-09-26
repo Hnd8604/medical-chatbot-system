@@ -1,7 +1,7 @@
 # Product Spec — Medical Chatbot
 
-> Đây là spec sản phẩm đầy đủ + quy tắc FHIR/usage/cache. `CLAUDE.md` gốc import file này.
-> (Trước đây là `AGENTS.md` gốc — đổi tên theo chuẩn Claude Code.)
+> Đặc tả sản phẩm và các quy tắc FHIR/usage/cache chính; `CLAUDE.md` ở root
+> tham chiếu tài liệu này khi cần ngữ cảnh chi tiết.
 
 ## 1. Tổng quan dự án
 
@@ -216,7 +216,7 @@ Trách nhiệm:
 
 Không sửa thủ công các bảng nội bộ của HAPI trừ khi có lý do bảo trì rõ ràng.
 
-Nếu dự án cần bảng ứng dụng, hãy dùng các bảng/schema tách biệt như:
+Ứng dụng hiện dùng app PostgreSQL riêng với các bảng:
 
 ```text
 app_users
@@ -224,10 +224,20 @@ chat_sessions
 chat_messages
 usage_logs
 quota_policies
-cache_entries
+audit_logs
+model_pricing
+alerts
+message_feedback
+notifications
+app_user_patient_links
+llm_virtual_keys
+backup_history
+restore_history
 ```
 
-Không trộn logic ứng dụng với các bảng nội bộ của HAPI.
+Semantic response cache nằm trong Qdrant; refresh token, reset-password state và
+rate-limit counter nằm trong Redis. Không trộn logic ứng dụng với các bảng nội bộ
+của HAPI.
 
 ---
 

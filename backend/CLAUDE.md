@@ -1,93 +1,79 @@
 # Spring Backend Notes
 
-This folder contains the main Spring Boot backend for the web application.
-Claude tự động nạp file này khi làm việc trong `backend/`.
+Backend Spring Boot chính của Medical Chatbot. Frontend chỉ gọi backend này;
+backend chịu trách nhiệm auth, phân quyền, quota/rate limit, lịch sử hội thoại,
+usage/cost, audit/alert/notification và gọi các hệ thống ngoài qua adapter trong
+`integration/`.
 
-Implemented:
+## Runtime và lệnh chính
 
-- Java 21 Spring Boot project generated with Maven Wrapper.
-- Spring Boot runs on port `8081`.
-- `ChatbotServiceClient` calls the FastAPI chatbot service at `http://localhost:8000`.
-- Frontend-facing REST endpoints under `/api`.
-- Patient search proxy endpoint for chatbot-service FHIR search.
-- Chat response passthrough for ambiguous patient selection fields.
-- `POST /api/chat` creates or reuses an app chat session, stores user/assistant messages, calls `chatbot-service`, stores an enhanced usage log, and writes an audit log.
-- Chat history read APIs for the demo user:
-  - `GET /api/chat/sessions?limit=20`
-  - `GET /api/chat/sessions/{sessionId}/messages`
-- Basic exception handling for chatbot-service errors.
-- App PostgreSQL datasource configuration.
-- Package layout now follows `config`, `controller`, `dto`, `entity`, `enums`, `exception`, `mapper`, `repository`, `service`.
-- JDBC SQL access is isolated in repository classes instead of `ChatApplicationService`.
-- Flyway migrations for minimum app tables, demo user/quota seed data, enhanced usage logging, and audit logs.
-- Controller tests for health, patient proxy, validation, and chat response mapping.
-- Controller/service tests for chat session history and session ownership checks.
+- Java 21, Spring Boot 3.5.x, port mặc định `8081`.
+- App PostgreSQL `5433`, Redis `6379`, chatbot-service `8000`, LiteLLM `4000`.
+- Flyway sở hữu schema; Hibernate chạy `ddl-auto: validate`.
 
-Not implemented yet:
+Chạy từ thư mục `backend`:
 
-- Authentication and authorization.
-- Frontend integration.
-- Real LLM orchestration; current chatbot-service response is rule-based demo logic.
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+.\mvnw.cmd spring-boot:run
+.\mvnw.cmd test
+```
 
-## Main Rule
-
-The Spring Boot backend should not query HAPI PostgreSQL internal tables. It should call the chatbot service or HAPI FHIR REST APIs through controlled service layers.
-
-## Package Layout
+## Kiến trúc package
 
 ```text
 src/main/java/com/medicalchatbot/backend/
-  config/
-  controller/
-  dto/
-  entity/
-  enums/
-  exception/
-  mapper/
-  repository/
-  service/
+  config/       security, HTTP client configuration, OpenAPI, response advice
+  controller/   ánh xạ HTTP và validation; không gọi adapter trực tiếp
+  dto/          contract request/response của REST API
+  domain/       value object nghiệp vụ độc lập với REST API
+  entity/       JPA entity khớp schema Flyway
+  enums/        enum nghiệp vụ
+  exception/    AppException, ErrorCode và global exception handler
+  integration/  outbound adapter: chatbot/LiteLLM, backup script, Telegram
+  mapper/       chuyển domain/entity/projection sang API DTO
+  repository/   Spring Data và query contract
+    projection/ read model tối giản cho kết quả query
+    jdbc/       implementation custom SQL/JdbcTemplate
+  service/      orchestration use case và nghiệp vụ ứng dụng
+  utils/        tiện ích dùng chung
 ```
 
-## Local Run
-
-```powershell
-cd backend
-.\mvnw.cmd spring-boot:run
-```
-
-> **JAVA_HOME bắt buộc** cho mọi lệnh `mvnw.cmd`: `C:\Program Files\Java\jdk-21.0.10` (Java 21).
-
-## Verified Endpoints
-
-Last checked on 2026-05-31:
+Luồng phụ thuộc chính:
 
 ```text
-GET http://localhost:8081/api/health
-GET http://localhost:8081/api/chatbot/status
-GET http://localhost:8081/api/patients?name=Nguyen&limit=5
-GET http://localhost:8081/api/patients/BN2026-00001
-GET http://localhost:8081/api/patients/BN2026-00001/observations?limit=5
-GET http://localhost:8081/api/patients/BN2026-00001/conditions
-GET http://localhost:8081/api/patients/BN2026-00001/medications
-GET http://localhost:8081/api/chat/sessions?limit=3
-GET http://localhost:8081/api/chat/sessions/{sessionId}/messages
-POST http://localhost:8081/api/chat
+controller → service → repository / integration
+                         ↓
+                  projection / entity
 ```
 
-## Verification Result
+Các rule được khóa bằng `LayerDependencyTest`:
 
-```text
-.\mvnw.cmd test: passed
-Java 21 runtime check: passed with C:\Program Files\Java\jdk-21.0.11
-Spring package refactor: passed
-Spring Boot app start: passed
-Spring Boot dev server: http://localhost:8081
-Spring -> chatbot-service -> HAPI FHIR integration: passed
-Patient search proxy endpoint: passed
-Ambiguous patient selection fields passthrough: passed
-Chat history session/message APIs: passed
-App PostgreSQL migration V1..V5: passed
-Created app tables: app_users, quota_policies, chat_sessions, chat_messages, usage_logs, audit_logs
-(cache_entries đã bị drop ở V5 — không dùng; caching qua Redis/semantic cache)
-POST /api/chat persisted 1 chat session, 1 user message, 1 assistant message, 1 enhanced usage log, and 1 audit log
-```
+1. Entity/repository không phụ thuộc REST DTO.
+2. Controller không gọi `integration` trực tiếp.
+3. Service không chứa `JdbcTemplate` hoặc SQL implementation.
+4. Service dùng `AppException` + `ErrorCode`, không dùng exception HTTP làm lỗi nghiệp vụ.
+5. Outbound adapter không phụ thuộc ngược vào service.
+
+## Quy tắc quan trọng
+
+- Không query trực tiếp database hoặc bảng nội bộ HAPI (`hfj_*`). Dữ liệu y tế
+  phải đi qua chatbot-service → FHIR REST API.
+- Không sửa migration Flyway đã tồn tại; thay đổi schema phải thêm migration mới.
+- Provider key LLM chỉ nằm trong LiteLLM Gateway. Backend chỉ quản lý virtual key.
+- Không log token, secret, raw FHIR Bundle hoặc response body upstream chứa PHI.
+- Sau khi đổi code, chạy `.\mvnw.cmd test`; test PostgreSQL thật cần `TEST_DB_URL`.
+
+## API chính
+
+- `/api/auth/**`: login, register, refresh rotation, profile, liên kết patient,
+  đổi/quên mật khẩu và logout.
+- `/api/chat`, `/api/chat/sessions/**`: chat, history, rename/delete, export, feedback.
+- `/api/patients/**`: proxy dữ liệu bệnh nhân qua chatbot-service.
+- `/api/quota/status`, `/api/usage/cost-summary`, `/api/model-pricing`.
+- `/api/notifications/**`, `/api/metrics/cache`, `/api/audit-logs`.
+- `/api/admin/**`: users, quota, pricing, costs, analytics, alerts, backup/restore.
+
+Chi tiết runtime, cấu hình và endpoint nằm trong `README.md`; tài liệu luồng nghiệp
+vụ nằm trong `../docs/`.

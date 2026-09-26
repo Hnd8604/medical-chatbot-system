@@ -16,7 +16,8 @@ quota, cache và model routing** — xem `docs/optimization-direction.md`.
   `DOCTOR` / `ADMIN`, liên kết tài khoản ↔ FHIR Patient, quên/đổi mật khẩu (OTP email).
 - Lịch sử hội thoại, session memory + **rolling summary** (LLM) để nén ngữ cảnh.
 - **Quota** theo ngày (request / token / cost) + rate limit theo phút; chặn và audit khi vượt.
-- **Semantic cache** (Qdrant + embedding đa ngôn ngữ) và exact cache cho câu trả lời.
+- **Semantic cache** cho câu trả lời bằng Qdrant + embedding đa ngôn ngữ, có TTL
+  và được scope theo user/bệnh nhân.
 - **Model routing** (M16): câu đơn giản → model rẻ, phức tạp → model mạnh;
   keyword classifier + LLM Router tùy chọn. **Retry / fallback** khi LLM lỗi (M17).
 - **AI Gateway (LiteLLM)**: provider key chỉ nằm ở gateway; Spring cấp virtual key theo user.
@@ -78,7 +79,7 @@ sequenceDiagram
     FE->>Spring: POST /api/chat (JWT)
     Spring->>Spring: Check quota + rate limit, lưu user message
     Spring->>Bot: POST /chat + conversation_context + virtual key
-    Bot->>Bot: Check semantic/exact cache
+    Bot->>Bot: Check semantic cache
     alt Cache miss
         Bot->>GW: Extract intent + route model
         Bot->>HAPI: FHIR REST request
@@ -131,7 +132,7 @@ Sau khi chạy thành công:
 
 ```text
 Frontend:        http://localhost:5174
-Spring backend:  http://localhost:8081  (Swagger: /swagger-ui/index.html)
+Spring backend:  http://localhost:8081  (Swagger: /swagger-ui.html)
 chatbot-service: http://localhost:8000  (OpenAPI: /docs)
 HAPI FHIR:       http://localhost:8080/fhir
 LiteLLM:         http://localhost:4000
@@ -239,11 +240,14 @@ Chi tiết đầy đủ xem Swagger của từng service. Tóm tắt:
 
 - **Spring** (`:8081`, prefix `/api`) — `auth/*` (login/register/refresh/OTP),
   `chat` + `chat/sessions/*` (kể cả export, feedback), `patients/*` (proxy FHIR),
-  `quota/status`, `usage/cost-summary`, `notifications/*` (SSE),
-  `admin/*` (users, quota-policies, model-pricing, costs, analytics, alerts),
+  `auth/me` (xem/cập nhật profile), `me/patient/profile`, `quota/status`,
+  `usage/cost-summary`, `notifications/*` (SSE),
+  `admin/*` (users, quota-policies, model-pricing, costs, analytics, alerts,
+  backup/restore),
   `audit-logs`, `metrics/cache`, `health`.
-- **chatbot-service** (`:8000`) — `POST /chat`, `GET /patients*`, `GET /health`,
-  `GET /fhir/status`.
+- **chatbot-service** (`:8000`) — `POST /chat`, tùy chọn `POST /chat/langgraph`,
+  `GET /patients*`, `GET /health`, `GET /fhir/status`; endpoint nội bộ
+  `POST /cache/invalidate/{patient_id}` dùng để xóa cache theo bệnh nhân.
 - **HAPI FHIR** (`:8080/fhir`) — FHIR REST chuẩn, ví dụ:
   `GET /fhir/Observation?patient=Patient/BN2026-00001&_sort=-date&_count=5`.
 
@@ -303,12 +307,13 @@ routing model rẻ…) xem `docs/optimization-direction.md`.
 - LLM chỉ trả lời từ evidence đã normalize; câu trả lời cuối là tiếng Việt.
 - Không commit `.env` / API key thật.
 - Chạy test của service liên quan sau mỗi thay đổi.
-- Hoàn thành milestone → cập nhật `MILESTONES.md`; đổi port/lệnh/kiến trúc → cập nhật README.
+- Hoàn thành module → cập nhật tài liệu tương ứng trong `docs/`; đổi
+  port/lệnh/kiến trúc → cập nhật README.
 
 ## Tài liệu
 
 - `docs/product-spec.md` — spec sản phẩm + quy tắc FHIR/usage/cache đầy đủ.
 - `docs/optimization-direction.md` — hướng tối ưu token/quota/cache/routing/gateway + chỉ số đánh giá.
 - `docs/M-*.md` — thiết kế từng milestone (LiteLLM gateway, model routing, rolling summary…).
-- `MILESTONES.md` — tiến độ chi tiết.
+- `docs/README.md` — mục lục tài liệu module và luồng nghiệp vụ.
 - README riêng của từng service: `backend/README.md`, …

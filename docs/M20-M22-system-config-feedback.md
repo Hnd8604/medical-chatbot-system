@@ -12,7 +12,9 @@
 **Mục tiêu:** Quản lý cấu hình LLM.
 
 **Hành vi:**
-- Cấu hình qua env trong `app/config.py`: `llm_provider`, `model_simple`, `model_complex`, `openai_api_key`, `openai_base_url`, `llm_request_timeout_seconds`, `enable_llm_answer`.
+- Cấu hình qua env trong `app/config.py`: `llm_provider`, `model_simple`,
+  `model_complex`, `litellm_master_key`, `litellm_base_url`,
+  `llm_request_timeout_seconds`, `enable_llm_answer`.
 - Đổi model/provider không cần sửa logic nghiệp vụ (router + generator đọc từ settings — [M16](M16-M17-model-routing-retry-fallback.md), [M6](M6-ai-integration.md)).
 
 **Tiêu chí hoàn thành:** Đổi model mà không sửa logic nghiệp vụ.
@@ -34,9 +36,11 @@
 **Hành vi:**
 - **Cache** (env, `app/config.py`): `cache_ttl_seconds` (300), `cache_similarity_threshold` (0.94), `qdrant_url`, `cache_embedding_model`, `cache_vector_size` ([M14](M14-cache-management.md)).
 - **Quota**: lưu trong DB `quota_policies` (gắn cho user); quản trị qua `QuotaPolicyAdminController` / `QuotaPolicyAdminService` ([M9](M9-quota-management.md)).
-- **Rate limit**: window 60s + limit theo policy/user (`V6`, [M10](M10-rate-limiting.md)).
+- **Rate limit**: window 60s + limit theo policy/user (schema baseline V1,
+  [M10](M10-rate-limiting.md)).
 - **Pricing**: DB `model_pricing` + admin API ([M8](M8-cost-management.md)).
-- Có admin config UI (commit `feat: add configuration system UI`) cho quota & pricing.
+- `frontend/src/pages/AdminConfigPage.tsx` cung cấp UI quản trị quota policy và
+  model pricing.
 
 **Tiêu chí hoàn thành:** Sai config được phát hiện sớm (pydantic `Settings` + Hibernate `validate` lúc startup — [M12](M12-database-design.md)).
 
@@ -49,9 +53,11 @@
 **Mục tiêu:** Cho người dùng đánh giá câu trả lời.
 
 **Hành vi:**
-- Nút feedback (useful/not useful + comment tùy chọn) trên mỗi assistant message.
-- API `POST /api/chat/messages/{messageId}/feedback` (body: `rating`, `comment?`).
-- Frontend `ChatPage.submitFeedback()` gọi API rồi cập nhật state message tại chỗ.
+- Bộ chọn 1–5 sao, comment tùy chọn và thao tác xóa trên mỗi assistant message.
+- API `POST` để tạo, `PUT` để sửa và `DELETE` để xóa tại
+  `/api/chat/messages/{messageId}/feedback`.
+- Frontend `ChatPage.submitFeedback()` chọn `POST` hay `PUT` theo state hiện tại;
+  `deleteFeedback()` xóa và cập nhật message tại chỗ.
 
 **Tiêu chí hoàn thành:** Feedback gắn đúng message.
 
@@ -60,11 +66,16 @@
 **Mục tiêu:** Lưu feedback để cải thiện hệ thống.
 
 **Hành vi:**
-- Bảng `message_feedback` (`V9`), entity `MessageFeedback`: message id, user id, rating, comment, created_at.
-- `FeedbackService.submitFeedback()`: nếu user đã feedback message đó → **update** (upsert theo `message_id + user_id`), ngược lại tạo mới.
-- Kiểm tra message tồn tại (404 nếu không) và gắn user hiện tại.
+- Bảng `message_feedback` (baseline V1), entity `MessageFeedback`: message id,
+  user id, rating, comment, created_at; V8 bổ sung unique index cho mỗi cặp
+  `(message_id, user_id)`.
+- `FeedbackService.createFeedback()` chỉ tạo mới; nếu cặp
+  `(message_id, user_id)` đã tồn tại thì trả `409 CONFLICT`.
+- `updateFeedback()` và `deleteFeedback()` chỉ thao tác feedback thuộc user hiện
+  tại; message phải là assistant message trong session của chính user.
 
-**Tiêu chí hoàn thành:** Admin xem được feedback (join vào message — đã hiển thị trong lịch sử qua `findMessagesForSession`, [M3](M3-message-history.md)).
+**Tiêu chí hoàn thành:** Feedback được trả lại cùng lịch sử message qua
+`findMessagesForSession` ([M3](M3-message-history.md)).
 
 ## M22.3 - Feedback analytics
 
@@ -87,12 +98,14 @@ M20 config:
 
 M22 feedback:
    Assistant message (UI nút đánh giá)
-        │ POST /api/chat/messages/{messageId}/feedback { rating, comment? }
+        │ chưa có feedback: POST { rating, comment? }
+        │ đã có feedback:  PUT  { rating, comment? }
+        │ xóa feedback:    DELETE
         ▼
-   FeedbackService.submitFeedback()
-        findById(messageId)            → 404 nếu không có
-        requireCurrentUser()
-        findByMessage_IdAndUser_Id     → có: update() | không: save() (upsert)
+   FeedbackService
+        createFeedback() → xác minh assistant message thuộc user → insert
+        updateFeedback() → tìm feedback được phép sửa → update
+        deleteFeedback() → tìm feedback được phép xóa → delete
         ▼
    message_feedback (rating, comment, created_at)
         ▼
@@ -101,11 +114,13 @@ M22 feedback:
 
 ## Luồng trong code
 
-- **Config (Python):** [config.py](chatbot-service/app/config.py) — `Settings` + `get_settings()`.
+- **Config (Python):** [config.py](../chatbot-service/app/config.py) — `Settings` + `get_settings()`.
 - **Config admin (Spring):** `QuotaPolicyAdminService`, `ModelPricingAdminService`.
-- **Feedback API:** `ChatbotController.submitFeedback()` ([ChatbotController.java:136-142](backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java#L136-L142)).
-- **Feedback service (upsert):** [FeedbackService.java:26-46](backend/src/main/java/com/medicalchatbot/backend/service/FeedbackService.java#L26-L46).
-- **Feedback UI:** `ChatPage.submitFeedback()` ([ChatPage.tsx:342-353](frontend/src/routes/ChatPage.tsx#L342-L353)).
+- **Feedback API:** `ChatbotController.createFeedback()` / `updateFeedback()` /
+  `deleteFeedback()` ([ChatbotController.java](../backend/src/main/java/com/medicalchatbot/backend/controller/ChatbotController.java)).
+- **Feedback service:** [FeedbackService.java](../backend/src/main/java/com/medicalchatbot/backend/service/FeedbackService.java).
+- **Feedback UI:** `ChatPage.submitFeedback()` / `deleteFeedback()`
+  ([ChatPage.tsx](../frontend/src/pages/ChatPage.tsx)).
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -114,5 +129,5 @@ M22 feedback:
 | Config chatbot-service | `chatbot-service/app/config.py` |
 | Quota/pricing admin (Spring) | `backend/.../service/{QuotaPolicyAdminService,ModelPricingAdminService}.java` |
 | Feedback service | `backend/.../service/FeedbackService.java` |
-| Feedback entity/migration | `backend/.../entity/MessageFeedback.java`, `db/migration/V1__baseline_schema_and_seed.sql` (bảng `message_feedback`) |
-| Feedback UI | `frontend/src/routes/ChatPage.tsx` |
+| Feedback entity/migration | `backend/.../entity/MessageFeedback.java`, baseline V1 + unique constraint V8 |
+| Feedback UI | `frontend/src/pages/ChatPage.tsx` |

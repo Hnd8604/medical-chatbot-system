@@ -14,7 +14,8 @@ và cách nó được dùng để **kiểm soát quyền truy cập dữ liệu
 
 ## 1. Schema
 
-Định nghĩa tại [V12__create_user_patient_links.sql](../src/main/resources/db/migration/V12__create_user_patient_links.sql),
+Định nghĩa và seed tại
+[V1__baseline_schema_and_seed.sql](../src/main/resources/db/migration/V1__baseline_schema_and_seed.sql),
 entity JPA tại [UserPatientLink.java](../src/main/java/com/medicalchatbot/backend/entity/UserPatientLink.java).
 
 | Cột | Kiểu | Ý nghĩa |
@@ -31,8 +32,8 @@ entity JPA tại [UserPatientLink.java](../src/main/java/com/medicalchatbot/back
 - **`unique (user_id, fhir_patient_id)`** — một user không thể có 2 link trùng tới
   cùng một hồ sơ.
 - **`ux_app_user_patient_links_primary`** (partial unique index `where is_primary`)
-  — mỗi user chỉ được **đúng một** hồ sơ `is_primary = true`.
-- **`ux_app_user_patient_links_self_patient_lower`** (V14, partial unique
+  — mỗi user có **tối đa một** hồ sơ `is_primary = true`.
+- **`ux_app_user_patient_links_self_patient_lower`** (baseline V1, partial unique
   `where relationship = 'SELF'`) — một hồ sơ FHIR chỉ được **một** user nhận là
   `SELF`. Tức không thể có 2 tài khoản cùng khai "đây là hồ sơ của chính tôi".
 
@@ -65,28 +66,31 @@ role == USER ?
 
 > ⚠️ **Bảng này chỉ thực sự siết quyền với role `USER`.** Với DOCTOR/ADMIN, nhánh
 > đầu hàm `resolve()` trả về scope `"STAFF"` và không tra link
-> ([dòng 26-33](../src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java#L26-L33)).
+> ([UserPatientScopeService.resolve](../src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java)).
 > Do đó link `CAREGIVER` của bác sĩ mang tính **dữ liệu demo / hiển thị** (vd trang
 > admin cho biết bác sĩ phụ trách ai), **không** giới hạn họ.
 
 **`is_primary`** quyết định "hồ sơ mặc định": nếu USER hỏi chung chung mà không chỉ
 rõ bệnh nhân, hệ thống lấy hồ sơ primary (sắp xếp `primaryLink desc` trong
-[`findPatientIdsForUser`](../src/main/java/com/medicalchatbot/backend/repository/UserPatientLinkRepository.java#L13-L19)).
+[`findPatientIdsForUser`](../src/main/java/com/medicalchatbot/backend/repository/UserPatientLinkRepository.java)).
 
 ---
 
 ## 3. Link được tạo khi nào?
 
-1. **Lúc đăng ký / liên kết hồ sơ** — `AuthService.linkPatient(...)` tạo một link
-   `SELF`, `is_primary = true`, kèm kiểm tra hồ sơ chưa thuộc về user khác
-   ([AuthService.java:190-195](../src/main/java/com/medicalchatbot/backend/service/AuthService.java#L190-L195)).
-2. **Seed migration** — dữ liệu demo:
-   - [V12](../src/main/resources/db/migration/V12__create_user_patient_links.sql): `user_demo` ↔ `BN2026-00001` (SELF).
-   - [V17 mục 3](../src/main/resources/db/migration/V17__seed_additional_users_and_enterprise_tier.sql#L45-L62): 8 user thường ↔ `BN2026-00007..016` (SELF, primary).
-   - [V17 mục 4](../src/main/resources/db/migration/V17__seed_additional_users_and_enterprise_tier.sql#L64-L75): 2 bác sĩ `dr_ngo`/`dr_ly` "theo dõi" `BN2026-00013`/`014` (CAREGIVER, không primary).
+1. **Khi người dùng liên kết hồ sơ** — `AuthService.linkPatient(...)` ủy quyền cho
+   [`PatientLinkService.linkCurrentUser(...)`](../src/main/java/com/medicalchatbot/backend/service/PatientLinkService.java).
+   Service này xác minh dữ liệu FHIR, kiểm tra hồ sơ chưa thuộc user khác rồi tạo
+   link `SELF`, `is_primary = true`.
+2. **Seed baseline V1** —
+   [V1__baseline_schema_and_seed.sql](../src/main/resources/db/migration/V1__baseline_schema_and_seed.sql)
+   tạo `user_demo` ↔ `BN2026-00001`, tám user thường ↔ `BN2026-00007..00012`
+   và `BN2026-00015..00016` (`SELF`, primary), cùng hai bác sĩ
+   `dr_ngo`/`dr_ly` ↔ `BN2026-00013/00014`
+   (`CAREGIVER`, không primary).
 
-> **`on conflict ... do update`** trong seed chỉ để migration chạy lại không lỗi
-> (idempotent): link đã tồn tại thì cập nhật thay vì báo trùng khóa.
+> **`on conflict ... do update`** giúp câu lệnh seed an toàn khi dữ liệu đích đã
+> tồn tại: link được cập nhật thay vì báo trùng khóa.
 
 ---
 

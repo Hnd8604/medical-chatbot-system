@@ -195,7 +195,7 @@ Endpoint được whitelist `permitAll()` trong `SecurityConfig` cùng nhóm `lo
 
 Test đổi mật khẩu nằm trong `AuthServiceTest` — xem [§10](#kiểm-thử-đổi-mật-khẩu).
 
-Frontend: `npm run typecheck`. Kết quả gần nhất: **backend 85 test pass, typecheck sạch**.
+Sau mỗi thay đổi, chạy `./mvnw.cmd test` trong `backend` và `npm run typecheck` trong `frontend`.
 
 ## 10. Đổi mật khẩu (khi đã đăng nhập)
 

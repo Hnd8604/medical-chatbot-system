@@ -31,7 +31,8 @@ Tối ưu tốc độ phản hồi và giảm chi phí LLM bằng **semantic cac
 - Storage chính: **Qdrant** vector DB (collection `medical_chat_cache`).
 - `created_at` lưu timestamp; đọc cache bỏ qua điểm cũ hơn TTL (`Range(gte = now - ttl)`).
 - `cleanup_expired_cache()` xóa điểm hết hạn; `invalidate_patient_cache(patient_id)` xóa cache của một bệnh nhân.
-- (Spring còn có bảng `cache_entries` với `expires_at` từ `V1` cho cache dạng key-value nếu cần.)
+- App PostgreSQL không giữ cache câu trả lời. Bảng khung `cache_entries` trong
+  baseline đã bị xóa bởi Flyway V5 vì không có code sử dụng.
 
 **Tiêu chí hoàn thành:** Cache hit/miss hoạt động đúng.
 
@@ -40,7 +41,7 @@ Tối ưu tốc độ phản hồi và giảm chi phí LLM bằng **semantic cac
 **Mục tiêu:** Theo dõi cache có giảm cost không.
 
 **Hành vi:**
-- Cache hit trả `tool_name = "cache_hit"`, `answer_source = "semantic_cache_strict"`, `usage = 0` và `saved_usage` (token đáng lẽ tốn) → Spring lưu `saved_tokens`/`saved_cost` vào `usage_logs` (`V7`).
+- Cache hit trả `tool_name = "cache_hit"`, `answer_source = "semantic_cache_strict"`, `usage = 0` và `saved_usage` (token đáng lẽ tốn) → Spring lưu `saved_tokens`/`saved_cost` vào `usage_logs` (schema baseline V1).
 - `MetricsService.getCacheMetrics()` → `usageLogRepository.getCacheObservabilityMetrics()` cho dashboard (`GET /api/metrics/cache` — [M13](M13-admin-dashboard.md)).
 
 **Tiêu chí hoàn thành:** Admin biết tỷ lệ cache hit.
@@ -68,10 +69,13 @@ Khi dữ liệu bệnh nhân đổi: invalidate_patient_cache(patient_id)
 
 ## Luồng trong code
 
-- **Đọc cache (đầu pipeline):** `get_cached_chat_payload()` ([cache_flow.py:10-49](chatbot-service/chat/cache_flow.py#L10-L49)); gọi tại [chat_routes.py:176-180](chatbot-service/api/chat_routes.py#L176-L180).
-- **Semantic cache service:** `get_cached_answer` / `save_to_cache` / `cleanup_expired_cache` / `invalidate_patient_cache` ([semantic_cache.py:54-167](chatbot-service/services/semantic_cache.py#L54-L167)).
-- **Config cache:** [config.py:19-25](chatbot-service/app/config.py#L19-L25).
-- **Observability (Spring):** `MetricsService` ([MetricsService.java](backend/src/main/java/com/medicalchatbot/backend/service/MetricsService.java)); ghi saved usage trong [ChatApplicationService.saveUsage()](backend/src/main/java/com/medicalchatbot/backend/service/ChatApplicationService.java#L196-L229).
+- **Đọc cache (đầu pipeline):** `get_cached_chat_payload()` ([cache_flow.py](../chatbot-service/chat/cache_flow.py)); gọi tại [chat_routes.py](../chatbot-service/api/chat_routes.py).
+- **Semantic cache service:** `get_cached_answer` / `save_to_cache` / `cleanup_expired_cache` / `invalidate_patient_cache` ([semantic_cache.py](../chatbot-service/services/semantic_cache.py)).
+- **Config cache:** [config.py](../chatbot-service/app/config.py).
+- **Observability (Spring):** `MetricsService`
+  ([MetricsService.java](../backend/src/main/java/com/medicalchatbot/backend/service/MetricsService.java));
+  `ChatInteractionRecorder` ghi usage/saved usage sau khi
+  `ChatbotResponseMapper` đọc response upstream.
 
 ## Thành phần liên quan trong mã nguồn
 
@@ -81,5 +85,5 @@ Khi dữ liệu bệnh nhân đổi: invalidate_patient_cache(patient_id)
 | Cache flow (đọc đầu pipeline) | `chatbot-service/chat/cache_flow.py` |
 | Config cache | `chatbot-service/app/config.py` |
 | Observability metrics | `backend/.../service/MetricsService.java`, `.../controller/MetricsController.java` |
-| Saved usage + migration | `backend/.../service/ChatApplicationService.java`, `db/migration/V1__baseline_schema_and_seed.sql` (cột `answer_source`/`saved_tokens`/`saved_cost_usd`) |
-| Cache entries (key-value) | `backend/.../entity/CacheEntry.java`, `db/migration/V1__baseline_schema_and_seed.sql` |
+| Saved usage + migration | `backend/.../service/ChatInteractionRecorder.java`, `.../mapper/ChatbotResponseMapper.java`, `db/migration/V1__baseline_schema_and_seed.sql` |
+| Cache persistence | Qdrant collection `medical_chat_cache`; không có JPA entity/bảng cache trong schema hiện tại |

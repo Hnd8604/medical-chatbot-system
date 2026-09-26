@@ -217,7 +217,7 @@ Phụ thuộc Redis đã có sẵn (`spring-boot-starter-data-redis`, `spring.da
   login trả cả refresh token; refresh xoay token cho user active; refresh bị từ chối khi
   `token_version` lệch (kèm revoke); refresh bị từ chối khi tài khoản LOCKED; logout revoke all.
 
-Kết quả gần nhất: **63 test pass, BUILD SUCCESS**.
+Chạy `./mvnw.cmd test` trong thư mục `backend` để xác nhận toàn bộ luồng xác thực sau mỗi thay đổi.
 
 ## 9. Giới hạn hiện tại / hướng mở rộng
 

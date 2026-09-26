@@ -1,10 +1,20 @@
 # App PostgreSQL
 
-PostgreSQL database for the web application layer.
+PostgreSQL database for the Spring Boot application layer.
 
-This database is separate from the HAPI FHIR PostgreSQL database. Use it for Spring Boot application data such as users, chat sessions, chat messages, usage logs, and quota policies.
+This database is separate from the HAPI FHIR PostgreSQL database. Spring Boot owns
+its schema through Flyway migrations in
+[`backend/src/main/resources/db/migration`](../../backend/src/main/resources/db/migration/).
 
-No application tables or migrations are created yet.
+Current application data includes users/roles, patient links, chat sessions and
+messages, usage/cost records, audit and alert records, model pricing, feedback,
+LiteLLM virtual keys, and backup/restore history. Refresh tokens, reset-password
+state, and rate-limit counters are kept in Redis. Medical resources remain in HAPI
+FHIR and must be accessed through the FHIR REST API.
+
+Flyway currently runs `V1` through `V9`. Development-only demo-account activation is
+kept separately in
+[`db/devmigration`](../../backend/src/main/resources/db/devmigration/).
 
 ## Connection
 
@@ -42,3 +52,6 @@ To remove persisted data:
 ```powershell
 docker compose -f infra/app-postgres/docker-compose.yml down -v
 ```
+
+`down -v` deletes the local database volume. Use it only when a full local reset is
+intended; Spring Boot will recreate the schema on the next startup.

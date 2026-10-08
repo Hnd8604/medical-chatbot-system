@@ -1,15 +1,15 @@
-"""Bộ đo trước–sau cho hai đường chat (M-LG6).
+"""Bộ đo cho ``POST /chat``: chạy bộ câu hỏi có nhãn và in bảng độ chính xác
+route/tool/status, số LLM call, token, cost, latency p50/p95, tỉ lệ cache hit.
 
-Chạy cùng một bộ câu hỏi có nhãn qua ``/chat`` và ``/chat/langgraph`` rồi in bảng:
-độ chính xác route/tool, số LLM call, token, cost, latency p50/p95, tỉ lệ cache hit.
-Không có bảng này thì mọi phát biểu "agent rẻ hơn / chính xác hơn" đều là cảm tính.
+So sánh trước–sau (vd khi đổi prompt): lưu một lần chạy bằng ``--json`` rồi truyền nó
+vào ``--baseline`` ở lần chạy sau.
 
 Cách dùng (cần chatbot-service đang chạy và HAPI FHIR có dữ liệu):
 
 ```powershell
 cd chatbot-service
-python -m tests.eval.run_eval --base-url http://localhost:8000 --endpoint both
-python -m tests.eval.run_eval --endpoint langgraph --json out.json
+python -m tests.eval.run_eval --json before.json
+python -m tests.eval.run_eval --baseline before.json --verbose
 ```
 
 Lưu ý: script này gọi LLM thật qua gateway nên **tốn tiền**. Chạy khi cần số liệu
@@ -28,7 +28,7 @@ from typing import Any
 
 
 QUESTIONS_PATH = Path(__file__).with_name("questions.jsonl")
-ENDPOINTS = {"legacy": "/chat", "langgraph": "/chat/langgraph"}
+CHAT_PATH = "/chat"
 
 
 @dataclass
@@ -36,6 +36,7 @@ class CaseResult:
     case_id: str
     ok_route: bool | None
     ok_tools: bool | None
+    ok_status: bool | None
     http_status: int
     latency_ms: float
     input_tokens: int
@@ -66,6 +67,7 @@ class Report:
             "cases": len(self.results),
             "route_accuracy": self._rate([r.ok_route for r in self.results]),
             "tool_accuracy": self._rate([r.ok_tools for r in self.results]),
+            "status_accuracy": self._rate([r.ok_status for r in self.results]),
             "errors": sum(1 for r in self.results if r.http_status >= 500),
             "llm_calls_per_turn": round(sum(r.llm_calls for r in self.results) / total, 2),
             "input_tokens_per_turn": round(sum(r.input_tokens for r in self.results) / total, 1),
@@ -114,63 +116,39 @@ def build_request(case: dict[str, Any], user_id: str) -> dict[str, Any]:
     return payload
 
 
-def score(case: dict[str, Any], payload: dict[str, Any], endpoint: str) -> tuple[bool | None, bool | None]:
-    """So kết quả với nhãn.
-
-    ``/chat`` không có khái niệm route nên route_accuracy chỉ chấm cho đường agent;
-    tool thì cả hai đều chấm được (legacy qua ``tool_name``, agent qua ``plan_steps``).
-    """
+def score(case: dict[str, Any], payload: dict[str, Any]) -> tuple[bool | None, bool | None, bool | None]:
+    """So kết quả với nhãn: route, tool (đủ tool cần thiết là đạt) và response_status."""
     expected_route = case.get("expected_route")
-    ok_route: bool | None = None
-    if expected_route and endpoint == "langgraph":
-        ok_route = payload.get("agent_route") == expected_route
+    ok_route = payload.get("agent_route") == expected_route if expected_route else None
 
     expected_tools = case.get("expected_tools")
     ok_tools: bool | None = None
     if expected_tools is not None:
-        if endpoint == "langgraph":
-            actual = {step.get("tool") for step in payload.get("plan_steps") or []}
-        else:
-            actual = {payload.get("tool_name")} - {None}
-        if not expected_tools:
-            ok_tools = not actual
-        else:
-            # Đủ tool cần thiết là đạt; thừa step không bị phạt ở đây (đã có cột token).
-            ok_tools = set(expected_tools).issubset(actual)
-    return ok_route, ok_tools
+        actual = {step.get("tool") for step in payload.get("plan_steps") or []}
+        # Thừa step không bị phạt ở đây (đã có cột token).
+        ok_tools = not actual if not expected_tools else set(expected_tools).issubset(actual)
+
+    expected_status = case.get("expected_status")
+    ok_status = payload.get("response_status") == expected_status if expected_status else None
+    return ok_route, ok_tools, ok_status
 
 
-def count_llm_calls(payload: dict[str, Any], endpoint: str) -> int:
-    if endpoint == "langgraph":
-        stage_usage = payload.get("stage_usage") or {}
-        calls = sum(1 for usage in stage_usage.values() if (usage or {}).get("input_tokens"))
-        if (payload.get("answer_source") or "").startswith("llm"):
-            calls += 0  # answer đã nằm trong stage_usage
-        return calls
-    calls = 0
-    if (payload.get("intent_source") or "").startswith("llm"):
-        calls += 1
-    if (payload.get("answer_source") or "") == "llm":
-        calls += 1
-    if (payload.get("routing_source") or "") == "llm_router":
-        calls += 1
-    if (payload.get("summary_usage") or {}).get("input_tokens"):
-        calls += 1
-    return calls
+def count_llm_calls(payload: dict[str, Any]) -> int:
+    stage_usage = payload.get("stage_usage") or {}
+    return sum(1 for usage in stage_usage.values() if (usage or {}).get("input_tokens"))
 
 
-async def run_endpoint(
+async def run_cases(
     *,
     base_url: str,
-    endpoint: str,
     cases: list[dict[str, Any]],
     user_id: str,
     timeout: float,
 ) -> Report:
     import httpx
 
-    report = Report(endpoint=endpoint)
-    url = base_url.rstrip("/") + ENDPOINTS[endpoint]
+    report = Report(endpoint=CHAT_PATH)
+    url = base_url.rstrip("/") + CHAT_PATH
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for case in cases:
@@ -186,6 +164,7 @@ async def run_endpoint(
                         case_id=case["id"],
                         ok_route=False,
                         ok_tools=False,
+                        ok_status=False,
                         http_status=0,
                         latency_ms=(time.perf_counter() - started) * 1000,
                         input_tokens=0,
@@ -208,6 +187,7 @@ async def run_endpoint(
                         case_id=case["id"],
                         ok_route=ok,
                         ok_tools=ok,
+                        ok_status=ok,
                         http_status=status_code,
                         latency_ms=latency_ms,
                         input_tokens=0,
@@ -227,6 +207,7 @@ async def run_endpoint(
                         case_id=case["id"],
                         ok_route=False,
                         ok_tools=False,
+                        ok_status=False,
                         http_status=status_code,
                         latency_ms=latency_ms,
                         input_tokens=0,
@@ -241,18 +222,19 @@ async def run_endpoint(
                 continue
 
             usage = payload.get("usage") or {}
-            ok_route, ok_tools = score(case, payload, endpoint)
+            ok_route, ok_tools, ok_status = score(case, payload)
             report.results.append(
                 CaseResult(
                     case_id=case["id"],
                     ok_route=ok_route,
                     ok_tools=ok_tools,
+                    ok_status=ok_status,
                     http_status=status_code,
                     latency_ms=latency_ms,
                     input_tokens=int(usage.get("input_tokens") or 0),
                     output_tokens=int(usage.get("output_tokens") or 0),
                     cost_usd=float(usage.get("estimated_cost_usd") or 0),
-                    llm_calls=count_llm_calls(payload, endpoint),
+                    llm_calls=count_llm_calls(payload),
                     cache_hit="cache" in (payload.get("answer_source") or ""),
                     answer_source=payload.get("answer_source") or "",
                 )
@@ -261,13 +243,13 @@ async def run_endpoint(
 
 
 def print_report(report: Report, *, verbose: bool) -> None:
-    print(f"\n=== {report.endpoint} ({ENDPOINTS[report.endpoint]}) ===")
+    print(f"\n=== {report.endpoint} ===")
     if verbose:
-        print(f"{'case':<12}{'route':<7}{'tool':<7}{'ms':>8}{'in':>7}{'out':>7}{'calls':>7}  source")
+        print(f"{'case':<12}{'route':<7}{'tool':<7}{'status':<7}{'ms':>8}{'in':>7}{'out':>7}{'calls':>7}  source")
         for r in report.results:
             print(
                 f"{r.case_id:<12}"
-                f"{_mark(r.ok_route):<7}{_mark(r.ok_tools):<7}"
+                f"{_mark(r.ok_route):<7}{_mark(r.ok_tools):<7}{_mark(r.ok_status):<7}"
                 f"{r.latency_ms:>8.0f}{r.input_tokens:>7}{r.output_tokens:>7}{r.llm_calls:>7}"
                 f"  {r.answer_source}{(' | ' + r.detail) if r.detail else ''}"
             )
@@ -291,54 +273,44 @@ def main() -> None:
     except Exception:
         pass
 
-    parser = argparse.ArgumentParser(description="Đo before/after cho agent (M-LG6).")
+    parser = argparse.ArgumentParser(description="Đo chất lượng và chi phí của POST /chat.")
     parser.add_argument("--base-url", default="http://localhost:8000")
-    parser.add_argument("--endpoint", choices=["legacy", "langgraph", "both"], default="both")
     parser.add_argument("--user-id", default="eval-user")
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--questions", type=Path, default=QUESTIONS_PATH)
     parser.add_argument("--json", type=Path, help="Ghi kết quả chi tiết ra file JSON.")
+    parser.add_argument("--baseline", type=Path, help="File JSON của một lần chạy trước để so sánh.")
     parser.add_argument("--verbose", action="store_true", help="In từng case.")
     args = parser.parse_args()
 
-    cases = load_cases(args.questions)
-    targets = ["legacy", "langgraph"] if args.endpoint == "both" else [args.endpoint]
-
-    reports: list[Report] = []
-    for endpoint in targets:
-        report = asyncio.run(
-            run_endpoint(
-                base_url=args.base_url,
-                endpoint=endpoint,
-                cases=cases,
-                user_id=f"{args.user_id}-{endpoint}",
-                timeout=args.timeout,
-            )
+    report = asyncio.run(
+        run_cases(
+            base_url=args.base_url,
+            cases=load_cases(args.questions),
+            user_id=args.user_id,
+            timeout=args.timeout,
         )
-        reports.append(report)
-        print_report(report, verbose=args.verbose)
+    )
+    print_report(report, verbose=args.verbose)
+    summary = report.summary()
 
-    if len(reports) == 2:
-        print("\n=== so sánh (langgraph so với legacy) ===")
-        legacy, agent = reports[0].summary(), reports[1].summary()
+    if args.baseline:
+        baseline = json.loads(args.baseline.read_text(encoding="utf-8"))["summary"]
+        print(f"\n=== so sánh với {args.baseline.name} ===")
         for key in ("llm_calls_per_turn", "input_tokens_per_turn", "cost_usd_per_turn", "latency_p50_ms", "latency_p95_ms"):
-            before, after = legacy[key], agent[key]
+            before, after = baseline.get(key), summary[key]
             delta = f"{(after - before) / before * 100:+.1f}%" if before else "n/a"
-            print(f"{key:<26}{before:>12} -> {after:>12}   {delta}")
+            print(f"{key:<26}{before!s:>12} -> {after!s:>12}   {delta}")
 
     if args.json:
         args.json.write_text(
             json.dumps(
-                {
-                    "summaries": [r.summary() for r in reports],
-                    "results": {r.endpoint: [vars(c) for c in r.results] for r in reports},
-                },
+                {"summary": summary, "results": [vars(c) for c in report.results]},
                 ensure_ascii=False,
                 indent=2,
             ),
             encoding="utf-8",
         )
-        print(f"\nĐã ghi {args.json}")
 
 
 if __name__ == "__main__":

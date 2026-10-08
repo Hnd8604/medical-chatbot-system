@@ -3,16 +3,17 @@ setup_logging()
 
 import logging
 import asyncio
-from api.exceptions import register_exception_handlers
+from api.errors import register_exception_handlers
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from api.cache_routes import router as cache_router
-from api.chat_routes import router as chat_router
-from api.fhir_routes import router as fhir_router
-from api.health_routes import router as health_router
+from agent.planning.plan_cache import get_plan_cache
+from api.cache import router as cache_router
+from api.chat import router as chat_router
+from api.fhir import router as fhir_router
+from api.health import router as health_router
 from app.config import get_settings
-from services.semantic_cache import get_semantic_cache
+from cache.semantic_cache import get_semantic_cache
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -30,11 +31,9 @@ async def lifespan(app: FastAPI):
     cache_service = get_semantic_cache()
     await cache_service.init_collection()
 
-    if settings.use_langgraph_agent and settings.enable_plan_cache:
-        # Collection thứ hai cho plan cache (không chứa PHI, TTL dài — xem
-        # docs/M-langgraph-agent.md §6.1). Lỗi ở đây không chặn service khởi động.
-        from langgraph_agent.plan_cache import get_plan_cache
-
+    if settings.enable_plan_cache:
+        # Collection thứ hai cho plan cache (không chứa PHI, TTL dài). Lỗi ở đây không
+        # chặn service khởi động.
         await get_plan_cache().init_collection()
 
     cleanup_task = asyncio.create_task(cache_cleanup_task())

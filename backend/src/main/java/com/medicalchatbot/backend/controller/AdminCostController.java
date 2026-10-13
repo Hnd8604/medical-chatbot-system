@@ -1,7 +1,6 @@
 package com.medicalchatbot.backend.controller;
 
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
-import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
 import com.medicalchatbot.backend.service.CostManagementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,11 +26,5 @@ public class AdminCostController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return costManagementService.getUserCostSummaryByUsername(username, from, to);
-    }
-
-
-    @GetMapping("/pricing")
-    public ModelPricingListResponse getActivePricing() {
-        return costManagementService.activePricing();
     }
 }

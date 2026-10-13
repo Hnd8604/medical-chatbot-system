@@ -19,9 +19,7 @@ import com.medicalchatbot.backend.dto.response.CostByDay;
 import com.medicalchatbot.backend.dto.response.CostByModel;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
 import com.medicalchatbot.backend.dto.response.JsonPayload;
-import com.medicalchatbot.backend.dto.response.MissingPricingModel;
-import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
-import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
+import com.medicalchatbot.backend.dto.response.CostUnavailableModel;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.config.JwtAuthenticationFilter;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
@@ -164,14 +162,14 @@ class ChatbotControllerTest {
                 {
                   "input_tokens": 0,
                   "output_tokens": 0,
-                  "estimated_cost_usd": 0
+                  "cost_usd": 0
                 }
                 """),
                         objectMapper.readTree("""
                 {
                   "input_tokens": 0,
                   "output_tokens": 0,
-                  "estimated_cost_usd": 0
+                  "cost_usd": 0
                 }
                 """),
                         objectMapper.readTree("""
@@ -179,7 +177,13 @@ class ChatbotControllerTest {
                   "saved_input_tokens": 0,
                   "saved_output_tokens": 0
                 }
-                """)
+                """),
+                        "trace-1",
+                        "answered",
+                        "fhir",
+                        objectMapper.readTree("[]"),
+                        objectMapper.readTree("{\"checked\": true, \"passed\": true}"),
+                        null
                 ));
 
         mockMvc.perform(post("/api/chat")
@@ -196,7 +200,10 @@ class ChatbotControllerTest {
                 .andExpect(jsonPath("$.result.tool_name").value("get_medication_requests"))
                 .andExpect(jsonPath("$.result.intent_source").value("llm"))
                 .andExpect(jsonPath("$.result.answer_source").value("llm"))
-                .andExpect(jsonPath("$.result.patient_id").value("BN2026-00001"));
+                .andExpect(jsonPath("$.result.patient_id").value("BN2026-00001"))
+                .andExpect(jsonPath("$.result.trace_id").value("trace-1"))
+                .andExpect(jsonPath("$.result.response_status").value("answered"))
+                .andExpect(jsonPath("$.result.agent_route").value("fhir"));
     }
 
     @Test
@@ -435,7 +442,7 @@ class ChatbotControllerTest {
                         3700,
                         new BigDecimal("0.002320")
                 )),
-                List.of(new MissingPricingModel("openai", "custom-model", 1))
+                List.of(new CostUnavailableModel("openai", "custom-model", 1))
         ));
 
         mockMvc.perform(get("/api/usage/cost-summary?from=2026-06-01&to=2026-06-01"))
@@ -446,11 +453,11 @@ class ChatbotControllerTest {
                 .andExpect(jsonPath("$.result.input_tokens").value(3000))
                 .andExpect(jsonPath("$.result.output_tokens").value(700))
                 .andExpect(jsonPath("$.result.total_tokens").value(3700))
-                .andExpect(jsonPath("$.result.estimated_cost_usd").value(0.002320))
+                .andExpect(jsonPath("$.result.cost_usd").value(0.002320))
                 .andExpect(jsonPath("$.result.models[0].llm_provider").value("openai"))
                 .andExpect(jsonPath("$.result.models[0].llm_model").value("gpt-4.1-mini"))
                 .andExpect(jsonPath("$.result.days[0].date").value("2026-06-01"))
-                .andExpect(jsonPath("$.result.missing_pricing_models[0].llm_model").value("custom-model"));
+                .andExpect(jsonPath("$.result.cost_unavailable_models[0].llm_model").value("custom-model"));
     }
 
     @Test
@@ -465,26 +472,5 @@ class ChatbotControllerTest {
 
         mockMvc.perform(get("/api/usage/cost-summary?from=2026-06-02&to=2026-06-01"))
                 .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void modelPricingReturnsActivePricing() throws Exception {
-        when(costManagementService.activePricing()).thenReturn(new ModelPricingListResponse(List.of(
-                new ModelPricingInfo(
-                        "openai",
-                        "gpt-4.1-mini",
-                        new BigDecimal("0.400000"),
-                        new BigDecimal("1.600000"),
-                        "USD"
-                )
-        )));
-
-        mockMvc.perform(get("/api/model-pricing"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.pricing[0].provider").value("openai"))
-                .andExpect(jsonPath("$.result.pricing[0].model").value("gpt-4.1-mini"))
-                .andExpect(jsonPath("$.result.pricing[0].input_price_per_1m_tokens").value(0.400000))
-                .andExpect(jsonPath("$.result.pricing[0].output_price_per_1m_tokens").value(1.600000))
-                .andExpect(jsonPath("$.result.pricing[0].currency").value("USD"));
     }
 }

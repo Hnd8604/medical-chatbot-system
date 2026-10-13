@@ -1,6 +1,9 @@
 package com.medicalchatbot.backend.mapper;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -19,6 +22,8 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class ChatbotResponseMapper {
+
+    private static final String ALL_PATIENTS_RESOURCE_ID = "all_patients";
 
     private final ObjectMapper objectMapper;
 
@@ -50,7 +55,13 @@ public class ChatbotResponseMapper {
                 chatbotResponse.path("evidence"),
                 chatbotResponse.path("answer_usage"),
                 chatbotResponse.path("usage"),
-                chatbotResponse.path("saved_usage")
+                chatbotResponse.path("saved_usage"),
+                textOrNull(chatbotResponse, "trace_id"),
+                textOrNull(chatbotResponse, "response_status"),
+                textOrNull(chatbotResponse, "agent_route"),
+                chatbotResponse.path("failed_steps"),
+                chatbotResponse.path("grounding"),
+                textOrNull(chatbotResponse, "llm_unavailable_reason")
         );
     }
 
@@ -127,20 +138,73 @@ public class ChatbotResponseMapper {
     }
 
     public ChatUsage usage(JsonNode chatbotResponse) {
-        JsonNode usage = chatbotResponse.path("usage");
         JsonNode savedUsage = chatbotResponse.path("saved_usage");
         boolean savedUsagePresent = !savedUsage.isMissingNode() && !savedUsage.isNull();
+        String provider = textOrNull(chatbotResponse, "llm_provider");
+        String model = textOrNull(chatbotResponse, "llm_model");
+        List<LlmCall> calls = chatbotResponse.path("llm_calls").isArray()
+                ? llmCalls(chatbotResponse)
+                : unattributedCalls(chatbotResponse.path("usage"), provider, model);
         return new ChatUsage(
-                textOrNull(chatbotResponse, "llm_provider"),
-                textOrNull(chatbotResponse, "llm_model"),
+                provider,
+                model,
                 textOrNull(chatbotResponse, "answer_source"),
-                usage.path("input_tokens").asInt(0),
-                usage.path("output_tokens").asInt(0),
-                decimalOrZero(usage.path("estimated_cost_usd")),
+                textOrNull(chatbotResponse, "trace_id"),
+                calls,
                 savedUsagePresent,
                 savedUsage.path("saved_input_tokens").asInt(0),
-                savedUsage.path("saved_output_tokens").asInt(0)
+                savedUsage.path("saved_output_tokens").asInt(0),
+                decimalOrNull(savedUsage.path("saved_cost_usd"))
         );
+    }
+
+    /** Từng LLM call trong {@code llm_calls} của response hoặc body lỗi của chatbot-service. */
+    public List<LlmCall> llmCalls(JsonNode node) {
+        JsonNode items = node == null ? null : node.path("llm_calls");
+        if (items == null || !items.isArray()) {
+            return List.of();
+        }
+        List<LlmCall> calls = new ArrayList<>();
+        for (JsonNode item : items) {
+            calls.add(new LlmCall(
+                    firstNonBlank(textOrNull(item, "stage"), "unknown"),
+                    textOrNull(item, "provider"),
+                    textOrNull(item, "model"),
+                    Math.max(0, item.path("input_tokens").asInt(0)),
+                    Math.max(0, item.path("output_tokens").asInt(0)),
+                    decimalOrNull(item.path("cost_usd")),
+                    textOrNull(item, "call_id")
+            ));
+        }
+        return calls;
+    }
+
+    /**
+     * {@code llm_calls} trong body lỗi (429/403/5xx) của chatbot-service: các call đã tốn tiền
+     * trước khi lượt hỏng. Body không đọc được thì coi như không có call nào.
+     */
+    public List<LlmCall> llmCallsFromErrorBody(byte[] body) {
+        if (body == null || body.length == 0) {
+            return List.of();
+        }
+        try {
+            return llmCalls(objectMapper.readTree(body));
+        } catch (IOException exception) {
+            return List.of();
+        }
+    }
+
+    /**
+     * Response không có {@code llm_calls} (chatbot-service cũ): gom tổng usage thành một call
+     * không rõ stage. Cost cũ chỉ là ước tính, không phải cost gateway, nên để null.
+     */
+    private List<LlmCall> unattributedCalls(JsonNode usage, String provider, String model) {
+        int inputTokens = Math.max(0, usage.path("input_tokens").asInt(0));
+        int outputTokens = Math.max(0, usage.path("output_tokens").asInt(0));
+        if (inputTokens == 0 && outputTokens == 0) {
+            return List.of();
+        }
+        return List.of(new LlmCall("unattributed", provider, model, inputTokens, outputTokens, null, null));
     }
 
     public ChatAudit audit(
@@ -188,6 +252,40 @@ public class ChatbotResponseMapper {
                     resourceType = "Patient";
                     resourceId = "search_query";
                 }
+                case "get_resource_by_id" -> {
+                    action = "VIEW_RESOURCE";
+                    resourceType = "FhirResource";
+                    resourceId = responsePatientId;
+                }
+                case "get_all_patient_observations" -> {
+                    action = "VIEW_ALL_PATIENT_OBSERVATIONS";
+                    resourceType = "Observation";
+                    resourceId = ALL_PATIENTS_RESOURCE_ID;
+                }
+                case "get_all_patient_conditions" -> {
+                    action = "VIEW_ALL_PATIENT_CONDITIONS";
+                    resourceType = "Condition";
+                    resourceId = ALL_PATIENTS_RESOURCE_ID;
+                }
+                case "get_all_patient_encounters" -> {
+                    action = "VIEW_ALL_PATIENT_ENCOUNTERS";
+                    resourceType = "Encounter";
+                    resourceId = ALL_PATIENTS_RESOURCE_ID;
+                }
+                case "get_all_patient_medication_requests" -> {
+                    action = "VIEW_ALL_PATIENT_MEDICATIONS";
+                    resourceType = "MedicationRequest";
+                    resourceId = ALL_PATIENTS_RESOURCE_ID;
+                }
+                case "multi_tool_plan" -> {
+                    // Plan nhiều bước: các tool cụ thể nằm ở metadata.plan_steps.
+                    action = "VIEW_PATIENT_DATA";
+                    resourceType = "Patient";
+                    resourceId = chatbotResponse.path("all_patients").asBoolean(false)
+                            ? ALL_PATIENTS_RESOURCE_ID
+                            : responsePatientId;
+                }
+                case "explain_concept" -> action = "EXPLAIN_CONCEPT";
                 case "cache_hit" -> {
                     action = "VIEW_FROM_CACHE";
                     resourceType = "Cache";
@@ -221,6 +319,15 @@ public class ChatbotResponseMapper {
         metadata.set("summary_usage", chatbotResponse.path("summary_usage"));
         metadata.set("memory_update", chatbotResponse.path("memory_update"));
         metadata.set("knowledge_refs", knowledgeRefs(chatbotResponse));
+        metadata.put("trace_id", textOrNull(chatbotResponse, "trace_id"));
+        metadata.put("response_status", textOrNull(chatbotResponse, "response_status"));
+        metadata.put("agent_route", textOrNull(chatbotResponse, "agent_route"));
+        metadata.set("plan_steps", chatbotResponse.path("plan_steps"));
+        metadata.set("failed_steps", chatbotResponse.path("failed_steps"));
+        metadata.set("grounding", chatbotResponse.path("grounding"));
+        metadata.put("safety_flag", textOrNull(chatbotResponse, "safety_flag"));
+        metadata.put("llm_unavailable_reason", textOrNull(chatbotResponse, "llm_unavailable_reason"));
+        metadata.put("llm_call_count", llmCalls(chatbotResponse).size());
         if (chatbotResponse.has("needs_patient_selection")) {
             metadata.put("needs_patient_selection", chatbotResponse.path("needs_patient_selection").asBoolean(false));
         }
@@ -295,18 +402,22 @@ public class ChatbotResponseMapper {
         return text == null || text.isBlank() ? null : text;
     }
 
-    private BigDecimal decimalOrZero(JsonNode value) {
+    /** null = không biết (khác 0). Số âm/không đọc được cũng coi là không biết. */
+    private BigDecimal decimalOrNull(JsonNode value) {
         if (value == null || value.isMissingNode() || value.isNull()) {
-            return BigDecimal.ZERO;
+            return null;
         }
+        BigDecimal decimal;
         if (value.isNumber()) {
-            return value.decimalValue();
+            decimal = value.decimalValue();
+        } else {
+            try {
+                decimal = new BigDecimal(value.asText(""));
+            } catch (NumberFormatException exception) {
+                return null;
+            }
         }
-        try {
-            return new BigDecimal(value.asText("0"));
-        } catch (NumberFormatException exception) {
-            return BigDecimal.ZERO;
-        }
+        return decimal.signum() < 0 ? null : decimal;
     }
 
     private String firstNonBlank(String... values) {
@@ -318,20 +429,48 @@ public class ChatbotResponseMapper {
         return null;
     }
 
+    /**
+     * Usage của một lượt chat. Token tổng = tổng các call, để usage_logs và llm_call_usage
+     * luôn khớp nhau.
+     */
     public record ChatUsage(
             String llmProvider,
             String llmModel,
             String answerSource,
-            int inputTokens,
-            int outputTokens,
-            BigDecimal reportedEstimatedCostUsd,
+            String traceId,
+            List<LlmCall> calls,
             boolean savedUsagePresent,
             int savedInputTokens,
-            int savedOutputTokens
+            int savedOutputTokens,
+            /** Cost gateway của câu trả lời gốc lúc ghi cache; null = không biết. */
+            BigDecimal savedCostUsd
     ) {
+        public int inputTokens() {
+            return calls.stream().mapToInt(LlmCall::inputTokens).sum();
+        }
+
+        public int outputTokens() {
+            return calls.stream().mapToInt(LlmCall::outputTokens).sum();
+        }
+
         public int savedTokens() {
             return savedInputTokens + savedOutputTokens;
         }
+    }
+
+    /**
+     * Một LLM call do chatbot-service báo. {@code gatewayCostUsd} null = gateway không báo
+     * cost, khác với 0.
+     */
+    public record LlmCall(
+            String stage,
+            String provider,
+            String model,
+            int inputTokens,
+            int outputTokens,
+            BigDecimal gatewayCostUsd,
+            String callId
+    ) {
     }
 
     public record ChatAudit(

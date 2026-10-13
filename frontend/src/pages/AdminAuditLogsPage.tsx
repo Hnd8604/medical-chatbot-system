@@ -73,7 +73,18 @@ function metadataPreview(value: unknown) {
     return "-";
   }
   const record = value as Record<string, unknown>;
-  const keys = ["operation", "intent", "tool_name", "answer_source", "llm_model", "latency_ms", "patient_id"];
+  const keys = [
+    "operation",
+    "response_status",
+    "intent",
+    "tool_name",
+    "answer_source",
+    "llm_model",
+    "latency_ms",
+    "patient_id",
+    "http_status",
+    "trace_id",
+  ];
   const pairs = keys
     .map((key) => [key, record[key]] as const)
     .filter(([, item]) => item !== undefined && item !== null && item !== "");

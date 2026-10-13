@@ -25,6 +25,7 @@ import com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection;
 import com.medicalchatbot.backend.repository.projection.QuotaUsageProjection;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -40,7 +41,6 @@ public class QuotaService {
     private final AlertService alertService;
     private final NotificationService notificationService;
     private final CurrentUserService currentUserService;
-    private final LiteLLMSpendService litellmSpendService;
     private final ZoneId quotaZone;
 
     @Autowired
@@ -53,7 +53,7 @@ public class QuotaService {
             AlertService alertService,
             NotificationService notificationService,
             CurrentUserService currentUserService,
-            LiteLLMSpendService litellmSpendService) {
+            @Value("${app.quota.timezone:Asia/Ho_Chi_Minh}") String quotaTimezone) {
         this(
                 userRepository,
                 quotaPolicyRepository,
@@ -62,9 +62,8 @@ public class QuotaService {
                 objectMapper,
                 alertService,
                 notificationService,
-                ZoneId.systemDefault(),
-                currentUserService,
-                litellmSpendService);
+                ZoneId.of(quotaTimezone),
+                currentUserService);
     }
 
     QuotaService(
@@ -76,8 +75,7 @@ public class QuotaService {
             AlertService alertService,
             NotificationService notificationService,
             ZoneId quotaZone,
-            CurrentUserService currentUserService,
-            LiteLLMSpendService litellmSpendService) {
+            CurrentUserService currentUserService) {
         this.userRepository = userRepository;
         this.quotaPolicyRepository = quotaPolicyRepository;
         this.usageLogRepository = usageLogRepository;
@@ -86,7 +84,6 @@ public class QuotaService {
         this.alertService = alertService;
         this.notificationService = notificationService;
         this.currentUserService = currentUserService;
-        this.litellmSpendService = litellmSpendService;
         this.quotaZone = quotaZone;
     }
 
@@ -99,8 +96,7 @@ public class QuotaService {
             AlertService alertService,
             NotificationService notificationService,
             CurrentUserService currentUserService,
-            ZoneId quotaZone,
-            LiteLLMSpendService litellmSpendService) {
+            ZoneId quotaZone) {
         this(
                 userRepository,
                 quotaPolicyRepository,
@@ -110,8 +106,7 @@ public class QuotaService {
                 alertService,
                 notificationService,
                 quotaZone,
-                currentUserService,
-                litellmSpendService);
+                currentUserService);
     }
 
     public QuotaStatusResponse currentUserStatus() {
@@ -182,15 +177,15 @@ public class QuotaService {
         ZonedDateTime now = ZonedDateTime.now(quotaZone);
         OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay(quotaZone).toOffsetDateTime();
         OffsetDateTime startOfNextDay = startOfDay.plusDays(1);
-        QuotaUsageProjection usage = usageLogRepository.summarizeSuccessfulUsage(
+        QuotaUsageProjection usage = usageLogRepository.summarizeUsage(
                 userId,
                 startOfDay,
                 startOfNextDay);
 
         int usedTokens = usage.usedTokens();
-        // Cost la nguon su that tu AI Gateway (LiteLLM budget). Neu gateway khong san
-        // sang thi roi ve so cost tich trong usage_logs.
-        BigDecimal usedCostUsd = effectiveUsedCost(userId, usage);
+        // Cost cong tu usage_logs (cost gateway bao cho tung call). Spring la so chi phi
+        // duy nhat va la noi chan han muc theo user; gateway khong giu spend theo user.
+        BigDecimal usedCostUsd = usage.usedCostUsd();
         checkAndTriggerQuotaWarning(userId, policy, usage, usedTokens, usedCostUsd);
 
         int remainingRequests = remaining(policy.dailyRequestLimit(), usage.usedRequests());
@@ -214,22 +209,6 @@ public class QuotaService {
                 remainingCost,
                 blockedReason == null,
                 blockedReason);
-    }
-
-    /**
-     * Cost da dung: uu tien spend cua gateway; fallback usage_logs khi gateway tat/loi.
-     *
-     * <p>Luu y cua so thoi gian: spend cua gateway theo budget_duration "1d" cua
-     * LiteLLM (cua so <b>rolling</b> tinh tu luc tao/reset key), con token/request
-     * o day tinh theo <b>ngay lich</b> trong quotaZone. Hai cua so co the lech nhau
-     * vai gio — chap nhan cho pham vi hien tai, xem docs/M-litellm-gateway.md.
-     */
-    private BigDecimal effectiveUsedCost(UUID userId, QuotaUsageProjection usage) {
-        LiteLLMSpendService.GatewaySpend spend = litellmSpendService.getSpendForUser(userId);
-        if (spend != null && spend.spendUsd() != null) {
-            return spend.spendUsd();
-        }
-        return usage.usedCostUsd();
     }
 
     private UUID getUserIdByUsername(String username) {
@@ -287,7 +266,6 @@ public class QuotaService {
             int usedTokens, BigDecimal usedCostUsd) {
         double requestUsagePct = ratio(usage.usedRequests(), policy.dailyRequestLimit());
         double tokenUsagePct = ratio(usedTokens, policy.dailyTokenLimit());
-        // Cost tinh theo spend gateway (source of truth) da duoc effectiveUsedCost xu ly.
         double costUsagePct = ratio(usedCostUsd, policy.dailyCostLimitUsd());
 
         if (requestUsagePct < 0.8 && tokenUsagePct < 0.8 && costUsagePct < 0.8) {

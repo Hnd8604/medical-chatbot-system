@@ -234,7 +234,7 @@ Thứ tự trong `finalize_answer`:
 5. **Grounding check** (mục 6.2).
 6. **Ghi semantic cache**: chỉ khi câu do LLM viết, đã qua grounding, và không phải partial.
 7. **Chờ rolling summary** (đã chạy song song từ đầu lượt).
-8. **Tính usage / cost**, dựng `memory_update` cho Spring lưu vào session.
+8. **Gộp usage** (token + cost thật của gateway), dựng `memory_update` cho Spring lưu vào session.
 
 ### 3.8 Rolling summary
 
@@ -300,9 +300,14 @@ bệnh nhân hoạt động hay không), vì "bệnh nhân này dùng thuốc g�
 - **Model theo stage**: router/chat/summary dùng model rẻ, planner dùng `model_complex`,
   answer chọn theo độ phức tạp của plan.
 - **Evidence budget**: giới hạn token đầu vào của bước answer, khoản tốn nhất mỗi lượt.
-- **LiteLLM gateway**: mọi call đi qua [llm/client.py](../llm/client.py) với virtual key
-  của user và `metadata.stage`. Spend log ở gateway tách được chi phí theo từng stage.
-  Vượt budget ⇒ **HTTP 429**.
+- **LiteLLM gateway (không trạng thái)**: mọi call đi qua [llm/client.py](../llm/client.py)
+  bằng master key, kèm `user` và `metadata.stage`. Gateway không có database, không virtual
+  key: nó chỉ chuyển tiếp và báo cost từng call. Spring là sổ chi phí duy nhất và chặn hạn
+  mức theo user trước mỗi lượt chat (HTTP 429 từ Spring).
+- **Trần chi tiêu cả hệ thống**: `provider_budget_config` trong
+  [infra/litellm/config.yaml](../../infra/litellm/config.yaml). Chạm trần ⇒ gateway từ chối
+  call, các stage rơi về luật và câu template. Số đã tiêu giữ trong bộ nhớ, gateway khởi
+  động lại thì đếm lại từ 0.
 - `stage_usage` trong response cho biết token của từng stage trong lượt.
 
 ---
@@ -393,7 +398,6 @@ số cũng không bắt được. Phần này vẫn dựa vào prompt.
 | `allowed_patient_ids` | Hồ sơ USER được xem |
 | `conversation_context` | `memory_summary`, `active_patient_id`, `last_intent`, `last_tool_name`, `last_resource_type`, `last_resource_id`, `recent_messages`, `total_message_count` |
 | `quota_used_ratio` | Tỉ lệ quota đã dùng (≥ 0.8 hạ model, ≥ 0.9 low-cost mode) |
-| `llm_key` | Virtual key LiteLLM của user |
 
 ### 7.2 Response
 
@@ -411,6 +415,8 @@ contract thì chỉ log kèm `trace_id`, lượt chat không bị hỏng.
 | `failed_steps` | `[{id, tool, error_code}]`, chỉ có khi có step lỗi |
 | `grounding` | `{checked, passed}` |
 | `stage_usage` | `{agent_router: {...}, agent_planner: {...}, agent_answer: {...}, ...}` |
+| `llm_calls` | `[{stage, provider, model, input_tokens, output_tokens, cost_usd, call_id}]` — từng LLM call của lượt; Spring lưu thành `llm_call_usage` |
+| `llm_unavailable_reason` | `gateway_not_configured`, chỉ có khi lượt không được gọi LLM |
 | `prompt_versions` | Version prompt router / planner / chat / answer |
 | `evidence_pruning` | Chỉ có khi evidence bị cắt |
 
@@ -438,10 +444,23 @@ routing_source`.
 |---|---|
 | 200 | Mọi lượt trả lời được, kể cả `clarification_needed`, `tool_error`, `partial` |
 | 403 | Vi phạm chính sách role (`PolicyError`) |
-| 429 | Virtual key vượt budget LiteLLM |
 | 502 | FHIR lỗi ở tầng không bắt được trong tool |
+| 500 | Lỗi ngoài dự kiến |
 
-Không còn 400 cho `/chat`. Endpoint `/chat/langgraph` đã bị xoá (404).
+Body lỗi luôn là `{"detail": str, "llm_calls": [...]}`: các call đã chạy (đã tốn tiền) trước
+khi lượt hỏng, để Spring vẫn ghi chi phí. Không còn 400 cho `/chat`.
+
+### 7.4 Usage và cost
+
+- `usage` / `answer_usage` / `summary_usage` / `stage_usage` có shape
+  `{input_tokens, output_tokens, cost_usd}`. `cost_usd` là **chi phí thật** gateway báo
+  qua header `x-litellm-response-cost`; `null` nghĩa là không biết (gateway không trả
+  header), khác `0` (biết chắc không tốn). Chỉ cần một call không biết cost thì tổng là `null`.
+- Không hệ thống nào giữ bảng giá: gateway là nguồn chi phí duy nhất. Khi `cost_usd` là
+  `null`, Spring ghi call đó với cost 0 và `cost_source = unavailable` (tổng bị thiếu,
+  báo cáo chi phí liệt kê các model này để kiểm tra gateway).
+- Cache hit: `saved_usage.saved_cost_usd` là cost gateway của câu trả lời gốc lúc ghi
+  cache (`null` với entry cũ). Endpoint `/chat/langgraph` đã bị xoá (404).
 
 ---
 
@@ -460,7 +479,7 @@ chatbot-service/
     memory/     context (rút gọn hội thoại), summary (rolling summary)
   tools/        registry + mỗi resource một file + formatting
   fhir/         client.py (FHIR REST), normalizer.py
-  llm/          client.py (một AsyncOpenAI duy nhất), pricing.py, model_select.py, usage.py
+  llm/          client.py (một AsyncOpenAI duy nhất + sổ call), models.py, model_select.py, usage.py
   nlp/          text, vocabulary, patient_refs, observation_types (xử lý tiếng Việt)
   cache/        semantic_cache.py (Qdrant)
   terminology/  LOINC, RxNorm, MedlinePlus

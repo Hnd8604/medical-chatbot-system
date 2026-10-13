@@ -83,8 +83,7 @@ public class SecurityConfig {
                                 "/api/quota/status",
                                 "/api/usage/cost-summary",
                                 "/api/notifications",
-                                "/api/notifications/**",
-                                "/api/model-pricing"
+                                "/api/notifications/**"
                         ).authenticated()
                         // Deny by default so a newly added controller cannot become public by omission.
                         .anyRequest().denyAll()

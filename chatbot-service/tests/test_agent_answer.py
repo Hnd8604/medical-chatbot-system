@@ -23,7 +23,7 @@ from agent.answer.generator import (
 )
 from agent.memory.context import compact_conversation_for_llm
 from agent.memory.summary import LlmSummaryGenerator, NoopSummaryGenerator, SummaryResult
-from llm.client import GatewayBudgetExceededError, LlmCallError, LlmResult
+from llm.client import LlmCallError, LlmResult
 from llm.model_select import ModelChoice
 from terminology.schemas import ExternalKnowledgeItem, KnowledgeType, TerminologySource
 
@@ -32,7 +32,7 @@ def llm_result(content: str, input_tokens: int = 40, output_tokens: int = 20) ->
     return LlmResult(
         content=content,
         model="gpt-4o-mini",
-        usage={"input_tokens": input_tokens, "output_tokens": output_tokens, "estimated_cost_usd": 0},
+        usage={"input_tokens": input_tokens, "output_tokens": output_tokens, "cost_usd": 0.0},
     )
 
 
@@ -191,7 +191,7 @@ class FakeGenerator:
         return AnswerResult(
             answer=f"LLM: {kwargs['fallback_answer']}",
             source=self.source,
-            usage={"input_tokens": 30, "output_tokens": 8, "estimated_cost_usd": 0},
+            usage={"input_tokens": 30, "output_tokens": 8, "cost_usd": 0.0},
             model="gpt-4o-mini",
         )
 
@@ -220,7 +220,7 @@ class FinalizeTests(unittest.IsolatedAsyncioTestCase):
             "intent": "conditions",
             "patient_id": "BN2026-00001",
             "source": "agent_llm",
-            "usage": {"input_tokens": 10, "output_tokens": 2, "estimated_cost_usd": 0},
+            "usage": {"input_tokens": 10, "output_tokens": 2, "cost_usd": 0.0},
         }
         values.update(overrides)
         return TurnMeta(**values)
@@ -406,16 +406,15 @@ class SummaryGeneratorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(captured["stage"], "agent_summary")
         self.assertEqual(captured["user_payload"]["previous_summary"], _CONTEXT["memory_summary"])
 
-    async def test_errors_including_budget_are_swallowed(self):
-        for error in (LlmCallError("agent_summary", "gateway down"), GatewayBudgetExceededError("ExceededBudget")):
-            async def broken(**kwargs):
-                raise error
+    async def test_llm_errors_are_swallowed(self):
+        async def broken(**kwargs):
+            raise LlmCallError("agent_summary", "gateway down")
 
-            with mock.patch("agent.memory.summary.call_llm", broken):
-                result = await self._generator().summarize(
-                    conversation_context=_CONTEXT, question="q", patient_id=None, total_message_count=8
-                )
-            self.assertEqual((result.summary, result.source), ("", "error"))
+        with mock.patch("agent.memory.summary.call_llm", broken):
+            result = await self._generator().summarize(
+                conversation_context=_CONTEXT, question="q", patient_id=None, total_message_count=8
+            )
+        self.assertEqual((result.summary, result.source), ("", "error"))
 
 
 class ConversationContextTests(unittest.TestCase):

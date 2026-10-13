@@ -87,7 +87,7 @@ class FixedGenerator:
         return AnswerResult(
             answer=self.answer,
             source=self.source,
-            usage={"input_tokens": 30, "output_tokens": 8, "estimated_cost_usd": 0},
+            usage={"input_tokens": 30, "output_tokens": 8, "cost_usd": 0.0},
             model="gpt-4o-mini",
         )
 

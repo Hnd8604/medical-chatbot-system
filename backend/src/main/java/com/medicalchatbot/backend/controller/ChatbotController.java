@@ -10,7 +10,6 @@ import com.medicalchatbot.backend.dto.response.ChatSessionRenameResponse;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
 import com.medicalchatbot.backend.dto.response.FeedbackResponse;
 import com.medicalchatbot.backend.dto.response.JsonPayload;
-import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.service.ChatApplicationService;
 import com.medicalchatbot.backend.service.ChatbotQueryService;
@@ -148,11 +147,6 @@ public class ChatbotController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return costManagementService.currentUserCostSummary(from, to);
-    }
-
-    @GetMapping("/model-pricing")
-    ModelPricingListResponse modelPricing() {
-        return costManagementService.activePricing();
     }
 
     @PostMapping("/chat/messages/{messageId}/feedback")

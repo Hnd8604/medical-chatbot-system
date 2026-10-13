@@ -93,6 +93,28 @@ export interface ChatResponse {
   answer_usage: unknown;
   usage: unknown;
   saved_usage: unknown;
+  /** Mã tra log bên chatbot-service — hiển thị để người dùng báo lỗi. */
+  trace_id?: string | null;
+  response_status?: ChatResponseStatus | null;
+  agent_route?: string | null;
+  failed_steps?: FailedStep[] | null;
+  grounding?: { checked: boolean; passed: boolean | null } | null;
+  /** Có khi lượt này không được gọi LLM (gateway chưa cấu hình) — trả lời bằng luật/template. */
+  llm_unavailable_reason?: string | null;
+}
+
+export type ChatResponseStatus =
+  | "answered"
+  | "partial"
+  | "no_data"
+  | "clarification_needed"
+  | "patient_selection_needed"
+  | "tool_error";
+
+export interface FailedStep {
+  id: string;
+  tool: string;
+  error_code: string;
 }
 
 export interface PatientCandidate {
@@ -149,20 +171,22 @@ export interface CostSummaryResponse {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
-  estimated_cost_usd: number;
+  cost_usd: number;
   models: CostByModel[];
   days: CostByDay[];
-  missing_pricing_models: MissingPricingModel[];
+  /** Model có call mà gateway không báo cost (ghi 0) — tổng cost_usd bị thiếu phần này. */
+  cost_unavailable_models: CostUnavailableModel[];
 }
 
 export interface CostByModel {
   llm_provider?: string | null;
   llm_model?: string | null;
-  request_count: number;
+  /** Số LLM call của model; một lượt chat (request) có thể gồm nhiều call. */
+  call_count: number;
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
-  estimated_cost_usd: number;
+  cost_usd: number;
 }
 
 export interface CostByDay {
@@ -171,13 +195,13 @@ export interface CostByDay {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
-  estimated_cost_usd: number;
+  cost_usd: number;
 }
 
-export interface MissingPricingModel {
+export interface CostUnavailableModel {
   llm_provider?: string | null;
   llm_model?: string | null;
-  request_count: number;
+  call_count: number;
 }
 
 export interface QuotaPolicy {
@@ -187,18 +211,6 @@ export interface QuotaPolicy {
   dailyTokenLimit: number;
   dailyCostLimitUsd: number;
   rateLimitPerMinute?: number | null;
-}
-
-export interface ModelPricingInfo {
-  provider: string;
-  model: string;
-  input_price_per_1m_tokens: number;
-  output_price_per_1m_tokens: number;
-  currency: string;
-}
-
-export interface ModelPricingListResponse {
-  pricing: ModelPricingInfo[];
 }
 
 export interface PageResponse<T> {
@@ -316,26 +328,6 @@ export interface QuotaPolicyUpsert {
   daily_token_limit: number;
   daily_cost_limit_usd: number;
   rate_limit_per_minute?: number | null;
-}
-
-export interface ModelPricingItem {
-  id: string;
-  provider: string;
-  model: string;
-  input_price_per_1m_tokens: number;
-  output_price_per_1m_tokens: number;
-  currency: string;
-  active: boolean;
-  updated_at: string;
-}
-
-export interface ModelPricingUpsert {
-  provider: string;
-  model: string;
-  input_price_per_1m_tokens: number;
-  output_price_per_1m_tokens: number;
-  currency?: string;
-  active?: boolean;
 }
 
 export interface FhirBundle {

@@ -16,7 +16,7 @@ prepare ─ cache_lookup ──hit───────────────�
 - Semantic cache đặt trước router ⇒ cache hit tốn 0 LLM call.
 - Rolling summary chạy song song cả lượt, không chặn response.
 - Các step FHIR độc lập chạy song song.
-- Mọi LLM call đi qua LiteLLM gateway (virtual key + budget + spend log theo stage).
+- Mọi LLM call đi qua LiteLLM gateway (không trạng thái; cost từng call về Spring ghi sổ).
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ from agent.state import (
 from api.schemas import ChatRequest
 from cache.semantic_cache import SemanticCacheService
 from fhir.client import FhirClient
-from llm.client import set_gateway_context
+from llm.client import llm_unavailable_reason, recorded_calls, set_gateway_context, start_call_log
 
 
 _compiled_graph = None
@@ -126,7 +126,9 @@ async def run_agent(
     summary_generator: SummaryGenerator,
 ) -> dict[str, Any]:
     """Chạy một lượt chat qua agent graph và trả payload cho Spring."""
-    set_gateway_context(request.llm_key, request.user_id)
+    set_gateway_context(request.user_id)
+    # Mở sổ call trước khi tạo summary task/graph để mọi call (kể cả task con) ghi chung.
+    start_call_log()
     trace_id = uuid.uuid4().hex
 
     conversation_context = compact_conversation_for_llm(request.conversation_context)
@@ -163,6 +165,12 @@ async def run_agent(
     payload.setdefault("agent_route", state.get("route") or ROUTE_CACHE)
     payload["trace_id"] = trace_id
     payload["stage_usage"] = deps.stage_usage
+    # Từng LLM call (stage, model, token, cost thật của gateway, call_id) — Spring lưu
+    # thành llm_call_usage để báo cáo theo model/stage đúng.
+    payload["llm_calls"] = recorded_calls()
+    unavailable = llm_unavailable_reason()
+    if unavailable:
+        payload["llm_unavailable_reason"] = unavailable
     payload["prompt_versions"] = {
         "router": ROUTER_PROMPT_VERSION,
         "planner": PLANNER_PROMPT_VERSION,

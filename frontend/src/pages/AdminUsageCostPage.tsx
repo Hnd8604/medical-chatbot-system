@@ -6,7 +6,6 @@ import type {
   CostByDay,
   CostByModel,
   CostSummaryResponse,
-  ModelPricingInfo,
   QuotaStatusResponse,
 } from "../lib/types";
 import { formatDate, formatNumber, formatUsd, numericValue } from "../lib/formatters";
@@ -38,13 +37,11 @@ function progressTone(value: number) {
   return "blue";
 }
 
-function modelName(item: CostByModel | ModelPricingInfo) {
-  if ("model" in item) return item.model || "unknown";
+function modelName(item: CostByModel) {
   return item.llm_model || "unknown";
 }
 
-function providerName(item: CostByModel | ModelPricingInfo) {
-  if ("provider" in item) return item.provider || "unknown";
+function providerName(item: CostByModel) {
   return item.llm_provider || "unknown";
 }
 
@@ -71,11 +68,11 @@ export function AdminUsageCostPage() {
   const requestPct = percent(quota?.used_requests, quota?.daily_request_limit);
   const tokenPct = percent(quota?.used_tokens, quota?.daily_token_limit);
   const costPct = percent(quota?.used_cost_usd, quota?.daily_cost_limit_usd);
-  const modelMaxCost = maxBy(cost?.models || [], (item) => numericValue(item.estimated_cost_usd));
+  const modelMaxCost = maxBy(cost?.models || [], (item) => numericValue(item.cost_usd));
   const dayMaxRequests = maxBy(cost?.days || [], (item) => numericValue(item.request_count));
 
   const sortedModels = useMemo(
-    () => [...(cost?.models || [])].sort((left, right) => numericValue(right.estimated_cost_usd) - numericValue(left.estimated_cost_usd)),
+    () => [...(cost?.models || [])].sort((left, right) => numericValue(right.cost_usd) - numericValue(left.cost_usd)),
     [cost?.models],
   );
   const sortedDays = useMemo(
@@ -277,7 +274,7 @@ export function AdminUsageCostPage() {
             progress={costPct}
             progressTone={progressTone(costPct)}
           />
-          <MetricCard label="Cost range" value={formatUsd(cost?.estimated_cost_usd)} description={`${formatNumber(cost?.request_count)} request`} />
+          <MetricCard label="Cost range" value={formatUsd(cost?.cost_usd)} description={`${formatNumber(cost?.request_count)} request`} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -325,11 +322,11 @@ export function AdminUsageCostPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{modelName(item)}</p>
-                        <p className="text-xs text-muted-foreground">{providerName(item)} · {formatNumber(item.request_count)} request</p>
+                        <p className="text-xs text-muted-foreground">{providerName(item)} · {formatNumber(item.call_count)} call</p>
                       </div>
-                      <span className="font-semibold text-foreground">{formatUsd(item.estimated_cost_usd)}</span>
+                      <span className="font-semibold text-foreground">{formatUsd(item.cost_usd)}</span>
                     </div>
-                    <MiniBar value={numericValue(item.estimated_cost_usd)} max={modelMaxCost} tone="green" />
+                    <MiniBar value={numericValue(item.cost_usd)} max={modelMaxCost} tone="green" />
                   </div>
                 ))}
               </div>
@@ -352,7 +349,7 @@ export function AdminUsageCostPage() {
                     <span className="font-semibold text-foreground">{formatDate(day.date)}</span>
                     <span className="font-mono text-sm text-accent">{formatNumber(day.request_count)} req</span>
                   </div>
-                  <p className="mt-2 text-lg font-semibold text-foreground">{formatUsd(day.estimated_cost_usd)}</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{formatUsd(day.cost_usd)}</p>
                   <MiniBar value={numericValue(day.request_count)} max={dayMaxRequests} />
                   <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
                     <div>
@@ -372,16 +369,19 @@ export function AdminUsageCostPage() {
           )}
         </section>
 
-        {cost?.missing_pricing_models?.length ? (
+        {cost?.cost_unavailable_models?.length ? (
           <section className="rounded-lg border border-warning/30 bg-warning/5 p-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="amber">Missing pricing</Badge>
-              {cost.missing_pricing_models.map((item) => (
+              <Badge tone="amber">Gateway không báo cost</Badge>
+              {cost.cost_unavailable_models.map((item) => (
                 <span key={`${item.llm_provider}-${item.llm_model}`} className="font-mono text-sm text-foreground">
-                  {item.llm_provider}/{item.llm_model} ({formatNumber(item.request_count)})
+                  {item.llm_provider}/{item.llm_model} ({formatNumber(item.call_count)} call)
                 </span>
               ))}
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Các call này được ghi chi phí 0 nên tổng chi phí trong kỳ đang thiếu phần này. Kiểm tra cấu hình/version LiteLLM.
+            </p>
           </section>
         ) : null}
       </div>

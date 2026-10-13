@@ -39,11 +39,18 @@ import com.medicalchatbot.backend.mapper.ChatbotResponseMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
+import com.medicalchatbot.backend.repository.LlmCallUsageRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatSessionSummaryProjection;
+import com.medicalchatbot.backend.entity.LlmCallUsage;
+import com.medicalchatbot.backend.entity.UsageLog;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -72,16 +79,13 @@ class ChatApplicationServiceTest {
     private QuotaService quotaService;
 
     @Mock
-    private CostEstimationService costEstimationService;
+    private LlmCallUsageRepository llmCallUsageRepository;
 
     @Mock
     private CurrentUserService currentUserService;
 
     @Mock
     private UserPatientLinkRepository userPatientLinkRepository;
-
-    @Mock
-    private LlmGatewayKeyService llmGatewayKeyService;
 
     @Test
     void sessionMessagesRejectsSessionOutsideDemoUser() {
@@ -394,7 +398,7 @@ class ChatApplicationServiceTest {
     }
 
     @Test
-    void chatSavesSpringEstimatedCostWhenUsageHasTokens() throws Exception {
+    void chatSavesGatewayCostPerCallAndFlagsCallsWithoutGatewayCost() throws Exception {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         User user = org.mockito.Mockito.mock(User.class);
         when(user.getId()).thenReturn(userId);
@@ -411,11 +415,18 @@ class ChatApplicationServiceTest {
                   "llm_model": "gpt-4.1-mini",
                   "evidence": [],
                   "memory_update": {},
+                  "trace_id": "trace-603",
                   "usage": {
-                    "input_tokens": 1000,
-                    "output_tokens": 500,
-                    "estimated_cost_usd": 0
-                  }
+                    "input_tokens": 1300,
+                    "output_tokens": 520,
+                    "cost_usd": null
+                  },
+                  "llm_calls": [
+                    {"stage": "agent_router", "provider": "openai", "model": "gpt-4o-mini",
+                     "input_tokens": 300, "output_tokens": 20, "cost_usd": 0.000057, "call_id": "c1"},
+                    {"stage": "agent_answer", "provider": "openai", "model": "gpt-4.1-mini",
+                     "input_tokens": 1000, "output_tokens": 500, "cost_usd": null, "call_id": "c2"}
+                  ]
                 }
                 """);
 
@@ -423,33 +434,118 @@ class ChatApplicationServiceTest {
         when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
         when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
         when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
-        when(costEstimationService.estimateUsd(
-                eq("openai"),
-                eq("gpt-4.1-mini"),
-                eq(1000),
-                eq(500),
-                eq(BigDecimal.ZERO)
-        )).thenReturn(new BigDecimal("0.001200"));
+        when(usageLogRepository.save(any(UsageLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
         mockAssistantMessageSave();
 
         service.chat(new ChatRequest(null, null, "danh sach benh nhan"));
 
-        verify(usageLogRepository).save(
-                eq(user),
-                eq(session),
-                eq("openai"),
-                eq("gpt-4.1-mini"),
-                eq("chat"),
-                eq("success"),
-                anyLong(),
-                eq(1000),
-                eq(500),
-                eq(new BigDecimal("0.001200")),
-                isNull(),
-                isNull(),
-                eq(0),
-                eq(BigDecimal.ZERO)
-        );
+        ArgumentCaptor<UsageLog> usageCaptor = ArgumentCaptor.forClass(UsageLog.class);
+        verify(usageLogRepository).save(usageCaptor.capture());
+        UsageLog usageLog = usageCaptor.getValue();
+        assertEquals(session, usageLog.getSession());
+        assertEquals("success", usageLog.getStatus());
+        assertEquals(1300, usageLog.getInputTokens());
+        assertEquals(520, usageLog.getOutputTokens());
+        // router: cost gateway 0.000057; answer: gateway không báo -> ghi 0, tổng bị thiếu.
+        assertEquals(new BigDecimal("0.000057"), usageLog.getEstimatedCostUsd());
+        assertEquals("unavailable", usageLog.getCostSource());
+        assertEquals("trace-603", usageLog.getTraceId());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<LlmCallUsage>> callsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(llmCallUsageRepository).saveAll(callsCaptor.capture());
+        List<LlmCallUsage> calls = callsCaptor.getValue();
+        assertEquals(2, calls.size());
+        assertEquals("gpt-4o-mini", calls.get(0).getLlmModel());
+        assertEquals("gateway", calls.get(0).getCostSource());
+        assertEquals("c1", calls.get(0).getGatewayCallId());
+        assertEquals("gpt-4.1-mini", calls.get(1).getLlmModel());
+        assertEquals(new BigDecimal("0.000000"), calls.get(1).getCostUsd());
+        assertEquals("unavailable", calls.get(1).getCostSource());
+    }
+
+    @Test
+    void chatRecordsSpentCallsWhenChatbotFailsMidPipeline() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000604");
+        ChatSession session = new ChatSession(sessionId);
+        ChatApplicationService service = newService();
+        // Router đã chạy (tốn tiền) rồi lượt bị chặn policy -> chatbot trả 403.
+        byte[] errorBody = """
+                {"detail": "Bạn không có quyền xem dữ liệu này.",
+                 "llm_calls": [{"stage": "agent_router", "provider": "openai", "model": "gpt-4o-mini",
+                                "input_tokens": 300, "output_tokens": 20, "cost_usd": 0.000057}]}
+                """.getBytes(StandardCharsets.UTF_8);
+        HttpClientErrorException policyError = HttpClientErrorException.create(
+                HttpStatus.FORBIDDEN, "Forbidden", HttpHeaders.EMPTY, errorBody, StandardCharsets.UTF_8);
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
+        when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenThrow(policyError);
+        when(usageLogRepository.save(any(UsageLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThrows(HttpClientErrorException.class,
+                () -> service.chat(new ChatRequest(null, null, "danh sach benh nhan")));
+
+        ArgumentCaptor<UsageLog> usageCaptor = ArgumentCaptor.forClass(UsageLog.class);
+        verify(usageLogRepository).save(usageCaptor.capture());
+        UsageLog usageLog = usageCaptor.getValue();
+        assertEquals("failed", usageLog.getStatus());
+        assertEquals(new BigDecimal("0.000057"), usageLog.getEstimatedCostUsd());
+        assertEquals("gateway", usageLog.getCostSource());
+        // Session vừa tạo trong transaction chat sẽ rollback -> không được tham chiếu.
+        assertEquals(null, usageLog.getSession());
+        verify(auditLogRepository).save(eq(user), isNull(), eq("CHAT_FAILED"), any(), isNull(), any());
+    }
+
+    @Test
+    void chatKeepsSpentCallsWhenSavingTheTurnFails() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000606");
+        ChatSession session = new ChatSession(sessionId);
+        ChatApplicationService service = newService();
+        JsonNode response = new ObjectMapper().readTree("""
+                {
+                  "answer": "Theo du lieu FHIR...",
+                  "intent": "list_patients",
+                  "tool_name": "search_patients",
+                  "evidence": [],
+                  "memory_update": {},
+                  "llm_calls": [
+                    {"stage": "agent_answer", "provider": "openai", "model": "gpt-4.1-mini",
+                     "input_tokens": 1000, "output_tokens": 500, "cost_usd": 0.0012, "call_id": "c1"}
+                  ]
+                }
+                """);
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
+        when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
+        // chatbot-service đã trả lời (LLM đã tốn tiền) nhưng lưu assistant message lỗi.
+        when(chatMessageRepository.saveAndReturn(any(ChatSession.class), eq(ChatMessageRole.ASSISTANT), any(), any()))
+                .thenThrow(new IllegalStateException("db down"));
+        when(usageLogRepository.save(any(UsageLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.chat(new ChatRequest(null, null, "danh sach benh nhan")));
+
+        ArgumentCaptor<UsageLog> usageCaptor = ArgumentCaptor.forClass(UsageLog.class);
+        verify(usageLogRepository).save(usageCaptor.capture());
+        UsageLog usageLog = usageCaptor.getValue();
+        assertEquals("failed", usageLog.getStatus());
+        assertEquals(new BigDecimal("0.001200"), usageLog.getEstimatedCostUsd());
+        assertEquals("gateway", usageLog.getCostSource());
+        // Session vừa tạo trong transaction chat sẽ rollback -> không được tham chiếu.
+        assertEquals(null, usageLog.getSession());
+        verify(auditLogRepository).save(eq(user), isNull(), eq("CHAT_FAILED"), any(), isNull(), any());
     }
 
     @Test
@@ -578,9 +674,10 @@ class ChatApplicationServiceTest {
         ChatbotResponseMapper chatbotResponseMapper = new ChatbotResponseMapper(new ObjectMapper());
         ChatInteractionRecorder chatInteractionRecorder = new ChatInteractionRecorder(
                 usageLogRepository,
+                llmCallUsageRepository,
                 auditLogRepository,
-                costEstimationService,
-                chatbotResponseMapper
+                chatbotResponseMapper,
+                new ObjectMapper()
         );
         return new ChatApplicationService(
                 chatSessionRepository,
@@ -589,7 +686,6 @@ class ChatApplicationServiceTest {
                 quotaService,
                 currentUserService,
                 new UserPatientScopeService(userPatientLinkRepository),
-                llmGatewayKeyService,
                 new ChatMapper(),
                 chatbotResponseMapper,
                 chatInteractionRecorder

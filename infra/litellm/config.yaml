@@ -1,4 +1,6 @@
-# App gửi tên alias (gpt-4o-mini / gpt-4.1-mini) → LiteLLM match với model_list trong config.yaml rồi forward tới OpenAI.
+# App gửi tên alias (gpt-4o-mini / gpt-4.1-mini) → LiteLLM match với model_list trong config.yaml rồi forward tới provider.
+# Them provider/model: them mot muc o day (key cua provider khai bao trong docker-compose.yml
+# + .env), roi them alias vao chatbot-service/llm/models.py de bao cao co ten on dinh.
 model_list:
   - model_name: gpt-4o-mini
     litellm_params:
@@ -8,22 +10,24 @@ model_list:
     litellm_params:
       model: openai/gpt-4.1-mini
       api_key: os.environ/OPENAI_API_KEY
-  - model_name: groq-llama-8b
-    litellm_params:
-      model: groq/llama-3.1-8b-instant
-      api_key: os.environ/GROQ_API_KEY
-  - model_name: groq-llama-70b
-    litellm_params:
-      model: groq/llama-3.3-70b-versatile
-      api_key: os.environ/GROQ_API_KEY
 
 litellm_settings:
-  request_timeout: 30
+  # Thap hon LLM_REQUEST_TIMEOUT_SECONDS (20s) cua chatbot-service: gateway bo cuoc truoc
+  # client, nen khong co call nao gateway con chay (va tinh tien) ma client da bo.
+  request_timeout: 18
   drop_params: true
 
+router_settings:
+  # Tran chi tieu cua CA HE THONG theo provider — luoi an toan khi code loi goi lap hoac co
+  # ai goi vong qua Spring. Han muc theo tung user do Spring chan truoc moi luot chat.
+  # Cham tran => gateway tra 429, chatbot-service roi ve luat/template (khong goi LLM).
+  # So da tieu giu trong bo nho: container khoi dong lai thi dem lai tu 0.
+  provider_budget_config:
+    openai:
+      budget_limit: 50 # USD
+      time_period: 1d
+
 general_settings:
+  # Khong trang thai: khong database, khong virtual key, khong spend log. Gateway chi chuyen
+  # tiep call va bao cost tung call qua header x-litellm-response-cost; Spring ghi so.
   master_key: os.environ/LITELLM_MASTER_KEY
-  # DB-backed: bat virtual key + spend log + Admin UI. LiteLLM tu chay Prisma
-  # migrate tao bang LiteLLM_* luc boot khi co database_url.
-  database_url: os.environ/DATABASE_URL
-  store_model_in_db: true

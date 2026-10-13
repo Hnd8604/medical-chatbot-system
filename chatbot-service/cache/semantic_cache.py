@@ -131,8 +131,9 @@ class SemanticCacheService:
     ) -> None:
         """Stores the newly generated LLM answer into the vector cache database.
 
-        ``llm_provider``/``llm_model`` là model đã sinh câu trả lời gốc — khi cache
-        hit, Spring dùng chúng để tính saved_cost đúng theo bảng model_pricing.
+        ``usage`` gồm cả ``cost_usd`` thật của gateway cho câu trả lời gốc — khi cache hit,
+        đó chính là chi phí tiết kiệm được (``saved_usage.saved_cost_usd``).
+        ``llm_provider``/``llm_model`` là model đã sinh câu trả lời gốc.
         """
         vector = await self._get_embedding(question)
 

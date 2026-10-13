@@ -5,6 +5,8 @@ import java.util.UUID;
 
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -37,6 +39,8 @@ public class MessageFeedback {
     @JoinColumn(name = "user_id")
     private User user;
 
+    // Cot la smallint (V1); khai bao ro de Hibernate validate khop voi schema.
+    @JdbcTypeCode(SqlTypes.SMALLINT)
     @Column(nullable = false)
     private int rating;
 

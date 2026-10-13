@@ -55,9 +55,6 @@ class QuotaServiceTest {
     @Mock
     private CurrentUserService currentUserService;
 
-    @Mock
-    private LiteLLMSpendService litellmSpendService;
-
     @Test
     void currentUserStatusReturnsRemainingQuota() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
@@ -73,7 +70,7 @@ class QuotaServiceTest {
                 1000,
                 new BigDecimal("0.50")
         )));
-        when(usageLogRepository.summarizeSuccessfulUsage(
+        when(usageLogRepository.summarizeUsage(
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
@@ -107,7 +104,7 @@ class QuotaServiceTest {
                 1000,
                 new BigDecimal("0.50")
         )));
-        when(usageLogRepository.summarizeSuccessfulUsage(
+        when(usageLogRepository.summarizeUsage(
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
@@ -155,7 +152,7 @@ class QuotaServiceTest {
                 50000,
                 new BigDecimal("0.01")
         )));
-        when(usageLogRepository.summarizeSuccessfulUsage(
+        when(usageLogRepository.summarizeUsage(
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
@@ -196,7 +193,7 @@ class QuotaServiceTest {
                 50000,
                 new BigDecimal("1.00")
         )));
-        when(usageLogRepository.summarizeSuccessfulUsage(
+        when(usageLogRepository.summarizeUsage(
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
@@ -229,8 +226,7 @@ class QuotaServiceTest {
                 alertService,
                 notificationService,
                 ZoneId.of("Asia/Saigon"),
-                currentUserService,
-                litellmSpendService
+                currentUserService
         );
     }
 }

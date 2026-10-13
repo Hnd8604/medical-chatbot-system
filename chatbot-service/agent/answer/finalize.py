@@ -1,10 +1,10 @@
-"""Khép lại một lượt: sinh câu trả lời, ghi cache, kế toán usage/cost, dựng memory_update.
+"""Khép lại một lượt: sinh câu trả lời, ghi cache, kế toán usage, dựng memory_update.
 
 Hai lối ra:
 
 - ``finalize_answer``: nhánh FHIR — evidence budget → terminology (nếu cần giải thích)
   → answer LLM (hoặc template fast-path) → grounding check → ghi semantic cache → chờ
-  rolling summary → cost → ``memory_update``.
+  rolling summary → usage → ``memory_update``.
 - ``finalize_simple``: nhánh không-FHIR (general_chat / conversation_meta / unsupported /
   clarification) — câu trả lời đã có sẵn, chỉ còn kế toán + memory.
 """
@@ -23,7 +23,7 @@ from agent.memory.summary import SummaryResult
 from agent.state import ANSWER_MODE_DATA_ONLY
 from app.config import get_settings
 from llm.model_select import ModelChoice
-from llm.pricing import apply_estimated_cost, provider_and_pricing_model
+from llm.models import provider_and_model
 from llm.usage import combine_usage, zero_usage
 from terminology.enrichment_service import get_enrichment_service
 
@@ -87,7 +87,6 @@ async def finalize_answer(
         payload["summary_usage"] = zero_usage()
         payload["usage"] = combine_usage(meta.usage)
         payload["pending_question"] = question
-        apply_estimated_cost(payload)
         if summary_task and not summary_task.done():
             summary_task.cancel()
         return payload
@@ -127,10 +126,10 @@ async def finalize_answer(
     payload["answer_usage"] = answer.usage
     if answer.reason:
         payload["answer_reason"] = answer.reason
-    # Model thực tế từ response (phản ánh cả fallback của gateway) để Spring tính cost
-    # đúng theo (provider, model) trong model_pricing.
+    # Model thực tế từ response (phản ánh cả fallback của gateway) — model "chính" của lượt
+    # cho audit/hiển thị. Cost theo từng model nằm ở llm_calls.
     if answer.model:
-        payload["llm_provider"], payload["llm_model"] = provider_and_pricing_model(answer.model)
+        payload["llm_provider"], payload["llm_model"] = provider_and_model(answer.model)
 
     grounded = True
     if answer.source == "llm" and settings.grounding_check_mode != "off":
@@ -151,11 +150,9 @@ async def finalize_answer(
     if summary.source == "error" and summary.reason:
         payload["summary_reason"] = summary.reason
 
-    # usage tổng gộp token của router/planner/summary (model rẻ) lẫn answer; cost tính
-    # theo model của answer nên ước tính hơi dư — chấp nhận được, cost thật lấy từ
-    # spend log của gateway.
+    # usage tổng gộp token + cost thật (gateway) của router/planner/answer/summary.
+    # Chi tiết theo từng call/model: payload["llm_calls"] (graph.run_agent gắn).
     payload["usage"] = combine_usage(meta.usage, answer.usage, summary.usage)
-    apply_estimated_cost(payload)
     memory_update = build_memory_update(payload, meta, summary=summary.summary)
     if memory_update:
         payload["memory_update"] = memory_update
@@ -178,7 +175,6 @@ async def finalize_simple(
     payload["answer_usage"] = combine_usage(meta.usage)
     payload["summary_usage"] = summary.usage
     payload["usage"] = combine_usage(meta.usage, summary.usage)
-    apply_estimated_cost(payload)
     memory_update = build_memory_update(payload, meta, summary=summary.summary)
     if memory_update:
         payload["memory_update"] = memory_update
@@ -277,7 +273,7 @@ def _grounding(*, checked: bool, passed: bool | None = None) -> dict[str, Any]:
 def _apply_turn_metadata(payload: dict[str, Any], meta: TurnMeta, *, model: str) -> None:
     payload["tool_name"] = meta.tool_name
     payload["intent_source"] = meta.source
-    payload["llm_provider"], payload["llm_model"] = provider_and_pricing_model(model)
+    payload["llm_provider"], payload["llm_model"] = provider_and_model(model)
     payload.setdefault("intent", meta.intent)
     payload.setdefault("patient_id", meta.patient_id)
     payload.setdefault("evidence", [])

@@ -72,8 +72,7 @@ class SecurityConfigTest {
             "/api/chat/sessions",
             "/api/quota/status",
             "/api/usage/cost-summary",
-            "/api/notifications",
-            "/api/model-pricing"
+            "/api/notifications"
     })
     @WithMockUser(roles = "USER")
     void authenticatedEndpointsAllowAuthenticatedUser(String path) throws Exception {
@@ -142,7 +141,6 @@ class SecurityConfigTest {
                 "/api/quota/status",
                 "/api/usage/cost-summary",
                 "/api/notifications",
-                "/api/model-pricing",
                 "/api/patients",
                 "/api/patients/patient-1",
                 "/api/admin/users",

@@ -18,7 +18,7 @@ from typing import Any, Protocol
 from agent.prompts import SUMMARY_SYSTEM_PROMPT
 from agent.state import STAGE_SUMMARY
 from app.config import get_settings
-from llm.client import GatewayBudgetExceededError, LlmCallError, call_llm
+from llm.client import LlmCallError, call_llm
 from llm.usage import zero_usage
 
 
@@ -92,9 +92,9 @@ class LlmSummaryGenerator:
                 max_output_tokens=self.max_output_tokens,
                 temperature=0.2,
             )
-        except (LlmCallError, GatewayBudgetExceededError) as exc:
-            # Summary là việc phụ: mọi lỗi (kể cả budget) chỉ log warning — làm hỏng cả
-            # lượt chat để vứt answer đã sinh là tệ hơn; lượt kế tiếp sẽ bị chặn 429 ở router.
+        except LlmCallError as exc:
+            # Summary là việc phụ: mọi lỗi chỉ log warning — làm hỏng cả lượt chat để vứt
+            # answer đã sinh là tệ hơn.
             log.warning("Summary LLM call failed: %s", exc)
             return SummaryResult(source="error", reason=str(exc))
 

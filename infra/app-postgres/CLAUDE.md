@@ -27,7 +27,8 @@ Password: app_password
 - `backend/src/main/resources/db/devmigration/` contains development-only repeatable
   migration logic for demo accounts.
 - `cache_entries` was removed by `V5`; semantic response caching is stored in Qdrant.
-- The current schema also includes LiteLLM virtual keys and backup/restore history.
+- The current schema also includes backup/restore history. LiteLLM runs stateless, so it
+  has no database and Spring keeps no virtual keys (`llm_virtual_keys` was dropped by `V11`).
 
 ## Rule
 
@@ -40,8 +41,7 @@ Use this database for application data:
 - quota policies
 - audit logs
 - alerts and notifications
-- feedback and model pricing
-- LiteLLM virtual keys
+- feedback
 - backup and restore history
 
 Do not store this application data inside the HAPI FHIR PostgreSQL database.

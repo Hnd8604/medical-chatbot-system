@@ -5,7 +5,7 @@ type UsageDay = {
   day?: string;
   request_count?: number | string;
   total_tokens?: number | string;
-  estimated_cost_usd?: number | string;
+  cost_usd?: number | string;
 };
 
 function shortDate(value?: string): string {
@@ -82,14 +82,14 @@ export function SevenDayUsageChart({ days }: SevenDayUsageChartProps) {
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-semibold text-foreground">{shortDate(day.date || day.day)}</p>
-                    <p className="text-[10px] tabular-nums text-muted-foreground">{formatUsd(day.estimated_cost_usd)}</p>
+                    <p className="text-[10px] tabular-nums text-muted-foreground">{formatUsd(day.cost_usd)}</p>
                   </div>
 
                   <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-max -translate-x-1/2 rounded-lg border border-border bg-foreground px-3 py-2 text-xs text-white shadow-card group-hover:block">
                     <p className="font-semibold">{shortDate(day.date || day.day)}</p>
                     <p className="mt-1 text-white/80">Tokens: {formatNumber(tokens)}</p>
                     <p className="text-white/80">Requests: {formatNumber(requests)}</p>
-                    <p className="text-white/80">Chi phí: {formatUsd(day.estimated_cost_usd)}</p>
+                    <p className="text-white/80">Chi phí: {formatUsd(day.cost_usd)}</p>
                   </div>
                 </div>
               );

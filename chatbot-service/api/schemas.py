@@ -33,9 +33,6 @@ class ChatRequest(BaseModel):
 
     quota_used_ratio: float = Field(default=0.0, ge=0.0)
 
-    # Virtual key LiteLLM cua user (do Spring cap). None => dung master key mac dinh.
-    llm_key: str | None = None
-
 
 ResponseStatus = Literal[
     "answered",
@@ -65,6 +62,18 @@ class GroundingInfo(BaseModel):
     passed: bool | None = None
 
 
+class LlmCallRecord(BaseModel):
+    """Một LLM call đã chạy trong lượt. ``cost_usd`` None = gateway không báo cost."""
+
+    stage: str
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float | None = None
+    call_id: str | None = None
+
+
 class ChatResponse(BaseModel):
     """Contract của ``POST /chat`` cho Spring/FE.
 
@@ -87,4 +96,7 @@ class ChatResponse(BaseModel):
     plan_steps: list[PlanStepRef] = Field(default_factory=list)
     failed_steps: list[FailedStep] = Field(default_factory=list)
     grounding: GroundingInfo | None = None
-    stage_usage: dict[str, dict[str, int | float]] = Field(default_factory=dict)
+    stage_usage: dict[str, dict[str, int | float | None]] = Field(default_factory=dict)
+    llm_calls: list[LlmCallRecord] = Field(default_factory=list)
+    # Có khi lượt này không được gọi LLM (gateway chưa cấu hình) — Spring ghi audit.
+    llm_unavailable_reason: str | None = None

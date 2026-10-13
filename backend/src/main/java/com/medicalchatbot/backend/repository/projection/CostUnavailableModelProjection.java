@@ -1,8 +1,8 @@
 package com.medicalchatbot.backend.repository.projection;
 
-public record MissingPricingModelProjection(
+public record CostUnavailableModelProjection(
         String llmProvider,
         String llmModel,
-        int requestCount
+        int callCount
 ) {
 }

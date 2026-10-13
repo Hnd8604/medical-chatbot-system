@@ -6,15 +6,14 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
-import com.medicalchatbot.backend.dto.response.ModelPricingListResponse;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.mapper.CostMapper;
-import com.medicalchatbot.backend.repository.ModelPricingRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.projection.CostSummaryProjection;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,7 +21,6 @@ public class CostManagementService {
 
     private final UserRepository userRepository;
     private final UsageLogRepository usageLogRepository;
-    private final ModelPricingRepository modelPricingRepository;
     private final CurrentUserService currentUserService;
     private final ZoneId costZone;
     private final CostMapper costMapper;
@@ -31,40 +29,36 @@ public class CostManagementService {
     public CostManagementService(
             UserRepository userRepository,
             UsageLogRepository usageLogRepository,
-            ModelPricingRepository modelPricingRepository,
             CurrentUserService currentUserService,
-            CostMapper costMapper
+            CostMapper costMapper,
+            @Value("${app.quota.timezone:Asia/Ho_Chi_Minh}") String costTimezone
     ) {
         this(
                 userRepository,
                 usageLogRepository,
-                modelPricingRepository,
                 currentUserService,
-                ZoneId.systemDefault(),
+                ZoneId.of(costTimezone),
                 costMapper
         );
     }
 
     CostManagementService(
             UsageLogRepository usageLogRepository,
-            ModelPricingRepository modelPricingRepository,
             ZoneId costZone,
             CurrentUserService currentUserService
     ) {
-        this(null, usageLogRepository, modelPricingRepository, currentUserService, costZone, new CostMapper());
+        this(null, usageLogRepository, currentUserService, costZone, new CostMapper());
     }
 
     CostManagementService(
             UserRepository userRepository,
             UsageLogRepository usageLogRepository,
-            ModelPricingRepository modelPricingRepository,
             CurrentUserService currentUserService,
             ZoneId costZone,
             CostMapper costMapper
     ) {
         this.userRepository = userRepository;
         this.usageLogRepository = usageLogRepository;
-        this.modelPricingRepository = modelPricingRepository;
         this.currentUserService = currentUserService;
         this.costZone = costZone;
         this.costMapper = costMapper;
@@ -86,10 +80,6 @@ public class CostManagementService {
         return costSummaryForUser(userId, from, to);
     }
 
-    public ModelPricingListResponse activePricing() {
-        return new ModelPricingListResponse(costMapper.toPricingInfo(modelPricingRepository.findActivePricing()));
-    }
-
     private CostSummaryResponse costSummaryForUser(UUID userId, LocalDate from, LocalDate to) {
         OffsetDateTime startInclusive = from.atStartOfDay(costZone).toOffsetDateTime();
         OffsetDateTime endExclusive = to.plusDays(1).atStartOfDay(costZone).toOffsetDateTime();
@@ -101,7 +91,7 @@ public class CostManagementService {
                 totals,
                 usageLogRepository.summarizeCostByModel(userId, startInclusive, endExclusive),
                 usageLogRepository.summarizeCostByDay(userId, startInclusive, endExclusive, costZone.getId()),
-                usageLogRepository.findMissingPricingModels(userId, startInclusive, endExclusive)
+                usageLogRepository.findCostUnavailableModels(userId, startInclusive, endExclusive)
         );
     }
 

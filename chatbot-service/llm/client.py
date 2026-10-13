@@ -1,16 +1,17 @@
 """Cửa LLM duy nhất của chatbot-service — mọi call đều đi qua LiteLLM gateway.
 
-Một client ``AsyncOpenAI`` dùng chung (master key), còn thông tin theo request được ghi
-đè ở từng call:
+Gateway chạy không trạng thái (không database, không virtual key): nó chỉ chuyển call tới
+provider và báo chi phí của đúng call đó. Một client ``AsyncOpenAI`` dùng chung (master
+key); mỗi call gửi kèm ``user=<user_id>`` và ``extra_body.metadata.stage`` (router /
+planner / answer / summary...) để log của gateway đọc được.
 
-- ``extra_headers={"Authorization": "Bearer <virtual_key>"}`` để gateway chặn budget
-  đúng người (virtual key do Spring cấp).
-- ``user=<user_id>`` để spend log của gateway tách theo end-user.
-- ``extra_body.metadata.stage`` để spend log tách chi phí theo stage (router / planner /
-  answer / summary...) mà không phải tự cộng token.
+Chi phí của từng call lấy từ header ``x-litellm-response-cost`` của gateway và được ghi
+vào sổ call của request (``start_call_log``/``recorded_calls``). Sổ này đi kèm cả response
+thành công lẫn response lỗi (403/502), để Spring ghi nhận tiền đã tiêu kể cả khi lượt
+chat hỏng giữa pipeline. Spring là sổ chi phí duy nhất và là nơi chặn hạn mức theo user.
 
-Lỗi vượt budget nổi lên thành ``GatewayBudgetExceededError`` (route trả 429); mọi lỗi
-khác thành ``LlmCallError`` để nơi gọi tự chọn đường lui.
+Mọi lỗi của một call — kể cả gateway từ chối vì chạm trần chi tiêu của provider
+(``provider_budget_config``) — thành ``LlmCallError`` để nơi gọi tự chọn đường lui.
 """
 
 from __future__ import annotations
@@ -24,24 +25,27 @@ from functools import lru_cache
 from typing import Any
 
 from app.config import get_settings
-from llm.usage import usage_from_response, zero_usage
+from llm.models import provider_and_model
+from llm.usage import parse_cost, usage_from_response, zero_usage
 
 
 log = logging.getLogger(__name__)
 
 
-# Virtual key của user cho request hiện tại. None => dùng master key mặc định của client.
-current_llm_key: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "current_llm_key", default=None
-)
-# user_id (end-user) cho spend tracking ở gateway.
+# user_id (end-user) gửi kèm mỗi call để log của gateway tách được theo người dùng.
 current_end_user: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_end_user", default=None
 )
 
 
-class GatewayBudgetExceededError(Exception):
-    """Gateway từ chối vì virtual key đã vượt budget token/cost trong kỳ."""
+# Sổ call LLM của request hiện tại (list dùng chung: task con như rolling summary copy
+# context nhưng vẫn trỏ cùng list). None => không ghi sổ (vd test gọi thẳng call_llm).
+current_call_log: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
+    "current_call_log", default=None
+)
+
+_COST_HEADER = "x-litellm-response-cost"
+_CALL_ID_HEADER = "x-litellm-call-id"
 
 
 class LlmCallError(Exception):
@@ -57,11 +61,29 @@ class LlmCallError(Exception):
 class LlmResult:
     content: str
     model: str | None = None
-    usage: dict[str, int | float] = field(default_factory=zero_usage)
+    usage: dict[str, Any] = field(default_factory=zero_usage)
+    call_id: str | None = None
 
 
-def set_gateway_context(llm_key: str | None, end_user: str | None) -> None:
-    current_llm_key.set(llm_key or None)
+def start_call_log() -> list[dict[str, Any]]:
+    """Mở sổ call mới cho request hiện tại; gọi trước khi chạy agent."""
+    calls: list[dict[str, Any]] = []
+    current_call_log.set(calls)
+    return calls
+
+
+def recorded_calls() -> list[dict[str, Any]]:
+    return list(current_call_log.get() or [])
+
+
+def llm_unavailable_reason() -> str | None:
+    """Lý do request này không được gọi LLM; None khi được gọi."""
+    if not get_settings().use_llm:
+        return "gateway_not_configured"
+    return None
+
+
+def set_gateway_context(end_user: str | None) -> None:
     current_end_user.set(end_user or None)
 
 
@@ -71,45 +93,7 @@ def gateway_call_kwargs() -> dict[str, Any]:
     user = current_end_user.get()
     if user:
         kwargs["user"] = user
-    key = current_llm_key.get()
-    if key:
-        # Ghi đè header Authorization của client (master key) bằng virtual key của user.
-        kwargs["extra_headers"] = {"Authorization": f"Bearer {key}"}
     return kwargs
-
-
-_BUDGET_ERROR_MARKERS = ("exceededbudget", "budget_exceeded")
-
-
-def _looks_like_budget_text(text: str) -> bool:
-    if any(marker in text for marker in _BUDGET_ERROR_MARKERS):
-        return True
-    return "budget" in text and ("exceed" in text or "crossed" in text or "over" in text)
-
-
-def is_budget_error(exc: Exception) -> bool:
-    """Nhận biết lỗi vượt budget từ LiteLLM.
-
-    Ưu tiên tín hiệu có cấu trúc từ openai SDK: ``APIStatusError.body`` mang
-    ``error.type/code/message`` do LiteLLM trả về (vd type ``budget_exceeded``,
-    message ``ExceededBudget: ...``). Khớp chuỗi trên message chỉ là lớp phủ vì
-    wording có thể đổi theo version LiteLLM.
-    """
-    body = getattr(exc, "body", None)
-    error = body.get("error", body) if isinstance(body, dict) else None
-    if isinstance(error, dict):
-        structured = " ".join(
-            str(error.get(key, "")) for key in ("type", "code", "message")
-        ).lower()
-        if _looks_like_budget_text(structured):
-            return True
-    text = f"{getattr(exc, 'message', '')} {exc}".lower()
-    return _looks_like_budget_text(text)
-
-
-def raise_if_budget_exceeded(exc: Exception) -> None:
-    if is_budget_error(exc):
-        raise GatewayBudgetExceededError(str(exc)) from exc
 
 
 @lru_cache
@@ -121,6 +105,9 @@ def _client():
         api_key=settings.llm_api_key,
         base_url=settings.llm_base_url,
         timeout=settings.llm_request_timeout_seconds,
+        # SDK mặc định tự thử lại 2 lần; lần thử bị bỏ dở vẫn có thể bị tính tiền mà sổ
+        # call không thấy. Thử lại (nếu cần) là việc của gateway.
+        max_retries=0,
     )
 
 
@@ -136,9 +123,9 @@ async def call_llm(
     """Gọi gateway cho một stage.
 
     Không có master key ⇒ raise ``LlmCallError`` ngay (không gọi mạng), để mọi stage rơi
-    về đường lui tất định — service vẫn chạy được khi demo không có gateway.
+    về đường lui tất định.
     """
-    if not get_settings().use_llm:
+    if llm_unavailable_reason():
         raise LlmCallError(stage, "LLM gateway chưa được cấu hình (thiếu LITELLM_MASTER_KEY).")
 
     content = user_payload if isinstance(user_payload, str) else json.dumps(user_payload, ensure_ascii=False)
@@ -152,7 +139,7 @@ async def call_llm(
         kwargs["max_tokens"] = max_output_tokens
 
     try:
-        response = await _client().chat.completions.create(
+        raw = await _client().chat.completions.with_raw_response.create(
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -162,15 +149,53 @@ async def call_llm(
             **kwargs,
         )
     except Exception as exc:
-        # Budget phải nổi lên trên; các lỗi còn lại để nơi gọi fallback.
-        raise_if_budget_exceeded(exc)
         log.warning("LLM stage %s lỗi: %s", stage, exc)
         raise LlmCallError(stage, str(exc)) from exc
 
-    return LlmResult(
+    # Gateway đã trả response nghĩa là call đã bị tính tiền: đọc cost từ header trước, để
+    # body hỏng (parse lỗi) vẫn ghi được call vào sổ.
+    headers = getattr(raw, "headers", None) or {}
+    cost_usd = parse_cost(headers.get(_COST_HEADER))
+    call_id = headers.get(_CALL_ID_HEADER) or None
+    if cost_usd is None:
+        # Spring ghi call này với cost 0 + nguồn "unavailable"; log để phát hiện
+        # gateway/version không trả header.
+        log.warning("Gateway không trả %s cho stage %s", _COST_HEADER, stage)
+    try:
+        response = raw.parse()
+    except Exception as exc:
+        log.warning("LLM stage %s trả body không đọc được: %s", stage, exc)
+        _record_call(
+            stage,
+            LlmResult(content="", model=model, usage=usage_from_response(None, cost_usd), call_id=call_id),
+        )
+        raise LlmCallError(stage, str(exc)) from exc
+
+    result = LlmResult(
         content=_first_message_content(response),
         model=getattr(response, "model", None) or model,
-        usage=usage_from_response(response),
+        usage=usage_from_response(response, cost_usd),
+        call_id=call_id,
+    )
+    _record_call(stage, result)
+    return result
+
+
+def _record_call(stage: str, result: LlmResult) -> None:
+    calls = current_call_log.get()
+    if calls is None:
+        return
+    provider, model = provider_and_model(result.model)
+    calls.append(
+        {
+            "stage": stage,
+            "provider": provider,
+            "model": model,
+            "input_tokens": result.usage.get("input_tokens", 0),
+            "output_tokens": result.usage.get("output_tokens", 0),
+            "cost_usd": result.usage.get("cost_usd"),
+            "call_id": result.call_id,
+        }
     )
 
 

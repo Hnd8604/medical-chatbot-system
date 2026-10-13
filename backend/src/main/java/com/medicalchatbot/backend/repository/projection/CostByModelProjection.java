@@ -5,10 +5,10 @@ import java.math.BigDecimal;
 public record CostByModelProjection(
         String llmProvider,
         String llmModel,
-        int requestCount,
+        int callCount,
         int inputTokens,
         int outputTokens,
-        BigDecimal estimatedCostUsd
+        BigDecimal costUsd
 ) {
     public int totalTokens() {
         return inputTokens + outputTokens;

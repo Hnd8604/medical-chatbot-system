@@ -57,6 +57,30 @@ public record ChatResponse(
         JsonNode usage,
 
         @JsonProperty("saved_usage")
-        JsonNode savedUsage
+        JsonNode savedUsage,
+
+        // --- Contract agent (chatbot-service) ---
+        /** Mã tra log bên chatbot-service; FE hiển thị khi người dùng báo lỗi. */
+        @JsonProperty("trace_id")
+        String traceId,
+
+        /** answered | partial | no_data | clarification_needed | patient_selection_needed | tool_error */
+        @JsonProperty("response_status")
+        String responseStatus,
+
+        /** fhir | general_chat | conversation_meta | unsupported | cache */
+        @JsonProperty("agent_route")
+        String agentRoute,
+
+        /** [{id, tool, error_code}] — các bước truy xuất bị lỗi khi response_status = partial. */
+        @JsonProperty("failed_steps")
+        JsonNode failedSteps,
+
+        /** {checked, passed} — kết quả kiểm câu trả lời LLM so với evidence. */
+        JsonNode grounding,
+
+        /** Có khi lượt này không được gọi LLM (gateway chưa cấu hình) — trả lời bằng luật/template. */
+        @JsonProperty("llm_unavailable_reason")
+        String llmUnavailableReason
 ) {
 }

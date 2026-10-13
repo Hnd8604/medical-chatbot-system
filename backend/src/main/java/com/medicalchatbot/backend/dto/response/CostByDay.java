@@ -15,7 +15,7 @@ public record CostByDay(
         int outputTokens,
         @JsonProperty("total_tokens")
         int totalTokens,
-        @JsonProperty("estimated_cost_usd")
-        BigDecimal estimatedCostUsd
+        @JsonProperty("cost_usd")
+        BigDecimal costUsd
 ) {
 }

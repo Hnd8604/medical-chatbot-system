@@ -17,7 +17,7 @@ from agent.planning.router import reset_route_cache
 from api.schemas import ChatRequest, ChatResponse
 from app.config import get_settings
 from fhir.client import FhirClientError
-from llm.client import GatewayBudgetExceededError, LlmCallError
+from llm.client import LlmCallError, start_call_log
 from tests.fakes import FakeFhirClient
 
 
@@ -41,7 +41,7 @@ class FakeAnswerGenerator:
         return AnswerResult(
             answer=f"LLM: {kwargs['fallback_answer']}",
             source="llm",
-            usage={"input_tokens": 30, "output_tokens": 8, "estimated_cost_usd": 0},
+            usage={"input_tokens": 30, "output_tokens": 8, "cost_usd": 0.0},
             model="gpt-4o-mini",
         )
 
@@ -103,7 +103,7 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
             return mock.Mock(
                 content=llm_responses[stage],
                 model="gpt-4o-mini",
-                usage={"input_tokens": 10, "output_tokens": 3, "estimated_cost_usd": 0},
+                usage={"input_tokens": 10, "output_tokens": 3, "cost_usd": 0.0},
             )
 
         with mock.patch("agent.planning.router.call_llm", fake_call_llm), \
@@ -149,13 +149,21 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.cache.lookups, ["BN2026-00001"])
 
     async def test_cache_hit_costs_zero_llm_calls(self):
-        self.cache.hit = ("Câu trả lời cũ", "conditions", {"input_tokens": 100, "output_tokens": 20}, "openai", "gpt-4o-mini")
+        self.cache.hit = (
+            "Câu trả lời cũ",
+            "conditions",
+            {"input_tokens": 100, "output_tokens": 20, "cost_usd": 0.00003},
+            "openai",
+            "gpt-4o-mini",
+        )
         payload, calls = await self._run(make_request(), llm_responses={})
         self.assertEqual(calls, [])
         self.assertEqual(payload["answer"], "Câu trả lời cũ")
         self.assertEqual(payload["agent_route"], "cache")
         self.assertEqual(payload["usage"]["input_tokens"], 0)
         self.assertEqual(payload["saved_usage"]["saved_input_tokens"], 100)
+        # Chi phí tiết kiệm = cost gateway của câu trả lời gốc lúc ghi cache.
+        self.assertEqual(payload["saved_usage"]["saved_cost_usd"], 0.00003)
         self.assertEqual(self.answer_generator.calls, 0)
 
     async def test_general_chat_route_skips_fhir(self):
@@ -283,20 +291,6 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
         # Trường ngoài contract vẫn đi qua (extra="allow").
         self.assertIn("saved_usage", response.model_dump())
 
-    async def test_budget_error_propagates(self):
-        async def budget_call(**kwargs):
-            raise GatewayBudgetExceededError("ExceededBudget")
-
-        with mock.patch("agent.planning.router.call_llm", budget_call):
-            with self.assertRaises(GatewayBudgetExceededError):
-                await run_agent(
-                    make_request(),
-                    client=self.client,
-                    answer_generator=self.answer_generator,
-                    cache_service=self.cache,
-                    summary_generator=FakeSummaryGenerator(),
-                )
-
 
 class ChatRouteTests(unittest.TestCase):
     """Ánh xạ lỗi của agent sang HTTP ở ``POST /chat``."""
@@ -324,8 +318,33 @@ class ChatRouteTests(unittest.TestCase):
     def test_policy_error_is_403(self):
         self.assertEqual(self._post(PolicyError("cấm")).status_code, 403)
 
-    def test_budget_error_is_429(self):
-        self.assertEqual(self._post(GatewayBudgetExceededError("x")).status_code, 429)
+    def test_error_body_carries_calls_already_spent(self):
+        spent = {
+            "stage": "agent_router",
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "input_tokens": 120,
+            "output_tokens": 9,
+            "cost_usd": 0.00002,
+            "call_id": "call-1",
+        }
+
+        async def router_ok_then_fhir_down(*args, **kwargs):
+            start_call_log().append(spent)
+            raise FhirClientError("FHIR Server đang bận.", "boom")
+
+        with mock.patch("api.chat.run_agent", router_ok_then_fhir_down):
+            response = self.client.post("/chat", json=self.body)
+        self.assertEqual(response.status_code, 502)
+        body = response.json()
+        self.assertTrue(body["detail"])
+        self.assertEqual(body["llm_calls"], [spent])
+
+    def test_unexpected_error_is_500_with_calls(self):
+        with self.assertLogs("api.chat", "ERROR"):
+            response = self._post(RuntimeError("boom"))
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["llm_calls"], [])
 
     def test_contract_violation_is_logged_not_raised(self):
         async def broken_payload(*args, **kwargs):

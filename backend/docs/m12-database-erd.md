@@ -1,16 +1,18 @@
 # M12 — Database Design / ERD
 
 Tài liệu này mô tả sơ đồ quan hệ thực thể (ERD) của database ứng dụng
-(PostgreSQL), được đối chiếu với Flyway migration V1→V9 trong
+(PostgreSQL), được đối chiếu với Flyway migration V1→V11 trong
 [`src/main/resources/db/migration/`](../src/main/resources/db/migration/):
 
-- `V1` là baseline gộp từ 17 migration cũ; `V2` thêm virtual key LiteLLM.
+- `V1` là baseline gộp từ 17 migration cũ; `V2` thêm virtual key LiteLLM (đã xoá ở `V11`).
 - `V3`→`V4` cập nhật quota policy và dữ liệu hiển thị của user demo.
 - `V5` xóa bảng `cache_entries`; semantic cache thực tế nằm trong Qdrant.
 - `V6`→`V7` thêm lịch sử backup/restore; `V8` siết unique feedback; `V9`
   vô hiệu hóa credential demo trong production.
+- `V10` thêm `llm_call_usage` và xoá `model_pricing`; `V11` xoá `llm_virtual_keys` vì
+  LiteLLM chạy không trạng thái (Spring là sổ chi phí và nơi chặn hạn mức theo user).
 
-Schema cuối có 14 bảng. Profile `dev` nạp thêm
+Schema cuối có 13 bảng. Profile `dev` nạp thêm
 `db/devmigration/R__enable_demo_accounts.sql` để bật lại ba tài khoản demo.
 
 > **Phạm vi**: Đây là DB *ứng dụng*. Dữ liệu lâm sàng của bệnh nhân (Patient,
@@ -35,7 +37,7 @@ erDiagram
     chat_messages    ||--o{ message_feedback        : "được đánh giá"
     app_users        ||--o{ message_feedback        : "gửi"
     app_users        ||--o{ app_user_patient_links  : "liên kết FHIR"
-    app_users        ||--o| llm_virtual_keys        : "có virtual key"
+    usage_logs       ||--o{ llm_call_usage          : "gồm các LLM call"
     backup_history   o|--o{ restore_history         : "nguồn khôi phục"
 
     quota_policies {
@@ -102,6 +104,22 @@ erDiagram
         varchar     answer_source
         integer     saved_tokens
         numeric     saved_cost_usd
+        varchar     cost_source
+        varchar     trace_id
+        timestamptz created_at
+    }
+
+    llm_call_usage {
+        uuid        id PK
+        uuid        usage_log_id FK
+        varchar     stage
+        varchar     llm_provider
+        varchar     llm_model
+        integer     input_tokens
+        integer     output_tokens
+        numeric     cost_usd
+        varchar     cost_source
+        varchar     gateway_call_id
         timestamptz created_at
     }
 
@@ -141,28 +159,6 @@ erDiagram
         varchar     fhir_patient_id
         varchar     relationship
         boolean     is_primary
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    llm_virtual_keys {
-        uuid        user_id "PK, FK"
-        varchar     key_alias
-        varchar     virtual_key
-        numeric     max_budget_usd
-        varchar     budget_duration
-        timestamptz created_at
-        timestamptz updated_at
-    }
-
-    model_pricing {
-        uuid        id PK
-        varchar     provider
-        varchar     model
-        numeric     input_price_per_1m_tokens
-        numeric     output_price_per_1m_tokens
-        varchar     currency
-        boolean     active
         timestamptz created_at
         timestamptz updated_at
     }
@@ -207,9 +203,9 @@ erDiagram
     }
 ```
 
-> `model_pricing` và `alerts` là các bảng **độc lập** (không có khóa ngoại) nên
-> không nối cạnh trong sơ đồ — chúng tham chiếu logic qua giá trị
-> (vd `usage_logs.llm_provider/llm_model` ↔ `model_pricing.provider/model`).
+> `alerts` là bảng **độc lập** (không có khóa ngoại) nên không nối cạnh trong sơ đồ.
+> `model_pricing` đã bị xoá ở V10: chi phí AI chỉ lấy từ LiteLLM gateway, Spring không
+> giữ bảng giá.
 
 ---
 
@@ -295,13 +291,34 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     error_message      text
     answer_source      varchar     [default: 'llm']
     saved_tokens       integer     [default: 0]
-    saved_cost_usd     numeric     [default: 0]
+    saved_cost_usd     numeric     [default: 0, note: "Cache hit: cost gateway của câu trả lời gốc lúc ghi cache"]
+    cost_source        varchar     [not null, default: 'none', note: "V10 — CHECK in (gateway, unavailable, none, legacy_estimate): nguồn của estimated_cost_usd; dòng trước V10 = legacy_estimate"]
+    trace_id           varchar     [note: "V10 — trace_id của lượt bên chatbot-service"]
     created_at         timestamptz [not null, default: `now()`]
+    Note: "estimated_cost_usd giữ tên cũ; từ V10 là cost thật của gateway khi cost_source = gateway. Lượt hỏng giữa pipeline vẫn có dòng status = failed nếu đã tốn tiền."
     Indexes {
       (user_id, created_at)
       (session_id, created_at)
       (llm_provider, llm_model, created_at)
       (status, created_at)
+    }
+  }
+
+  Table llm_call_usage {
+    id              uuid        [pk, default: `gen_random_uuid()`]
+    usage_log_id    uuid        [not null, ref: > usage_logs.id] // ON DELETE CASCADE
+    stage           varchar     [not null, note: "agent_router | agent_planner | agent_answer | agent_summary | ..."]
+    llm_provider    varchar
+    llm_model       varchar
+    input_tokens    integer     [not null, default: 0]
+    output_tokens   integer     [not null, default: 0]
+    cost_usd        numeric     [not null, default: 0]
+    cost_source     varchar     [not null, note: "CHECK in (gateway, unavailable) — unavailable: gateway không báo cost, ghi 0"]
+    gateway_call_id varchar     [note: "x-litellm-call-id, dùng để tra log của gateway"]
+    created_at      timestamptz [not null, default: `now()`]
+    Note: "V10 — từng LLM call của một lượt chat; báo cáo chi phí theo model đọc từ đây"
+    Indexes {
+      usage_log_id
     }
   }
 
@@ -363,21 +380,6 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     }
   }
 
-  Table model_pricing {
-    id                         uuid        [pk, default: `gen_random_uuid()`]
-    provider                   varchar     [not null]
-    model                      varchar     [not null]
-    input_price_per_1m_tokens  numeric     [not null]
-    output_price_per_1m_tokens numeric     [not null]
-    currency                   varchar     [not null, default: 'USD']
-    active                     boolean     [not null, default: true]
-    created_at                 timestamptz [not null, default: `now()`]
-    updated_at                 timestamptz [not null, default: `now()`]
-    Indexes {
-      (provider, model) [unique, note: "partial: WHERE active, lower()"]
-    }
-  }
-
   Table alerts {
     id            uuid        [pk, default: `gen_random_uuid()`]
     source        varchar     [not null]
@@ -394,17 +396,6 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
       (severity, created_at)
       (alert_type, status, created_at)
     }
-  }
-
-  Table llm_virtual_keys {
-    user_id         uuid        [pk, ref: > app_users.id] // ON DELETE CASCADE
-    key_alias       varchar     [not null]
-    virtual_key     varchar     [not null]
-    max_budget_usd  numeric     [not null]
-    budget_duration varchar     [not null, default: '1d']
-    created_at      timestamptz [not null, default: `now()`]
-    updated_at      timestamptz [not null, default: `now()`]
-    Note: "V2 — AI Gateway (LiteLLM) DB-backed: ánh xạ app_user → virtual key; gateway là nguồn chặn budget token/cost, bảng này chỉ lưu mapping + budget"
   }
 
   Table backup_history {
@@ -455,18 +446,18 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
 | 7 | `notifications` | M25 Notification | Thông báo gửi tới user |
 | 8 | `message_feedback` | M22 Feedback | Đánh giá 1–5 sao + bình luận cho 1 tin nhắn |
 | 9 | `app_user_patient_links` | M4, M5 FHIR | Nối user ↔ Patient ID trên HAPI FHIR |
-| 10 | `model_pricing` | M8 Cost, M16 Routing | Bảng giá token theo provider/model |
+| 10 | ~~`model_pricing`~~ | — | Đã xoá ở V10: chi phí chỉ lấy từ LiteLLM gateway |
 | 11 | `alerts` | M19 Alert | Cảnh báo sự cố hệ thống + trạng thái xử lý |
-| 12 | `llm_virtual_keys` | AI Gateway (LiteLLM) | Ánh xạ user ↔ virtual key + budget trên gateway |
+| 12 | ~~`llm_virtual_keys`~~ | — | Đã xoá ở V11: LiteLLM chạy không trạng thái, Spring chặn hạn mức theo user |
 | 13 | `backup_history` | M26 Backup | Trạng thái và kết quả từng lần sao lưu |
 | 14 | `restore_history` | M26 Restore | Lịch sử khôi phục, có thể tham chiếu bản backup nguồn |
+| 15 | `llm_call_usage` | M7, M8 Cost | Từng LLM call (stage, model, token, cost gateway) của một lượt chat |
 
 ---
 
 ## 4. Quy ước thiết kế (rút ra từ schema)
 
-- **Khóa chính**: `uuid` + `gen_random_uuid()` cho mọi bảng
-  (ngoại lệ: `llm_virtual_keys` dùng thẳng `user_id` làm PK — quan hệ 1–1 với `app_users`).
+- **Khóa chính**: `uuid` + `gen_random_uuid()` cho mọi bảng.
 - **Thời gian**: `timestamptz` + `default now()`.
 - **Xóa dữ liệu**:
   - Quan hệ sở hữu (con không tồn tại độc lập) → `ON DELETE CASCADE`

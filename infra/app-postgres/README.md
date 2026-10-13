@@ -7,12 +7,12 @@ its schema through Flyway migrations in
 [`backend/src/main/resources/db/migration`](../../backend/src/main/resources/db/migration/).
 
 Current application data includes users/roles, patient links, chat sessions and
-messages, usage/cost records, audit and alert records, model pricing, feedback,
-LiteLLM virtual keys, and backup/restore history. Refresh tokens, reset-password
+messages, usage/cost records, audit and alert records, feedback, and backup/restore
+history. Refresh tokens, reset-password
 state, and rate-limit counters are kept in Redis. Medical resources remain in HAPI
 FHIR and must be accessed through the FHIR REST API.
 
-Flyway currently runs `V1` through `V9`. Development-only demo-account activation is
+Flyway currently runs `V1` through `V11`. Development-only demo-account activation is
 kept separately in
 [`db/devmigration`](../../backend/src/main/resources/db/devmigration/).
 

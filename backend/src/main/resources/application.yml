@@ -54,6 +54,11 @@ management:
     health:
       show-details: never
 
+app:
+  quota:
+    # Ngay cua quota (request/token/cost) va bao cao chi phi tinh theo timezone nay.
+    timezone: ${APP_QUOTA_TIMEZONE:Asia/Ho_Chi_Minh}
+
 chatbot:
   service:
     connect-timeout: ${CHATBOT_SERVICE_CONNECT_TIMEOUT:3s}

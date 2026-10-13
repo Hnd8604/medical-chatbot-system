@@ -16,15 +16,14 @@ import java.util.UUID;
 import com.medicalchatbot.backend.dto.response.CostByDay;
 import com.medicalchatbot.backend.dto.response.CostByModel;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
-import com.medicalchatbot.backend.dto.response.MissingPricingModel;
+import com.medicalchatbot.backend.dto.response.CostUnavailableModel;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
-import com.medicalchatbot.backend.repository.ModelPricingRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.projection.CostByDayProjection;
 import com.medicalchatbot.backend.repository.projection.CostByModelProjection;
 import com.medicalchatbot.backend.repository.projection.CostSummaryProjection;
-import com.medicalchatbot.backend.repository.projection.MissingPricingModelProjection;
+import com.medicalchatbot.backend.repository.projection.CostUnavailableModelProjection;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -37,13 +36,10 @@ class CostManagementServiceTest {
     private UsageLogRepository usageLogRepository;
 
     @Mock
-    private ModelPricingRepository modelPricingRepository;
-
-    @Mock
     private CurrentUserService currentUserService;
 
     @Test
-    void currentUserCostSummaryReturnsTotalsModelsDaysAndMissingPricing() {
+    void currentUserCostSummaryReturnsTotalsModelsDaysAndCostUnavailableModels() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         CostManagementService service = newService();
         CostByModelProjection byModelProjection = new CostByModelProjection(
@@ -61,8 +57,8 @@ class CostManagementServiceTest {
                 700,
                 new BigDecimal("0.002320")
         );
-        MissingPricingModelProjection missingPricingProjection =
-                new MissingPricingModelProjection("openai", "custom-model", 1);
+        CostUnavailableModelProjection missingPricingProjection =
+                new CostUnavailableModelProjection("openai", "custom-model", 1);
 
         when(currentUserService.requireCurrentUserId()).thenReturn(userId);
         when(usageLogRepository.summarizeCost(
@@ -86,7 +82,7 @@ class CostManagementServiceTest {
                 any(OffsetDateTime.class),
                 eq("Asia/Saigon")
         )).thenReturn(List.of(byDayProjection));
-        when(usageLogRepository.findMissingPricingModels(
+        when(usageLogRepository.findCostUnavailableModels(
                 eq(userId),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
@@ -101,14 +97,14 @@ class CostManagementServiceTest {
         assertEquals(LocalDate.parse("2026-06-01"), result.to());
         assertEquals(2, result.requestCount());
         assertEquals(3700, result.totalTokens());
-        assertEquals(new BigDecimal("0.002320"), result.estimatedCostUsd());
+        assertEquals(new BigDecimal("0.002320"), result.costUsd());
         assertEquals(List.of(new CostByModel(
                 "openai", "gpt-4.1-mini", 2, 3000, 700, 3700, new BigDecimal("0.002320")
         )), result.models());
         assertEquals(List.of(new CostByDay(
                 LocalDate.parse("2026-06-01"), 2, 3000, 700, 3700, new BigDecimal("0.002320")
         )), result.days());
-        assertEquals(List.of(new MissingPricingModel("openai", "custom-model", 1)), result.missingPricingModels());
+        assertEquals(List.of(new CostUnavailableModel("openai", "custom-model", 1)), result.costUnavailableModels());
     }
 
     @Test
@@ -129,7 +125,6 @@ class CostManagementServiceTest {
     private CostManagementService newService() {
         return new CostManagementService(
                 usageLogRepository,
-                modelPricingRepository,
                 ZoneId.of("Asia/Saigon"),
                 currentUserService
         );

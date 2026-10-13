@@ -62,8 +62,20 @@ public class UsageLog {
     @Column(name = "output_tokens", nullable = false)
     private int outputTokens;
 
+    /**
+     * Tổng chi phí AI của lượt. Giữ tên cột cũ; từ V10 là cost thật của gateway (dòng
+     * {@link #costSource} = legacy_estimate là ước tính cũ trước V10).
+     */
     @Column(name = "estimated_cost_usd", nullable = false, precision = 12, scale = 6)
     private BigDecimal estimatedCostUsd = BigDecimal.ZERO;
+
+    /** gateway | unavailable | none | legacy_estimate — xem {@link com.medicalchatbot.backend.enums.CostSource}. */
+    @Column(name = "cost_source", nullable = false, length = 20)
+    private String costSource = "none";
+
+    /** trace_id của lượt bên chatbot-service, để đối chiếu log. */
+    @Column(name = "trace_id", length = 64)
+    private String traceId;
 
     @Column(name = "error_message", columnDefinition = "text")
     private String errorMessage;

@@ -17,11 +17,12 @@ public record CostSummaryResponse(
         int outputTokens,
         @JsonProperty("total_tokens")
         int totalTokens,
-        @JsonProperty("estimated_cost_usd")
-        BigDecimal estimatedCostUsd,
+        @JsonProperty("cost_usd")
+        BigDecimal costUsd,
         List<CostByModel> models,
         List<CostByDay> days,
-        @JsonProperty("missing_pricing_models")
-        List<MissingPricingModel> missingPricingModels
+        /** Model có call mà gateway không báo cost — tổng {@code cost_usd} bị thiếu phần này. */
+        @JsonProperty("cost_unavailable_models")
+        List<CostUnavailableModel> costUnavailableModels
 ) {
 }

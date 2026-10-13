@@ -6,31 +6,15 @@ import java.util.List;
 import com.medicalchatbot.backend.dto.response.CostByDay;
 import com.medicalchatbot.backend.dto.response.CostByModel;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
-import com.medicalchatbot.backend.dto.response.MissingPricingModel;
-import com.medicalchatbot.backend.dto.response.ModelPricingInfo;
+import com.medicalchatbot.backend.dto.response.CostUnavailableModel;
 import com.medicalchatbot.backend.repository.projection.CostByDayProjection;
 import com.medicalchatbot.backend.repository.projection.CostByModelProjection;
 import com.medicalchatbot.backend.repository.projection.CostSummaryProjection;
-import com.medicalchatbot.backend.repository.projection.MissingPricingModelProjection;
-import com.medicalchatbot.backend.repository.projection.ModelPricingProjection;
+import com.medicalchatbot.backend.repository.projection.CostUnavailableModelProjection;
 import org.springframework.stereotype.Component;
 
 @Component
 public class CostMapper {
-
-    public List<ModelPricingInfo> toPricingInfo(List<ModelPricingProjection> pricing) {
-        return pricing.stream().map(this::toPricingInfo).toList();
-    }
-
-    public ModelPricingInfo toPricingInfo(ModelPricingProjection pricing) {
-        return new ModelPricingInfo(
-                pricing.provider(),
-                pricing.model(),
-                pricing.inputPricePer1mTokens(),
-                pricing.outputPricePer1mTokens(),
-                pricing.currency()
-        );
-    }
 
     public CostSummaryResponse toCostSummary(
             LocalDate from,
@@ -38,7 +22,7 @@ public class CostMapper {
             CostSummaryProjection totals,
             List<CostByModelProjection> models,
             List<CostByDayProjection> days,
-            List<MissingPricingModelProjection> missingPricingModels
+            List<CostUnavailableModelProjection> costUnavailableModels
     ) {
         return new CostSummaryResponse(
                 from,
@@ -47,10 +31,10 @@ public class CostMapper {
                 totals.inputTokens(),
                 totals.outputTokens(),
                 totals.totalTokens(),
-                totals.estimatedCostUsd(),
+                totals.costUsd(),
                 models.stream().map(this::toCostByModel).toList(),
                 days.stream().map(this::toCostByDay).toList(),
-                missingPricingModels.stream().map(this::toMissingPricingModel).toList()
+                costUnavailableModels.stream().map(this::toCostUnavailableModel).toList()
         );
     }
 
@@ -58,11 +42,11 @@ public class CostMapper {
         return new CostByModel(
                 model.llmProvider(),
                 model.llmModel(),
-                model.requestCount(),
+                model.callCount(),
                 model.inputTokens(),
                 model.outputTokens(),
                 model.totalTokens(),
-                model.estimatedCostUsd()
+                model.costUsd()
         );
     }
 
@@ -73,11 +57,11 @@ public class CostMapper {
                 day.inputTokens(),
                 day.outputTokens(),
                 day.totalTokens(),
-                day.estimatedCostUsd()
+                day.costUsd()
         );
     }
 
-    private MissingPricingModel toMissingPricingModel(MissingPricingModelProjection model) {
-        return new MissingPricingModel(model.llmProvider(), model.llmModel(), model.requestCount());
+    private CostUnavailableModel toCostUnavailableModel(CostUnavailableModelProjection model) {
+        return new CostUnavailableModel(model.llmProvider(), model.llmModel(), model.callCount());
     }
 }

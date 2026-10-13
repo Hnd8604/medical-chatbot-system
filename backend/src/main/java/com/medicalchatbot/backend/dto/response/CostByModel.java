@@ -9,15 +9,16 @@ public record CostByModel(
         String llmProvider,
         @JsonProperty("llm_model")
         String llmModel,
-        @JsonProperty("request_count")
-        int requestCount,
+        /** Số LLM call của model (một lượt chat có thể gọi nhiều call, nhiều model). */
+        @JsonProperty("call_count")
+        int callCount,
         @JsonProperty("input_tokens")
         int inputTokens,
         @JsonProperty("output_tokens")
         int outputTokens,
         @JsonProperty("total_tokens")
         int totalTokens,
-        @JsonProperty("estimated_cost_usd")
-        BigDecimal estimatedCostUsd
+        @JsonProperty("cost_usd")
+        BigDecimal costUsd
 ) {
 }

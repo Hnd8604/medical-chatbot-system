@@ -37,7 +37,7 @@ RESPONSE_STATUS_TOOL_ERROR = "tool_error"
 ANSWER_MODE_DATA_ONLY = "data_only"
 ANSWER_MODE_EXPLAIN = "explain_with_external_knowledge"
 
-# Nhãn stage: dùng cho stage_usage trong response và metadata.stage ở spend log gateway.
+# Nhãn stage: dùng cho stage_usage trong response và metadata.stage gửi kèm call tới gateway.
 STAGE_ROUTER = "agent_router"
 STAGE_PLANNER = "agent_planner"
 STAGE_CHAT = "agent_chat"
@@ -90,7 +90,7 @@ class AgentDeps:
     answer_generator: "AnswerGenerator"
     cache_service: "SemanticCacheService"
     summary_task: "asyncio.Task[SummaryResult] | None" = None
-    # {stage: {input_tokens, output_tokens, estimated_cost_usd}} — cho phép dashboard
+    # {stage: {input_tokens, output_tokens, cost_usd}} — cho phép dashboard
     # tách "planner tốn bao nhiêu token so với answer".
     stage_usage: dict[str, dict[str, int | float]] = field(default_factory=dict)
 

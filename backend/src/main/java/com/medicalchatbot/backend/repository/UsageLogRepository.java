@@ -6,85 +6,18 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.UsageLog;
-import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.repository.projection.CacheMetricsProjection;
 import com.medicalchatbot.backend.repository.projection.CostByDayProjection;
 import com.medicalchatbot.backend.repository.projection.CostByModelProjection;
 import com.medicalchatbot.backend.repository.projection.CostSummaryProjection;
-import com.medicalchatbot.backend.repository.projection.MissingPricingModelProjection;
+import com.medicalchatbot.backend.repository.projection.CostUnavailableModelProjection;
 import com.medicalchatbot.backend.repository.projection.QuotaUsageProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
-    default void save(
-            User user,
-            ChatSession session,
-            String llmProvider,
-            String llmModel,
-            String operation,
-            String status,
-            long latencyMs,
-            int inputTokens,
-            int outputTokens,
-            BigDecimal estimatedCostUsd,
-            String errorMessage
-    ) {
-        save(
-                user,
-                session,
-                llmProvider,
-                llmModel,
-                operation,
-                status,
-                latencyMs,
-                inputTokens,
-                outputTokens,
-                estimatedCostUsd,
-                errorMessage,
-                null,
-                0,
-                BigDecimal.ZERO
-        );
-    }
-
-
-    default void save(
-            User user,
-            ChatSession session,
-            String llmProvider,
-            String llmModel,
-            String operation,
-            String status,
-            long latencyMs,
-            int inputTokens,
-            int outputTokens,
-            BigDecimal estimatedCostUsd,
-            String errorMessage,
-            String answerSource,
-            int savedTokens,
-            BigDecimal savedCostUsd
-    ) {
-        save(new UsageLog(
-                user,
-                session,
-                llmProvider,
-                llmModel,
-                operation,
-                status,
-                latencyMs,
-                inputTokens,
-                outputTokens,
-                estimatedCostUsd,
-                errorMessage,
-                answerSource,
-                savedTokens,
-                savedCostUsd
-        ));
-    }
 
     @Query("""
         SELECT new com.medicalchatbot.backend.repository.projection.CacheMetricsProjection(
@@ -101,33 +34,39 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             @Param("endDate") OffsetDateTime endDate
     );
 
+    /*
+     * Quy ước cho mọi truy vấn quota/chi phí bên dưới: lượt hỏng giữa pipeline (status
+     * 'failed') vẫn đã tốn token/tiền nên được cộng vào token và cost, nhưng không tính là
+     * một lượt gọi AI (request) của người dùng.
+     */
+
     @Query(
             value = """
                     select
-                        coalesce(sum(request_count), 0)::int as "usedRequests",
+                        coalesce(sum(request_count) filter (where status = 'success'), 0)::int as "usedRequests",
                         coalesce(sum(input_tokens), 0)::int as "usedInputTokens",
                         coalesce(sum(output_tokens), 0)::int as "usedOutputTokens",
                         coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "usedCostUsd"
                     from usage_logs
                     where user_id = :userId
-                      and status = 'success'
+                      and status in ('success', 'failed')
                       and created_at >= :startInclusive
                       and created_at < :endExclusive
                     """,
             nativeQuery = true
     )
-    QuotaUsageSummaryView summarizeSuccessfulUsageView(
+    QuotaUsageSummaryView summarizeUsageView(
             @Param("userId") UUID userId,
             @Param("startInclusive") OffsetDateTime startInclusive,
             @Param("endExclusive") OffsetDateTime endExclusive
     );
 
-    default QuotaUsageProjection summarizeSuccessfulUsage(
+    default QuotaUsageProjection summarizeUsage(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive
     ) {
-        QuotaUsageSummaryView summary = summarizeSuccessfulUsageView(userId, startInclusive, endExclusive);
+        QuotaUsageSummaryView summary = summarizeUsageView(userId, startInclusive, endExclusive);
         return new QuotaUsageProjection(
                 summary.getUsedRequests(),
                 summary.getUsedInputTokens(),
@@ -139,13 +78,13 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
     @Query(
             value = """
                     select
-                        coalesce(sum(request_count), 0)::int as "requestCount",
+                        coalesce(sum(request_count) filter (where status = 'success'), 0)::int as "requestCount",
                         coalesce(sum(input_tokens), 0)::int as "inputTokens",
                         coalesce(sum(output_tokens), 0)::int as "outputTokens",
-                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "estimatedCostUsd"
+                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "costUsd"
                     from usage_logs
                     where user_id = :userId
-                      and status = 'success'
+                      and status in ('success', 'failed')
                       and created_at >= :startInclusive
                       and created_at < :endExclusive
                     """,
@@ -167,26 +106,55 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                 summary.getRequestCount(),
                 summary.getInputTokens(),
                 summary.getOutputTokens(),
-                summary.getEstimatedCostUsd()
+                summary.getCostUsd()
         );
     }
 
     @Query(
             value = """
                     select
-                        coalesce(llm_provider, 'unknown') as "llmProvider",
-                        coalesce(llm_model, 'unknown') as "llmModel",
-                        coalesce(sum(request_count), 0)::int as "requestCount",
+                        llm_provider as "llmProvider",
+                        llm_model as "llmModel",
+                        coalesce(sum(call_count), 0)::int as "callCount",
                         coalesce(sum(input_tokens), 0)::int as "inputTokens",
                         coalesce(sum(output_tokens), 0)::int as "outputTokens",
-                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "estimatedCostUsd"
-                    from usage_logs
-                    where user_id = :userId
-                      and status = 'success'
-                      and created_at >= :startInclusive
-                      and created_at < :endExclusive
-                    group by coalesce(llm_provider, 'unknown'), coalesce(llm_model, 'unknown')
-                    order by "estimatedCostUsd" desc, "requestCount" desc, "llmProvider", "llmModel"
+                        coalesce(sum(cost_usd), 0)::numeric(12, 6) as "costUsd"
+                    from (
+                        -- Mỗi LLM call một dòng. Một lượt chat gọi nhiều call nên đây là số call,
+                        -- không so được với request_count (số lượt chat) của tổng kỳ.
+                        select
+                            coalesce(lc.llm_provider, 'unknown') as llm_provider,
+                            coalesce(lc.llm_model, 'unknown') as llm_model,
+                            1 as call_count,
+                            lc.input_tokens,
+                            lc.output_tokens,
+                            lc.cost_usd
+                        from llm_call_usage lc
+                        join usage_logs usage on usage.id = lc.usage_log_id
+                        where usage.user_id = :userId
+                          and usage.status in ('success', 'failed')
+                          and usage.created_at >= :startInclusive
+                          and usage.created_at < :endExclusive
+                        union all
+                        -- Dòng cũ (trước V10, cost ước tính) chưa có chi tiết call: gán cả lượt cho model
+                        -- chính, mỗi lượt tính là một call.
+                        select
+                            coalesce(usage.llm_provider, 'unknown'),
+                            coalesce(usage.llm_model, 'unknown'),
+                            usage.request_count,
+                            usage.input_tokens,
+                            usage.output_tokens,
+                            usage.estimated_cost_usd
+                        from usage_logs usage
+                        where usage.user_id = :userId
+                          and usage.status = 'success'
+                          and usage.cost_source <> 'none'
+                          and usage.created_at >= :startInclusive
+                          and usage.created_at < :endExclusive
+                          and not exists (select 1 from llm_call_usage lc where lc.usage_log_id = usage.id)
+                    ) usage_by_model
+                    group by llm_provider, llm_model
+                    order by "costUsd" desc, "callCount" desc, "llmProvider", "llmModel"
                     """,
             nativeQuery = true
     )
@@ -206,10 +174,10 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                 .map(model -> new CostByModelProjection(
                         model.getLlmProvider(),
                         model.getLlmModel(),
-                        model.getRequestCount(),
+                        model.getCallCount(),
                         model.getInputTokens(),
                         model.getOutputTokens(),
-                        model.getEstimatedCostUsd()
+                        model.getCostUsd()
                 ))
                 .toList();
     }
@@ -218,20 +186,21 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
             value = """
                     select
                         usage_date as "usageDate",
-                        coalesce(sum(request_count), 0)::int as "requestCount",
+                        coalesce(sum(request_count) filter (where status = 'success'), 0)::int as "requestCount",
                         coalesce(sum(input_tokens), 0)::int as "inputTokens",
                         coalesce(sum(output_tokens), 0)::int as "outputTokens",
-                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "estimatedCostUsd"
+                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "costUsd"
                     from (
                         select
                             cast(created_at at time zone :zoneId as date) as usage_date,
+                            status,
                             request_count,
                             input_tokens,
                             output_tokens,
                             estimated_cost_usd
                         from usage_logs
                         where user_id = :userId
-                          and status = 'success'
+                          and status in ('success', 'failed')
                           and created_at >= :startInclusive
                           and created_at < :endExclusive
                     ) usage_by_day
@@ -260,7 +229,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                         day.getRequestCount(),
                         day.getInputTokens(),
                         day.getOutputTokens(),
-                        day.getEstimatedCostUsd()
+                        day.getCostUsd()
                 ))
                 .toList();
     }
@@ -268,43 +237,39 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
     @Query(
             value = """
                     select
-                        usage.llm_provider as "llmProvider",
-                        usage.llm_model as "llmModel",
-                        coalesce(sum(usage.request_count), 0)::int as "requestCount"
-                    from usage_logs usage
-                    left join model_pricing pricing
-                      on lower(pricing.provider) = lower(usage.llm_provider)
-                     and lower(pricing.model) = lower(usage.llm_model)
-                     and pricing.active = true
+                        coalesce(lc.llm_provider, 'unknown') as "llmProvider",
+                        coalesce(lc.llm_model, 'unknown') as "llmModel",
+                        count(*)::int as "callCount"
+                    from llm_call_usage lc
+                    join usage_logs usage on usage.id = lc.usage_log_id
                     where usage.user_id = :userId
-                      and usage.status = 'success'
+                      and usage.status in ('success', 'failed')
                       and usage.created_at >= :startInclusive
                       and usage.created_at < :endExclusive
-                      and usage.llm_provider is not null
-                      and usage.llm_model is not null
-                      and pricing.id is null
-                    group by usage.llm_provider, usage.llm_model
-                    order by "requestCount" desc, "llmProvider", "llmModel"
+                      and lc.cost_source = 'unavailable'
+                    group by coalesce(lc.llm_provider, 'unknown'), coalesce(lc.llm_model, 'unknown')
+                    order by "callCount" desc, "llmProvider", "llmModel"
                     """,
             nativeQuery = true
     )
-    List<MissingPricingModelView> findMissingPricingModelViews(
+    List<CostUnavailableModelView> findCostUnavailableModelViews(
             @Param("userId") UUID userId,
             @Param("startInclusive") OffsetDateTime startInclusive,
             @Param("endExclusive") OffsetDateTime endExclusive
     );
 
-    default List<MissingPricingModelProjection> findMissingPricingModels(
+    /** Model có call mà gateway không báo cost (ghi 0) — tổng chi phí kỳ đó bị thiếu. */
+    default List<CostUnavailableModelProjection> findCostUnavailableModels(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive
     ) {
-        return findMissingPricingModelViews(userId, startInclusive, endExclusive)
+        return findCostUnavailableModelViews(userId, startInclusive, endExclusive)
                 .stream()
-                .map(model -> new MissingPricingModelProjection(
+                .map(model -> new CostUnavailableModelProjection(
                         model.getLlmProvider(),
                         model.getLlmModel(),
-                        model.getRequestCount()
+                        model.getCallCount()
                 ))
                 .toList();
     }
@@ -326,7 +291,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
 
         int getOutputTokens();
 
-        BigDecimal getEstimatedCostUsd();
+        BigDecimal getCostUsd();
     }
 
     interface CostByModelView {
@@ -334,13 +299,13 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
 
         String getLlmModel();
 
-        int getRequestCount();
+        int getCallCount();
 
         int getInputTokens();
 
         int getOutputTokens();
 
-        BigDecimal getEstimatedCostUsd();
+        BigDecimal getCostUsd();
     }
 
     interface CostByDayView {
@@ -352,14 +317,14 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
 
         int getOutputTokens();
 
-        BigDecimal getEstimatedCostUsd();
+        BigDecimal getCostUsd();
     }
 
-    interface MissingPricingModelView {
+    interface CostUnavailableModelView {
         String getLlmProvider();
 
         String getLlmModel();
 
-        int getRequestCount();
+        int getCallCount();
     }
 }

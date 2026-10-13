@@ -6,7 +6,7 @@ public record CostSummaryProjection(
         int requestCount,
         int inputTokens,
         int outputTokens,
-        BigDecimal estimatedCostUsd
+        BigDecimal costUsd
 ) {
     public int totalTokens() {
         return inputTokens + outputTokens;

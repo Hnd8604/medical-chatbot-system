@@ -10,7 +10,7 @@ from langchain_core.runnables import RunnableConfig
 from agent.answer.finalize import NO_PATIENT_CACHE_KEY, TurnMeta, build_memory_update
 from agent.state import RESPONSE_STATUS_ANSWERED, ROUTE_CACHE, AgentState, get_deps
 from api.schemas import ChatRequest
-from llm.pricing import provider_and_pricing_model
+from llm.models import provider_and_model
 from llm.usage import zero_usage
 
 
@@ -40,8 +40,8 @@ async def cache_lookup(state: AgentState, config: RunnableConfig) -> dict[str, A
     answer, intent, original_usage, provider, model = hit
     settings = deps.cache_service.settings
     if not provider or not model:
-        # Entry cũ chưa lưu model gốc → tính saved_cost theo model mặc định.
-        provider, model = provider_and_pricing_model(settings.model_simple)
+        # Entry cũ chưa lưu model gốc → gán model mặc định cho audit/báo cáo.
+        provider, model = provider_and_model(settings.model_simple)
 
     payload: dict[str, Any] = {
         "answer": answer,
@@ -54,6 +54,9 @@ async def cache_lookup(state: AgentState, config: RunnableConfig) -> dict[str, A
         "saved_usage": {
             "saved_input_tokens": original_usage.get("input_tokens", 0),
             "saved_output_tokens": original_usage.get("output_tokens", 0),
+            # Cost gateway của câu trả lời gốc lúc ghi cache; None với entry cũ / gateway
+            # không báo cost (Spring ghi saved_cost = 0).
+            "saved_cost_usd": original_usage.get("cost_usd"),
         },
         "tool_name": CACHE_TOOL_NAME,
         "intent_source": "strict_cache",

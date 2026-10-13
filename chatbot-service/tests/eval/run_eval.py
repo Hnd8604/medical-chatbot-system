@@ -134,6 +134,9 @@ def score(case: dict[str, Any], payload: dict[str, Any]) -> tuple[bool | None, b
 
 
 def count_llm_calls(payload: dict[str, Any]) -> int:
+    calls = payload.get("llm_calls")
+    if isinstance(calls, list):
+        return len(calls)
     stage_usage = payload.get("stage_usage") or {}
     return sum(1 for usage in stage_usage.values() if (usage or {}).get("input_tokens"))
 
@@ -233,7 +236,7 @@ async def run_cases(
                     latency_ms=latency_ms,
                     input_tokens=int(usage.get("input_tokens") or 0),
                     output_tokens=int(usage.get("output_tokens") or 0),
-                    cost_usd=float(usage.get("estimated_cost_usd") or 0),
+                    cost_usd=float(usage.get("cost_usd") or 0),
                     llm_calls=count_llm_calls(payload),
                     cache_hit="cache" in (payload.get("answer_source") or ""),
                     answer_source=payload.get("answer_source") or "",

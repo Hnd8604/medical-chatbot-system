@@ -29,9 +29,12 @@ import com.medicalchatbot.backend.mapper.ChatbotResponseMapper;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientResponseException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatApplicationService {
@@ -45,7 +48,6 @@ public class ChatApplicationService {
     private final QuotaService quotaService;
     private final CurrentUserService currentUserService;
     private final UserPatientScopeService userPatientScopeService;
-    private final LlmGatewayKeyService llmGatewayKeyService;
     private final ChatMapper chatMapper;
     private final ChatbotResponseMapper chatbotResponseMapper;
     private final ChatInteractionRecorder chatInteractionRecorder;
@@ -62,6 +64,8 @@ public class ChatApplicationService {
             session = requireSessionForUser(request.sessionId(), userId);
             sessionMemory = chatMapper.toResponse(session.memory());
         }
+        // Session có từ trước lượt này (khác session tạo mới bên dưới, sẽ rollback nếu lượt hỏng).
+        ChatSession preExistingSession = session;
         UserPatientScopeService.PatientScope patientScope = userPatientScopeService.resolve(
                 user,
                 request.patientId(),
@@ -95,39 +99,88 @@ public class ChatApplicationService {
                 effectivePatientId
         ));
 
-        String llmKey = llmGatewayKeyService.resolveUserKey(user);
-
         long startedAtNanos = System.nanoTime();
-        JsonNode chatbotResponse = chatbotServiceClient.chat(new ChatbotChatRequest(
-                userId.toString(),
-                user.getRole().name(),
-                sessionId.toString(),
-                request.message(),
-                effectivePatientId,
-                patientScope.allowedPatientIds(),
-                patientScope.patientScope(),
-                conversationContext,
-                quotaUsedRatio,
-                llmKey
-        ));
+        JsonNode chatbotResponse;
+        try {
+            chatbotResponse = chatbotServiceClient.chat(new ChatbotChatRequest(
+                    userId.toString(),
+                    user.getRole().name(),
+                    sessionId.toString(),
+                    request.message(),
+                    effectivePatientId,
+                    patientScope.allowedPatientIds(),
+                    patientScope.patientScope(),
+                    conversationContext,
+                    quotaUsedRatio
+            ));
+        } catch (RestClientResponseException exception) {
+            recordFailedTurn(user, preExistingSession, exception, startedAtNanos);
+            throw exception;
+        }
         long latencyMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
 
-        String answer = chatbotResponseMapper.answer(chatbotResponse);
-        ChatMessage assistantMsg = chatMessageRepository.saveAndReturn(
-                session,
-                ChatMessageRole.ASSISTANT,
-                answer,
-                chatbotResponseMapper.assistantMessageMetadata(chatbotResponse)
-        );
-        ChatSessionMemory nextMemory = chatbotResponseMapper.nextSessionMemory(
-                scopedSessionMemory,
-                effectivePatientId,
-                chatbotResponse
-        );
-        chatSessionRepository.updateMemory(session, chatMapper.toDomain(nextMemory));
-        chatInteractionRecorder.record(user, session, request, effectivePatientId, chatbotResponse, latencyMs);
+        try {
+            String answer = chatbotResponseMapper.answer(chatbotResponse);
+            ChatMessage assistantMsg = chatMessageRepository.saveAndReturn(
+                    session,
+                    ChatMessageRole.ASSISTANT,
+                    answer,
+                    chatbotResponseMapper.assistantMessageMetadata(chatbotResponse)
+            );
+            ChatSessionMemory nextMemory = chatbotResponseMapper.nextSessionMemory(
+                    scopedSessionMemory,
+                    effectivePatientId,
+                    chatbotResponse
+            );
+            chatSessionRepository.updateMemory(session, chatMapper.toDomain(nextMemory));
+            chatInteractionRecorder.record(user, session, request, effectivePatientId, chatbotResponse, latencyMs);
 
-        return chatbotResponseMapper.toResponse(sessionId, assistantMsg.getId(), chatbotResponse);
+            return chatbotResponseMapper.toResponse(sessionId, assistantMsg.getId(), chatbotResponse);
+        } catch (RuntimeException exception) {
+            // LLM đã chạy xong và tốn tiền, còn transaction chat sắp rollback (kể cả usage vừa ghi).
+            recordUnsavedTurn(user, preExistingSession, chatbotResponse, latencyMs);
+            throw exception;
+        }
+    }
+
+    private void recordUnsavedTurn(
+            User user,
+            ChatSession preExistingSession,
+            JsonNode chatbotResponse,
+            long latencyMs
+    ) {
+        try {
+            chatInteractionRecorder.recordUnsavedTurn(user, preExistingSession, chatbotResponse, latencyMs);
+        } catch (RuntimeException recordingError) {
+            log.warn("Could not record LLM usage of unsaved chat turn ({})",
+                    recordingError.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Lượt hỏng giữa pipeline vẫn có thể đã tốn tiền (vd router chạy xong rồi FHIR lỗi hoặc
+     * bị chặn policy): chatbot-service trả các call đó trong body lỗi. Ghi lại nhưng không bao
+     * giờ để lỗi ghi nhận che mất lỗi gốc.
+     */
+    private void recordFailedTurn(
+            User user,
+            ChatSession preExistingSession,
+            RestClientResponseException exception,
+            long startedAtNanos
+    ) {
+        long latencyMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+        try {
+            chatInteractionRecorder.recordFailedTurn(
+                    user,
+                    preExistingSession,
+                    exception.getStatusCode().value(),
+                    chatbotResponseMapper.llmCallsFromErrorBody(exception.getResponseBodyAsByteArray()),
+                    latencyMs
+            );
+        } catch (RuntimeException recordingError) {
+            log.warn("Could not record LLM usage of failed chat turn ({})",
+                    recordingError.getClass().getSimpleName());
+        }
     }
 
     public ChatSessionListResponse recentSessions(int limit) {

@@ -13,7 +13,7 @@ type UsageDay = {
   input_tokens?: number | string;
   output_tokens?: number | string;
   total_tokens?: number | string;
-  estimated_cost_usd?: number | string;
+  cost_usd?: number | string;
 };
 
 function percentage(used: number | string | null | undefined, limit: number | string | null | undefined) {

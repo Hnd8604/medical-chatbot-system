@@ -20,11 +20,6 @@ chatbot:
   service:
     base-url: ${CHATBOT_SERVICE_BASE_URL:http://localhost:8000}
 
-litellm:
-  base-url: ${LITELLM_BASE_URL:http://localhost:4000}
-  master-key: ${LITELLM_MASTER_KEY:}
-  enabled: ${LITELLM_GATEWAY_ENABLED:true}
-
 jwt:
   secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-please-1234567890}
 

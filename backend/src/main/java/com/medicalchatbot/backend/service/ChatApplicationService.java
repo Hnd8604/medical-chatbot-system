@@ -5,6 +5,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.request.ChatContextMessage;
 import com.medicalchatbot.backend.dto.request.ChatRequest;
 import com.medicalchatbot.backend.dto.request.ChatbotChatRequest;
@@ -20,6 +21,7 @@ import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.ChatMessageRole;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
@@ -51,6 +53,7 @@ public class ChatApplicationService {
     private final ChatMapper chatMapper;
     private final ChatbotResponseMapper chatbotResponseMapper;
     private final ChatInteractionRecorder chatInteractionRecorder;
+    private final AlertService alertService;
 
     @Transactional
     public ChatResponse chat(ChatRequest request) {
@@ -134,6 +137,7 @@ public class ChatApplicationService {
             );
             chatSessionRepository.updateMemory(session, chatMapper.toDomain(nextMemory));
             chatInteractionRecorder.record(user, session, request, effectivePatientId, chatbotResponse, latencyMs);
+            alertOnToolError(chatbotResponse);
 
             return chatbotResponseMapper.toResponse(sessionId, assistantMsg.getId(), chatbotResponse);
         } catch (RuntimeException exception) {
@@ -141,6 +145,24 @@ public class ChatApplicationService {
             recordUnsavedTurn(user, preExistingSession, chatbotResponse, latencyMs);
             throw exception;
         }
+    }
+
+    /**
+     * Mọi bước truy xuất FHIR đều lỗi nhưng chatbot-service vẫn trả HTTP 200
+     * (response_status = tool_error), nên ApiExceptionHandler không thấy sự cố này.
+     */
+    private void alertOnToolError(JsonNode chatbotResponse) {
+        ObjectNode metadata = chatbotResponseMapper.toolErrorAlertMetadata(chatbotResponse);
+        if (metadata == null) {
+            return;
+        }
+        alertService.triggerAlert(
+                "AI_SERVICE",
+                "CHATBOT_TOOL_ERROR",
+                AlertSeverity.CRITICAL,
+                "Dịch vụ AI không truy xuất được dữ liệu FHIR.",
+                metadata
+        );
     }
 
     private void recordUnsavedTurn(

@@ -60,7 +60,23 @@ export interface MessageFeedback {
   comment: string | null;
 }
 
-export interface ChatMessageItem {
+export interface GroundingInfo {
+  checked: boolean;
+  passed: boolean | null;
+}
+
+/** Kết quả của một lượt trả lời: có ở response của /api/chat và ở message assistant tải lại từ lịch sử. */
+export interface ResponseOutcome {
+  response_status?: ChatResponseStatus | null;
+  /** Mã tra log bên chatbot-service — hiển thị để người dùng báo lỗi. */
+  trace_id?: string | null;
+  answer_source?: string | null;
+  grounding?: GroundingInfo | null;
+  /** Có khi lượt này không được gọi LLM (gateway chưa cấu hình) — trả lời bằng luật/template. */
+  llm_unavailable_reason?: string | null;
+}
+
+export interface ChatMessageItem extends ResponseOutcome {
   id: string;
   role: "USER" | "ASSISTANT" | "SYSTEM" | string;
   content: string;
@@ -73,7 +89,7 @@ export interface ChatMessagesResponse {
   messages: ChatMessageItem[];
 }
 
-export interface ChatResponse {
+export interface ChatResponse extends ResponseOutcome {
   session_id: string;
   message_id: string | null;
   answer: string;
@@ -93,14 +109,8 @@ export interface ChatResponse {
   answer_usage: unknown;
   usage: unknown;
   saved_usage: unknown;
-  /** Mã tra log bên chatbot-service — hiển thị để người dùng báo lỗi. */
-  trace_id?: string | null;
-  response_status?: ChatResponseStatus | null;
   agent_route?: string | null;
   failed_steps?: FailedStep[] | null;
-  grounding?: { checked: boolean; passed: boolean | null } | null;
-  /** Có khi lượt này không được gọi LLM (gateway chưa cấu hình) — trả lời bằng luật/template. */
-  llm_unavailable_reason?: string | null;
 }
 
 export type ChatResponseStatus =
@@ -381,6 +391,8 @@ export interface MessageView {
   createdAt?: string;
   pending?: boolean;
   response?: ChatResponse;
+  /** Kết quả lượt trả lời của message tải lại từ lịch sử (message mới dùng `response`). */
+  outcome?: ResponseOutcome;
   feedback?: MessageFeedback | null;
 }
 

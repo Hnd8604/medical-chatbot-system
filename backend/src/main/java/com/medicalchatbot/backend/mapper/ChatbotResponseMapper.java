@@ -24,6 +24,8 @@ import org.springframework.stereotype.Component;
 public class ChatbotResponseMapper {
 
     private static final String ALL_PATIENTS_RESOURCE_ID = "all_patients";
+    private static final String STATUS_CLARIFICATION_NEEDED = "clarification_needed";
+    private static final String STATUS_TOOL_ERROR = "tool_error";
 
     private final ObjectMapper objectMapper;
 
@@ -78,6 +80,11 @@ public class ChatbotResponseMapper {
         metadata.put("tool_name", textOrNull(chatbotResponse, "tool_name"));
         metadata.put("patient_id", textOrNull(chatbotResponse, "patient_id"));
         metadata.put("answer_source", textOrNull(chatbotResponse, "answer_source"));
+        // Kết quả lượt trả lời: lịch sử hội thoại đọc lại để hiện đúng ghi chú như lúc trả lời.
+        metadata.put("response_status", textOrNull(chatbotResponse, "response_status"));
+        metadata.put("trace_id", textOrNull(chatbotResponse, "trace_id"));
+        metadata.set("grounding", chatbotResponse.path("grounding"));
+        metadata.put("llm_unavailable_reason", textOrNull(chatbotResponse, "llm_unavailable_reason"));
         metadata.set("evidence_refs", evidenceRefs(chatbotResponse));
         metadata.set("knowledge_refs", knowledgeRefs(chatbotResponse));
         metadata.set("memory_update", chatbotResponse.path("memory_update"));
@@ -180,7 +187,7 @@ public class ChatbotResponseMapper {
     }
 
     /**
-     * {@code llm_calls} trong body lỗi (429/403/5xx) của chatbot-service: các call đã tốn tiền
+     * {@code llm_calls} trong body lỗi (403/5xx) của chatbot-service: các call đã tốn tiền
      * trước khi lượt hỏng. Body không đọc được thì coi như không có call nào.
      */
     public List<LlmCall> llmCallsFromErrorBody(byte[] body) {
@@ -297,6 +304,15 @@ public class ChatbotResponseMapper {
             }
         }
 
+        // Lượt không trả dữ liệu nào thì không ghi là VIEW_*/SEARCH_*: agent hỏi lại người dùng,
+        // hoặc mọi bước truy xuất đều lỗi. Tool đã thử chạy vẫn nằm ở metadata.plan_steps.
+        String responseStatus = textOrNull(chatbotResponse, "response_status");
+        if (STATUS_CLARIFICATION_NEEDED.equals(responseStatus) || STATUS_TOOL_ERROR.equals(responseStatus)) {
+            action = STATUS_TOOL_ERROR.equals(responseStatus) ? "CHAT_TOOL_ERROR" : "CHAT_CLARIFICATION";
+            resourceType = "chat_session";
+            resourceId = sessionId.toString();
+        }
+
         if (resourceId == null) {
             resourceId = effectivePatientId != null ? effectivePatientId : sessionId.toString();
         }
@@ -320,7 +336,7 @@ public class ChatbotResponseMapper {
         metadata.set("memory_update", chatbotResponse.path("memory_update"));
         metadata.set("knowledge_refs", knowledgeRefs(chatbotResponse));
         metadata.put("trace_id", textOrNull(chatbotResponse, "trace_id"));
-        metadata.put("response_status", textOrNull(chatbotResponse, "response_status"));
+        metadata.put("response_status", responseStatus);
         metadata.put("agent_route", textOrNull(chatbotResponse, "agent_route"));
         metadata.set("plan_steps", chatbotResponse.path("plan_steps"));
         metadata.set("failed_steps", chatbotResponse.path("failed_steps"));
@@ -333,6 +349,21 @@ public class ChatbotResponseMapper {
         }
 
         return new ChatAudit(action, resourceType, resourceId, metadata);
+    }
+
+    /**
+     * Metadata cảnh báo vận hành cho lượt mà mọi bước truy xuất dữ liệu đều lỗi
+     * ({@code response_status = tool_error}); null khi lượt không rơi vào trường hợp đó.
+     */
+    public ObjectNode toolErrorAlertMetadata(JsonNode chatbotResponse) {
+        if (!STATUS_TOOL_ERROR.equals(textOrNull(chatbotResponse, "response_status"))) {
+            return null;
+        }
+        ObjectNode metadata = objectMapper.createObjectNode();
+        metadata.put("trace_id", textOrNull(chatbotResponse, "trace_id"));
+        metadata.put("tool_name", textOrNull(chatbotResponse, "tool_name"));
+        metadata.set("failed_steps", chatbotResponse.path("failed_steps"));
+        return metadata;
     }
 
     private ArrayNode knowledgeRefs(JsonNode chatbotResponse) {

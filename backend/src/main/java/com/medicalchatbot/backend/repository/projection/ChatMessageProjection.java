@@ -9,6 +9,12 @@ public record ChatMessageProjection(
         String content,
         OffsetDateTime createdAt,
         Integer feedbackRating,
-        String feedbackComment
+        String feedbackComment,
+        String responseStatus,
+        String traceId,
+        String answerSource,
+        Boolean groundingChecked,
+        Boolean groundingPassed,
+        String llmUnavailableReason
 ) {
 }

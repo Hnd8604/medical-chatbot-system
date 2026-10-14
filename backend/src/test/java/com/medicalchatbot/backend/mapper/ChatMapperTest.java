@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.domain.model.ChatSessionMemoryState;
+import com.medicalchatbot.backend.dto.response.ChatMessageItem;
 import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
 import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
@@ -56,13 +57,21 @@ class ChatMapperTest {
                 )
         ));
         var messages = mapper.toMessageItems(List.of(
-                new ChatMessageProjection(messageId, "assistant", "answer", timestamp, 5, "helpful"),
-                new ChatMessageProjection(UUID.randomUUID(), "user", "question", timestamp, null, null)
+                new ChatMessageProjection(messageId, "assistant", "answer", timestamp, 5, "helpful",
+                        "partial", "trace-1", "llm", true, false, null),
+                new ChatMessageProjection(UUID.randomUUID(), "user", "question", timestamp, null, null,
+                        null, null, null, null, null, null)
         ));
 
         assertEquals("hello", context.getFirst().content());
         assertEquals(sessionId, sessions.getFirst().id());
         assertEquals(5, messages.getFirst().feedback().rating());
         assertNull(messages.get(1).feedback());
+        assertEquals("partial", messages.getFirst().responseStatus());
+        assertEquals("trace-1", messages.getFirst().traceId());
+        assertEquals(new ChatMessageItem.Grounding(true, false), messages.getFirst().grounding());
+        // Message không lưu kết quả grounding (user, hoặc assistant cũ) thì không có object grounding.
+        assertNull(messages.get(1).grounding());
+        assertNull(messages.get(1).responseStatus());
     }
 }

@@ -559,5 +559,10 @@ p50/p95 và tỉ lệ cache hit. Bộ câu hỏi ở `tests/eval/questions.jsonl
   dù cùng câu hỏi. Không sai dữ liệu, chỉ giảm hit rate.
 - **Không có lớp phát hiện cấp cứu:** câu như "tôi đang đau ngực" được router xếp vào
   `unsupported` và nhận câu từ chối chung, không có hướng dẫn gọi 115.
-- **Spring và FE chưa đọc các trường mới** (`response_status`, `failed_steps`,
-  `grounding`, `trace_id`…). Các trường cũ giữ nguyên nên tích hợp hiện tại vẫn chạy.
+- **Spring và FE mới dùng một phần contract.** Spring ghi `trace_id`, `response_status`,
+  `agent_route`, `plan_steps`, `failed_steps`, `grounding` vào audit log, phát cảnh báo
+  vận hành khi `tool_error`, trả 403 cho FE khi `/chat` trả 403, và lưu `response_status`,
+  `trace_id`, `grounding`, `llm_unavailable_reason` theo từng message. FE hiện ghi chú cho
+  `partial` / `tool_error` và cho câu trả lời không qua grounding, cả khi mở lại hội thoại
+  cũ. Còn thiếu: mở lại hội thoại thì lượt `patient_selection_needed` không còn danh sách
+  `patient_candidates` để chọn, và FE không hiện gì khi grounding đạt.

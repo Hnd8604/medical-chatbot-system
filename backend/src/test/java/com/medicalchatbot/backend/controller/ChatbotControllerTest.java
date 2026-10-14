@@ -30,6 +30,7 @@ import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.FeedbackService;
 import com.medicalchatbot.backend.service.QuotaService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -40,9 +41,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.client.HttpClientErrorException;
 
 @WebMvcTest(ChatbotController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -241,6 +245,30 @@ class ChatbotControllerTest {
     }
 
     @Test
+    void chatReturnsForbiddenWhenAgentBlocksTurnOnRolePolicy() throws Exception {
+        when(chatApplicationService.chat(any(ChatRequest.class)))
+                .thenThrow(HttpClientErrorException.create(
+                        HttpStatus.FORBIDDEN,
+                        "Forbidden",
+                        HttpHeaders.EMPTY,
+                        "{\"detail\": \"Tài khoản USER không được tìm kiếm danh sách bệnh nhân.\"}"
+                                .getBytes(StandardCharsets.UTF_8),
+                        StandardCharsets.UTF_8
+                ));
+
+        mockMvc.perform(post("/api/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "message": "danh sach benh nhan"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1102))
+                .andExpect(jsonPath("$.detail").value("Bạn không có quyền truy cập tài nguyên này."));
+    }
+
+    @Test
     void chatSessionsReturnRecentSessions() throws Exception {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000401");
         when(chatApplicationService.sessions(null, 20))
@@ -313,6 +341,11 @@ class ChatbotControllerTest {
                                         "user",
                                         "Bệnh nhân này dùng thuốc gì?",
                                         OffsetDateTime.parse("2026-05-31T10:00:00Z"),
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
                                         null
                                 ),
                                 new ChatMessageItem(
@@ -320,7 +353,12 @@ class ChatbotControllerTest {
                                         "assistant",
                                         "Theo dữ liệu FHIR...",
                                         OffsetDateTime.parse("2026-05-31T10:00:05Z"),
-                                        new ChatMessageItem.Feedback(5, "Rất hữu ích")
+                                        new ChatMessageItem.Feedback(5, "Rất hữu ích"),
+                                        "partial",
+                                        "trace-502",
+                                        "template_grounding_fallback",
+                                        new ChatMessageItem.Grounding(true, false),
+                                        null
                                 )
                         )
                 ));
@@ -334,7 +372,14 @@ class ChatbotControllerTest {
                 .andExpect(jsonPath("$.result.messages[0].feedback").isEmpty())
                 .andExpect(jsonPath("$.result.messages[1].role").value("assistant"))
                 .andExpect(jsonPath("$.result.messages[1].feedback.rating").value(5))
-                .andExpect(jsonPath("$.result.messages[1].feedback.comment").value("Rất hữu ích"));
+                .andExpect(jsonPath("$.result.messages[1].feedback.comment").value("Rất hữu ích"))
+                .andExpect(jsonPath("$.result.messages[0].response_status").isEmpty())
+                .andExpect(jsonPath("$.result.messages[0].grounding").isEmpty())
+                .andExpect(jsonPath("$.result.messages[1].response_status").value("partial"))
+                .andExpect(jsonPath("$.result.messages[1].trace_id").value("trace-502"))
+                .andExpect(jsonPath("$.result.messages[1].answer_source").value("template_grounding_fallback"))
+                .andExpect(jsonPath("$.result.messages[1].grounding.checked").value(true))
+                .andExpect(jsonPath("$.result.messages[1].grounding.passed").value(false));
     }
 
     @Test

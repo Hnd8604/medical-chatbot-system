@@ -248,7 +248,13 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                             where f.message_id = m.id
                             order by f.created_at desc
                             limit 1
-                        ) as "feedbackComment"
+                        ) as "feedbackComment",
+                        m.metadata_json ->> 'response_status' as "responseStatus",
+                        m.metadata_json ->> 'trace_id' as "traceId",
+                        m.metadata_json ->> 'answer_source' as "answerSource",
+                        m.metadata_json -> 'grounding' ->> 'checked' as "groundingChecked",
+                        m.metadata_json -> 'grounding' ->> 'passed' as "groundingPassed",
+                        m.metadata_json ->> 'llm_unavailable_reason' as "llmUnavailableReason"
                     from chat_messages m
                     join chat_sessions s on s.id = m.session_id
                     where s.id = :sessionId and s.user_id = :userId
@@ -270,13 +276,24 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                         message.getContent(),
                         toOffsetDateTime(message.getCreatedAt()),
                         message.getFeedbackRating(),
-                        message.getFeedbackComment()
+                        message.getFeedbackComment(),
+                        message.getResponseStatus(),
+                        message.getTraceId(),
+                        message.getAnswerSource(),
+                        toBoolean(message.getGroundingChecked()),
+                        toBoolean(message.getGroundingPassed()),
+                        message.getLlmUnavailableReason()
                 ))
                 .toList();
     }
 
     private static OffsetDateTime toOffsetDateTime(Instant value) {
         return value == null ? null : value.atOffset(ZoneOffset.UTC);
+    }
+
+    /** Giá trị boolean đọc từ jsonb dưới dạng text; thiếu hoặc JSON null thì là null. */
+    private static Boolean toBoolean(String value) {
+        return value == null ? null : Boolean.valueOf(value);
     }
 
     interface ChatContextMessageView {
@@ -313,5 +330,17 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
         Integer getFeedbackRating();
 
         String getFeedbackComment();
+
+        String getResponseStatus();
+
+        String getTraceId();
+
+        String getAnswerSource();
+
+        String getGroundingChecked();
+
+        String getGroundingPassed();
+
+        String getLlmUnavailableReason();
     }
 }

@@ -17,6 +17,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,6 +61,26 @@ class ApiExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo(5002);
         assertThat(response.getBody().detail()).doesNotContain(sensitiveRemoteBody, "BN2026-00001");
+    }
+
+    @Test
+    void upstreamPolicyRejectionMapsToForbiddenWithoutRemoteBody() {
+        String remoteBody = "{\"detail\": \"Tài khoản USER không được tìm kiếm danh sách bệnh nhân.\"}";
+        var exception = (HttpClientErrorException.Forbidden) HttpClientErrorException.create(
+                HttpStatus.FORBIDDEN,
+                "Forbidden",
+                HttpHeaders.EMPTY,
+                remoteBody.getBytes(StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8
+        );
+
+        ResponseEntity<ApiErrorResponse> response = handler.externalAccessDenied(exception);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo(1102);
+        assertThat(response.getBody().errorCode()).isEqualTo("FORBIDDEN");
+        assertThat(response.getBody().message()).doesNotContain("tìm kiếm danh sách bệnh nhân");
     }
 
     @Test

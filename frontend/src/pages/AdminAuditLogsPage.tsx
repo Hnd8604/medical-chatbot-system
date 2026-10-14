@@ -15,12 +15,23 @@ const PAGE_SIZE = 15;
 
 const actionOptions = [
   "CHAT_COMPLETED",
+  "CHAT_CLARIFICATION",
+  "CHAT_TOOL_ERROR",
+  "CHAT_FAILED",
   "VIEW_OBSERVATIONS",
   "VIEW_CONDITIONS",
   "VIEW_MEDICATIONS",
   "VIEW_ENCOUNTERS",
   "VIEW_PATIENT_DETAIL",
+  "VIEW_PATIENT_DATA",
+  "VIEW_RESOURCE",
+  "VIEW_ALL_PATIENT_OBSERVATIONS",
+  "VIEW_ALL_PATIENT_CONDITIONS",
+  "VIEW_ALL_PATIENT_ENCOUNTERS",
+  "VIEW_ALL_PATIENT_MEDICATIONS",
   "SEARCH_PATIENTS",
+  "EXPLAIN_CONCEPT",
+  "ASK_UNSUPPORTED",
   "VIEW_FROM_CACHE",
   "LOGIN_SUCCESS",
   "LOGIN_FAILURE",
@@ -32,7 +43,7 @@ const actionOptions = [
   "MODEL_PRICING_UPDATED",
 ];
 
-const resourceOptions = ["chat_session", "Patient", "Observation", "Condition", "MedicationRequest", "Encounter", "Cache", "app_user", "auth"];
+const resourceOptions = ["chat_session", "Patient", "Observation", "Condition", "MedicationRequest", "Encounter", "FhirResource", "Cache", "app_user", "auth"];
 
 function pageTotal<T>(page: PageResponse<T> | null) {
   return page?.totalElements ?? page?.total_elements ?? 0;
@@ -56,7 +67,7 @@ function endOfDay(value: string) {
 
 function actionTone(action?: string | null) {
   if (!action) return "slate";
-  if (action.includes("FAILURE") || action.includes("DELETED")) return "red";
+  if (action.includes("FAILURE") || action.includes("FAILED") || action.includes("ERROR") || action.includes("DELETED")) return "red";
   if (action.includes("CREATED") || action.includes("UPDATED")) return "green";
   if (action.includes("CACHE") || action.includes("EXPORT")) return "amber";
   return "blue";

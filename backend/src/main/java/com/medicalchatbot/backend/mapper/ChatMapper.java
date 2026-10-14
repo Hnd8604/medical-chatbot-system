@@ -75,7 +75,17 @@ public class ChatMapper {
                                 : new ChatMessageItem.Feedback(
                                         message.feedbackRating(),
                                         message.feedbackComment()
-                                )
+                                ),
+                        message.responseStatus(),
+                        message.traceId(),
+                        message.answerSource(),
+                        message.groundingChecked() == null
+                                ? null
+                                : new ChatMessageItem.Grounding(
+                                        message.groundingChecked(),
+                                        message.groundingPassed()
+                                ),
+                        message.llmUnavailableReason()
                 ))
                 .toList();
     }

@@ -79,6 +79,13 @@ function mapHistoryMessage(item: ChatMessageItem): MessageView {
     content: item.content,
     createdAt: item.created_at,
     feedback: item.feedback ?? null,
+    outcome: {
+      response_status: item.response_status,
+      trace_id: item.trace_id,
+      answer_source: item.answer_source,
+      grounding: item.grounding,
+      llm_unavailable_reason: item.llm_unavailable_reason,
+    },
   };
 }
 

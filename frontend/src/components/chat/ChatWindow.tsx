@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { ArrowUp, Check, PanelRightClose, PanelRightOpen, Sparkles, Star, Trash2 } from "lucide-react";
-import type { ChatResponse, MessageView, NotificationItem, PatientCandidate, UserRole } from "../../lib/types";
+import type { MessageView, NotificationItem, PatientCandidate, ResponseOutcome, UserRole } from "../../lib/types";
 import { formatDateTime, genderLabel, safeJson } from "../../lib/formatters";
 import { STAFF_QUICK_PROMPTS, USER_QUICK_PROMPTS } from "../../lib/constants";
 import { cn } from "../../lib/cn";
@@ -243,41 +243,65 @@ function candidateMeta(candidate: PatientCandidate) {
     .join(", ");
 }
 
-/** Ghi chú khi lượt trả lời không trọn vẹn; null khi bình thường. */
-function responseNotice(response: ChatResponse | undefined): { tone: "warning" | "danger" | "muted"; text: string } | null {
-  if (!response) {
-    return null;
-  }
-  if (response.response_status === "tool_error") {
-    return { tone: "danger", text: "Không truy xuất được dữ liệu do sự cố hệ thống." };
-  }
-  if (response.response_status === "partial") {
-    return { tone: "warning", text: "Một phần dữ liệu chưa truy xuất được; câu trả lời có thể chưa đầy đủ." };
-  }
-  if (response.llm_unavailable_reason) {
-    return { tone: "muted", text: "Trả lời ở chế độ rút gọn (không dùng AI) do dịch vụ AI tạm không khả dụng." };
-  }
-  return null;
+interface Notice {
+  tone: "warning" | "danger" | "muted";
+  text: string;
 }
 
-function ResponseNotice({ response }: { response: ChatResponse | undefined }) {
-  const notice = responseNotice(response);
-  if (!notice) {
+/** Ghi chú khi lượt trả lời không trọn vẹn; rỗng khi bình thường. */
+function responseNotices(outcome: ResponseOutcome | undefined): Notice[] {
+  if (!outcome) {
+    return [];
+  }
+  const notices: Notice[] = [];
+  if (outcome.response_status === "tool_error") {
+    notices.push({ tone: "danger", text: "Không truy xuất được dữ liệu do sự cố hệ thống." });
+  } else if (outcome.response_status === "partial") {
+    notices.push({ tone: "warning", text: "Một phần dữ liệu chưa truy xuất được; câu trả lời có thể chưa đầy đủ." });
+  } else if (outcome.llm_unavailable_reason) {
+    notices.push({ tone: "muted", text: "Trả lời ở chế độ rút gọn (không dùng AI) do dịch vụ AI tạm không khả dụng." });
+  }
+  // Chỉ báo khi kiểm grounding không đạt: câu lấy từ cache hay template không được kiểm lại,
+  // nên nhãn "đã đối chiếu" sẽ có lúc hiện lúc không trên cùng một câu trả lời.
+  if (outcome.grounding?.checked && outcome.grounding.passed === false) {
+    notices.push(
+      outcome.answer_source === "template_grounding_fallback"
+        ? {
+            tone: "muted",
+            text: "Câu trả lời do AI viết có dữ kiện không khớp hồ sơ nên đã được thay bằng nội dung lấy trực tiếp từ dữ liệu.",
+          }
+        : {
+            tone: "warning",
+            text: "Câu trả lời có số liệu, ngày hoặc mã chưa đối chiếu được với hồ sơ. Vui lòng kiểm tra lại với dữ liệu gốc.",
+          },
+    );
+  }
+  return notices;
+}
+
+function ResponseNotices({ outcome }: { outcome: ResponseOutcome | undefined }) {
+  const notices = responseNotices(outcome);
+  if (notices.length === 0) {
     return null;
   }
   return (
-    <div
-      className={cn(
-        "mt-3 rounded-lg border px-3 py-2 text-xs",
-        notice.tone === "danger" && "border-danger/20 bg-danger/10 text-danger",
-        notice.tone === "warning" && "border-warning/30 bg-warning/10 text-foreground",
-        notice.tone === "muted" && "border-border bg-muted text-muted-foreground",
-      )}
-    >
-      <p>{notice.text}</p>
-      {response?.trace_id ? (
-        <p className="mt-1 font-mono text-[11px] text-muted-foreground">Mã tra cứu: {response.trace_id}</p>
-      ) : null}
+    <div className="mt-3 grid gap-2">
+      {notices.map((notice, index) => (
+        <div
+          key={notice.text}
+          className={cn(
+            "rounded-lg border px-3 py-2 text-xs",
+            notice.tone === "danger" && "border-danger/20 bg-danger/10 text-danger",
+            notice.tone === "warning" && "border-warning/30 bg-warning/10 text-foreground",
+            notice.tone === "muted" && "border-border bg-muted text-muted-foreground",
+          )}
+        >
+          <p>{notice.text}</p>
+          {index === 0 && outcome?.trace_id ? (
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground">Mã tra cứu: {outcome.trace_id}</p>
+          ) : null}
+        </div>
+      ))}
     </div>
   );
 }
@@ -318,7 +342,7 @@ function MessageBubble({
           {message.pending ? <Spinner className="text-accent" /> : null}
         </div>
         <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.content}</p>
-        {!isUser && !isError ? <ResponseNotice response={message.response} /> : null}
+        {!isUser && !isError ? <ResponseNotices outcome={message.response ?? message.outcome} /> : null}
         {message.createdAt ? <p className="mt-3 text-xs text-muted-foreground">{formatDateTime(message.createdAt)}</p> : null}
         {message.response?.needs_patient_selection ? (
           <div className="mt-3 rounded-xl bg-muted p-3 text-xs">

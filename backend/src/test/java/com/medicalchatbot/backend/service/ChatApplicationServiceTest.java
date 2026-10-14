@@ -28,6 +28,7 @@ import com.medicalchatbot.backend.domain.model.ChatSessionMemoryState;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.enums.AlertSeverity;
 import com.medicalchatbot.backend.enums.ChatMessageRole;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.exception.AppException;
@@ -86,6 +87,9 @@ class ChatApplicationServiceTest {
 
     @Mock
     private UserPatientLinkRepository userPatientLinkRepository;
+
+    @Mock
+    private AlertService alertService;
 
     @Test
     void sessionMessagesRejectsSessionOutsideDemoUser() {
@@ -150,7 +154,7 @@ class ChatApplicationServiceTest {
                   "usage": {
                     "input_tokens": 0,
                     "output_tokens": 0,
-                    "estimated_cost_usd": 0
+                    "cost_usd": 0
                   }
                 }
                 """);
@@ -228,7 +232,7 @@ class ChatApplicationServiceTest {
                   "usage": {
                     "input_tokens": 0,
                     "output_tokens": 0,
-                    "estimated_cost_usd": 0
+                    "cost_usd": 0
                   }
                 }
                 """);
@@ -314,7 +318,7 @@ class ChatApplicationServiceTest {
                   "usage": {
                     "input_tokens": 0,
                     "output_tokens": 0,
-                    "estimated_cost_usd": 0
+                    "cost_usd": 0
                   }
                 }
                 """);
@@ -357,7 +361,7 @@ class ChatApplicationServiceTest {
                   "usage": {
                     "input_tokens": 0,
                     "output_tokens": 0,
-                    "estimated_cost_usd": 0
+                    "cost_usd": 0
                   }
                 }
                 """);
@@ -549,6 +553,57 @@ class ChatApplicationServiceTest {
     }
 
     @Test
+    void toolErrorTurnTriggersAlertAndIsNotAuditedAsDataAccess() throws Exception {
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        when(user.getRole()).thenReturn(UserRole.DOCTOR);
+        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000607");
+        ChatSession session = new ChatSession(sessionId);
+        ChatApplicationService service = newService();
+        // FHIR lỗi ở mọi bước: chatbot-service vẫn trả HTTP 200 kèm response_status = tool_error.
+        JsonNode response = new ObjectMapper().readTree("""
+                {
+                  "answer": "Hệ thống chưa lấy được dữ liệu FHIR: máy chủ FHIR không phản hồi.",
+                  "intent": "unknown",
+                  "tool_name": "get_conditions",
+                  "patient_id": null,
+                  "answer_source": "template_no_evidence",
+                  "response_status": "tool_error",
+                  "agent_route": "fhir",
+                  "trace_id": "trace-607",
+                  "evidence": [],
+                  "plan_steps": [{"id": "c", "tool": "get_conditions"}],
+                  "failed_steps": [{"id": "c", "tool": "get_conditions", "error_code": "fhir_error"}],
+                  "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0},
+                  "llm_calls": []
+                }
+                """);
+
+        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        when(chatSessionRepository.create(eq(user), any())).thenReturn(session);
+        when(chatSessionRepository.findRecentMessagesForContext(sessionId, userId, 8)).thenReturn(List.of());
+        when(chatbotServiceClient.chat(any(ChatbotChatRequest.class))).thenReturn(response);
+        mockAssistantMessageSave();
+
+        ChatResponse result = service.chat(new ChatRequest(null, "BN2026-00001", "chẩn đoán của bệnh nhân"));
+
+        assertEquals("tool_error", result.responseStatus());
+        ArgumentCaptor<JsonNode> alertMetadata = ArgumentCaptor.forClass(JsonNode.class);
+        verify(alertService).triggerAlert(
+                eq("AI_SERVICE"),
+                eq("CHATBOT_TOOL_ERROR"),
+                eq(AlertSeverity.CRITICAL),
+                any(),
+                alertMetadata.capture()
+        );
+        assertEquals("trace-607", alertMetadata.getValue().path("trace_id").asText());
+        assertEquals("fhir_error", alertMetadata.getValue().path("failed_steps").get(0).path("error_code").asText());
+        verify(auditLogRepository).save(
+                eq(user), eq(session), eq("CHAT_TOOL_ERROR"), eq("chat_session"), eq(sessionId.toString()), any());
+    }
+
+    @Test
     void sessionsUsesRecentSessionsWhenQueryIsBlank() {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000201");
         ChatApplicationService service = newService();
@@ -642,7 +697,7 @@ class ChatApplicationServiceTest {
                   "usage": {
                     "input_tokens": 0,
                     "output_tokens": 0,
-                    "estimated_cost_usd": 0
+                    "cost_usd": 0
                   }
                 }
                 """);
@@ -688,7 +743,8 @@ class ChatApplicationServiceTest {
                 new UserPatientScopeService(userPatientLinkRepository),
                 new ChatMapper(),
                 chatbotResponseMapper,
-                chatInteractionRecorder
+                chatInteractionRecorder,
+                alertService
         );
     }
 

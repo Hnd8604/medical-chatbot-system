@@ -106,6 +106,13 @@ public class ApiExceptionHandler {
                 HttpStatus.NOT_FOUND);
     }
 
+    /** chatbot-service answers 403 when the agent blocks a turn on its role policy. */
+    @ExceptionHandler(HttpClientErrorException.Forbidden.class)
+    public ResponseEntity<ApiErrorResponse> externalAccessDenied(HttpClientErrorException.Forbidden exception) {
+        log.warn("chatbot-service returned HTTP 403");
+        return build(ErrorCode.ACCESS_DENIED);
+    }
+
     @ExceptionHandler(RestClientResponseException.class)
     public ResponseEntity<ApiErrorResponse> externalResponseError(RestClientResponseException exception) {
         HttpStatusCode remoteStatus = exception.getStatusCode();

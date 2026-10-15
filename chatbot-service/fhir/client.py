@@ -73,8 +73,11 @@ class FhirClient:
             birth_date=birth_date,
             identifier=identifier,
         )
+        if bundle.get("entry") or not name:
+            return bundle
+
         tokens = [token for token in (part.strip(" .,'-") for part in name.split()) if len(token) >= 2]
-        if bundle.get("entry") or len(tokens) < 3:
+        if len(tokens) < 3:
             return bundle
 
         # Khi AND đủ token ra rỗng, chỉ nới lỏng tối thiểu: thử các tổ hợp con giữ

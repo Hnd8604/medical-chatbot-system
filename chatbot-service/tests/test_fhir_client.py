@@ -122,6 +122,31 @@ class FhirClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.get("entry"))
         self.assertEqual(result["entry"][0]["resource"]["id"], "BN2026-00002")
 
+    async def test_search_patients_flexible_without_name_uses_other_criteria(self) -> None:
+        cases = (
+            ("phone", "0900000001", "phone"),
+            ("birth_date", "2003-01-01", "birthdate"),
+            ("identifier", "BN2026-00001", "identifier"),
+        )
+        for field, value, query_key in cases:
+            with self.subTest(field=field):
+                requests = []
+
+                def handler(request: httpx.Request) -> httpx.Response:
+                    requests.append(request)
+                    return httpx.Response(200, json={"resourceType": "Bundle", "entry": []})
+
+                client = FhirClient(
+                    base_url="http://fhir.test",
+                    transport=httpx.MockTransport(handler),
+                )
+                result = await client.search_patients_flexible(**{field: value})
+
+                self.assertEqual(result, {"resourceType": "Bundle", "entry": []})
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(requests[0].url.params[query_key], value)
+                self.assertNotIn("name", requests[0].url.params)
+
     async def test_search_patients_flexible_does_not_match_single_token(self) -> None:
         # Regression: "Nguyen Van An" không được khớp nhầm bệnh nhân chỉ trùng token "An".
         seen_names = []

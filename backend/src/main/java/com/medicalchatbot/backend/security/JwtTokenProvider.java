@@ -1,73 +1,50 @@
 package com.medicalchatbot.backend.security;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Date;
-import java.util.UUID;
 
-import javax.crypto.SecretKey;
-
+import com.medicalchatbot.backend.config.JwtConfig;
 import com.medicalchatbot.backend.config.properties.JwtProperties;
 import com.medicalchatbot.backend.entity.User;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
 /**
- * Issues and verifies short-lived access tokens. The {@code token_version} claim lets the server
- * revoke every outstanding token of a user by bumping {@link User#getTokenVersion()}.
+ * Issues short-lived access tokens. The {@value #TOKEN_VERSION_CLAIM} claim lets the server revoke
+ * every outstanding token of a user by bumping {@link User#getTokenVersion()}.
  */
 @Component
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class JwtTokenProvider {
 
     public static final String TOKEN_TYPE = "Bearer";
+    public static final String USERNAME_CLAIM = "username";
+    public static final String TOKEN_VERSION_CLAIM = "token_version";
 
-    private static final String USERNAME_CLAIM = "username";
-    private static final String TOKEN_VERSION_CLAIM = "token_version";
+    JwtEncoder jwtEncoder;
+    JwtProperties properties;
 
-    private final JwtProperties properties;
-    private final SecretKey signingKey;
-
-    public JwtTokenProvider(JwtProperties properties) {
-        this.properties = properties;
-        this.signingKey = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
-    }
-
+    /** Subject is the user id; roles are not in the token, they are reloaded on every request. */
     public String generateToken(User user) {
         Instant now = Instant.now();
-        return Jwts.builder()
+        JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(user.getId().toString())
                 .claim(USERNAME_CLAIM, user.getUsername())
                 .claim(TOKEN_VERSION_CLAIM, user.getTokenVersion())
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(properties.accessTokenTtl())))
-                .signWith(signingKey)
-                .compact();
-    }
-
-    /**
-     * @throws io.jsonwebtoken.ExpiredJwtException when the token has expired
-     * @throws JwtException when the token is malformed or its signature is invalid
-     */
-    public TokenClaims parse(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(signingKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-        Integer tokenVersion = claims.get(TOKEN_VERSION_CLAIM, Integer.class);
-        if (claims.getSubject() == null || tokenVersion == null) {
-            throw new JwtException("Missing required claims");
-        }
-        return new TokenClaims(UUID.fromString(claims.getSubject()), tokenVersion);
+                .issuedAt(now)
+                .expiresAt(now.plus(properties.accessTokenTtl()))
+                .build();
+        JwsHeader header = JwsHeader.with(JwtConfig.ALGORITHM).build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 
     public long expiresInSeconds() {
         return properties.accessTokenTtl().toSeconds();
-    }
-
-    public record TokenClaims(UUID userId, int tokenVersion) {
     }
 }

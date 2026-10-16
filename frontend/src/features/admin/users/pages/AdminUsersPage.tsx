@@ -25,14 +25,14 @@ const STATUS_TONE: Record<UserStatus, "green" | "amber" | "red"> = { ACTIVE: "gr
 type UserChange = { userId: string } & ({ role: UserRole } | { status: UserStatus });
 
 function PatientLinks({ user }: { user: AdminUser }) {
-  if (user.patient_links.length === 0) {
+  if (user.patientLinks.length === 0) {
     return <span className="text-sm text-muted-foreground">Chưa có dữ liệu liên kết</span>;
   }
   return (
     <div className="flex flex-wrap items-start gap-2">
-      {user.patient_links.map((link) => (
-        <Badge key={link.fhir_patient_id} tone={link.is_primary ? "blue" : "slate"}>
-          {link.fhir_patient_id}
+      {user.patientLinks.map((link) => (
+        <Badge key={link.fhirPatientId} tone={link.isPrimary ? "blue" : "slate"}>
+          {link.fhirPatientId}
         </Badge>
       ))}
     </div>
@@ -42,9 +42,9 @@ function PatientLinks({ user }: { user: AdminUser }) {
 function UserIdentity({ user }: { user: AdminUser }) {
   return (
     <div className="min-w-0">
-      <p className="line-clamp-1 font-semibold text-foreground">{user.display_name || user.username}</p>
+      <p className="line-clamp-1 font-semibold text-foreground">{user.displayName || user.username}</p>
       <p className="line-clamp-1 text-sm text-muted-foreground">{user.email}</p>
-      <p className="mt-1 text-xs text-muted-foreground">Tạo lúc {formatDateTime(user.created_at)}</p>
+      <p className="mt-1 text-xs text-muted-foreground">Tạo lúc {formatDateTime(user.createdAt)}</p>
     </div>
   );
 }
@@ -188,7 +188,7 @@ export function AdminUsersPage() {
           </select>
         </label>
         <div className="flex items-center justify-end text-sm font-semibold text-muted-foreground">
-          {visibleUsers.length}/{users.data?.total_elements ?? 0} user
+          {visibleUsers.length}/{users.data?.totalElements ?? 0} user
         </div>
       </section>
 

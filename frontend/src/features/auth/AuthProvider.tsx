@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (usernameOrEmail: string, password: string) => {
       const response = await authApi.login(usernameOrEmail, password);
       queryClient.clear();
-      setTokens(response.access_token, response.refresh_token);
+      setTokens(response.accessToken, response.refreshToken);
       setUser(response.user);
       return response.user;
     },

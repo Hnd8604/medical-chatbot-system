@@ -33,5 +33,5 @@ export function homePath(user: AuthUser): string {
   if (user.role === "ADMIN") {
     return "/admin";
   }
-  return user.role === "USER" && user.onboarding_required ? "/onboarding" : "/chat";
+  return user.role === "USER" && user.onboardingRequired ? "/onboarding" : "/chat";
 }

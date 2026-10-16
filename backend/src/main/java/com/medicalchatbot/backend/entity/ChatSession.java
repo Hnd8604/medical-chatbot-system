@@ -1,57 +1,39 @@
 package com.medicalchatbot.backend.entity;
 
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
 
 @Entity
 @Table(name = "chat_sessions")
 @Getter
 @Setter
-@Builder
+@SuperBuilder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class ChatSession {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class ChatSession extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    User user;
 
     @Column(length = 255)
-    private String title;
+    String title;
 
     @Embedded
-    private ChatMemory memory;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    ChatMemory memory;
 
     /** Hibernate maps an embeddable whose columns are all null to {@code null}. */
     public ChatMemory getMemory() {
@@ -65,6 +47,6 @@ public class ChatSession {
 
     /** Moves the session to the top of the history list. */
     public void touch() {
-        this.updatedAt = OffsetDateTime.now();
+        setUpdatedAt(OffsetDateTime.now());
     }
 }

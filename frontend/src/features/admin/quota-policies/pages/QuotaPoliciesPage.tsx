@@ -73,11 +73,11 @@ export function QuotaPoliciesPage() {
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground">{policy.name}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {formatNumber(policy.daily_request_limit)} request · {formatNumber(policy.daily_token_limit)} token ·{" "}
-                        {formatUsd(policy.daily_cost_limit_usd)} / ngày
-                        {policy.rate_limit_per_minute != null ? ` · ${formatNumber(policy.rate_limit_per_minute)} req/phút` : ""}
+                        {formatNumber(policy.dailyRequestLimit)} request · {formatNumber(policy.dailyTokenLimit)} token ·{" "}
+                        {formatUsd(policy.dailyCostLimitUsd)} / ngày
+                        {policy.rateLimitPerMinute != null ? ` · ${formatNumber(policy.rateLimitPerMinute)} req/phút` : ""}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">Tạo lúc {formatDateTime(policy.created_at)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Tạo lúc {formatDateTime(policy.createdAt)}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button type="button" variant="secondary" size="sm" onClick={() => setModal({ open: true, policy })}>

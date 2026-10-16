@@ -12,16 +12,16 @@ export interface BackupItem {
 
 export interface Backup {
   id: string;
-  trigger_type: BackupTrigger;
+  triggerType: BackupTrigger;
   status: JobStatus;
-  triggered_by: string | null;
-  started_at: string;
-  finished_at: string | null;
-  total_size_bytes: number | null;
-  upload_target: string | null;
+  triggeredBy: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  totalSizeBytes: number | null;
+  uploadTarget: string | null;
   items: BackupItem[] | null;
-  error_message: string | null;
-  created_at: string;
+  errorMessage: string | null;
+  createdAt: string;
 }
 
 export interface RestoreItem {
@@ -33,12 +33,12 @@ export interface RestoreItem {
 
 export interface Restore {
   id: string;
-  backup_id: string | null;
+  backupId: string | null;
   status: JobStatus;
-  triggered_by: string | null;
-  started_at: string;
-  finished_at: string | null;
+  triggeredBy: string | null;
+  startedAt: string;
+  finishedAt: string | null;
   items: RestoreItem[] | null;
-  error_message: string | null;
-  created_at: string;
+  errorMessage: string | null;
+  createdAt: string;
 }

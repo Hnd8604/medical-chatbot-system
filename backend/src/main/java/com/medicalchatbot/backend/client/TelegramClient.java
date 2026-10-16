@@ -4,6 +4,9 @@ import java.util.Map;
 
 import com.medicalchatbot.backend.config.properties.TelegramProperties;
 import com.medicalchatbot.backend.enums.AlertSeverity;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
@@ -14,21 +17,15 @@ import org.springframework.web.client.RestClient;
 /** Sends operational alerts to a Telegram chat when a bot is configured; otherwise does nothing. */
 @Slf4j
 @Component
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TelegramClient {
 
-    private final RestClient restClient;
-    private final TelegramProperties properties;
-    private final TaskExecutor taskExecutor;
-
-    public TelegramClient(
-            @Qualifier("telegramRestClient") RestClient restClient,
-            TelegramProperties properties,
-            @Qualifier(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME) TaskExecutor taskExecutor
-    ) {
-        this.restClient = restClient;
-        this.properties = properties;
-        this.taskExecutor = taskExecutor;
-    }
+    @Qualifier("telegramRestClient")
+    RestClient restClient;
+    TelegramProperties properties;
+    @Qualifier(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
+    TaskExecutor taskExecutor;
 
     /** Fire-and-forget: alerting must never slow down or fail the request that raised the alert. */
     public void sendAlert(String type, AlertSeverity severity, String message) {

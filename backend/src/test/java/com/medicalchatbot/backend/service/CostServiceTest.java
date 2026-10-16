@@ -14,7 +14,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
+import com.medicalchatbot.backend.dto.response.usage.CostSummaryResponse;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.mapper.CostMapper;
@@ -25,9 +25,12 @@ import com.medicalchatbot.backend.repository.projection.CostByModelProjection;
 import com.medicalchatbot.backend.repository.projection.CostUnavailableModelProjection;
 import com.medicalchatbot.backend.repository.projection.UsageTotalsProjection;
 import com.medicalchatbot.backend.support.TestProperties;
+import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -43,21 +46,23 @@ class CostServiceTest {
     @Mock
     private UserRepository userRepository;
 
-    @Mock
-    private CurrentUserService currentUserService;
-
     private CostService service;
 
     @BeforeEach
     void setUp() {
-        service = new CostService(usageLogRepository, userRepository, currentUserService, new CostMapper(),
+        service = new CostService(usageLogRepository, userRepository, Mappers.getMapper(CostMapper.class),
                 TestProperties.app(ZONE));
+    }
+
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
     }
 
     @Test
     void currentUserSummaryReturnsTotalsModelsDaysAndUnpricedModels() {
         UUID userId = UUID.randomUUID();
-        when(currentUserService.requireCurrentUserId()).thenReturn(userId);
+        TestUsers.signIn(userId);
         when(usageLogRepository.summarizeUsage(eq(userId), any(), any()))
                 .thenReturn(new UsageTotalsProjection(2, 3000, 700, new BigDecimal("0.002320")));
         when(usageLogRepository.summarizeCostByModel(eq(userId), any(), any())).thenReturn(List.of(
@@ -84,7 +89,7 @@ class CostServiceTest {
     @Test
     void summaryCoversWholeCalendarDaysOfTheApplicationZone() {
         UUID userId = UUID.randomUUID();
-        when(currentUserService.requireCurrentUserId()).thenReturn(userId);
+        TestUsers.signIn(userId);
         when(usageLogRepository.summarizeUsage(any(), any(), any()))
                 .thenReturn(new UsageTotalsProjection(0, 0, 0, BigDecimal.ZERO));
 
@@ -97,10 +102,11 @@ class CostServiceTest {
 
     @Test
     void rejectsInvertedRange() {
+        TestUsers.signIn(UUID.randomUUID());
         AppException exception = assertThrows(AppException.class,
                 () -> service.currentUserSummary(DAY.plusDays(1), DAY));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.DATE_RANGE_INVALID, exception.getErrorCode());
     }
 
     @Test
@@ -110,6 +116,6 @@ class CostServiceTest {
 
         AppException exception = assertThrows(AppException.class, () -> service.userSummary(userId, DAY, DAY));
 
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
+        assertEquals(ErrorCode.USER_NOT_EXISTED, exception.getErrorCode());
     }
 }

@@ -23,13 +23,15 @@ TailwindCSS, react-router-dom, TanStack Query.
 
 ## Quy ước
 - **Không gọi HAPI FHIR trực tiếp.** Mọi dữ liệu đi qua REST của Spring backend
-  (`/api/...`). JSON request/response dùng snake_case; danh sách phân trang có
-  dạng `{ items, page, size, total_elements, total_pages }`; lỗi có dạng
-  `{ code, error_code, status, message }`.
+  (`/api/v1/...`, gọi qua `api` trong `shared/api/client.ts` với đường dẫn tương đối như
+  `/auth/login`). JSON request/response dùng camelCase; riêng dữ liệu FHIR/chatbot-service
+  chuyển thẳng (evidence, usage, patient candidates...) giữ snake_case. Danh sách phân trang
+  có dạng `{ items, page, size, totalElements, totalPages }`; mọi response có dạng
+  `{ code, message, result }` (lỗi: `{ code, message }`).
 - Dữ liệu server dùng TanStack Query (`useQuery`/`useMutation`, invalidate theo
   query key của feature); state UI cục bộ dùng `useState`.
-- Giữ luồng chat: gửi kèm `session_id`/`patient_id`, hiển thị
-  `patient_candidates` khi `needs_patient_selection=true`
+- Giữ luồng chat: gửi kèm `sessionId`/`patientId`, hiển thị
+  `patientCandidates` khi `needsPatientSelection=true`
   (`features/chat/hooks/useConversation.ts`, `features/chat/pages/ChatPage.tsx`).
 - TypeScript chặt (`noUnusedLocals`); Tailwind cho style; văn bản UI tiếng Việt.
 

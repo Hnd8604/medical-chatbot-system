@@ -4,14 +4,14 @@ export type AlertStatus = "OPEN" | "RESOLVED" | "IGNORED";
 export interface Alert {
   id: string;
   source: string;
-  alert_type: string;
+  alertType: string;
   severity: AlertSeverity;
   status: AlertStatus;
   message: string;
   metadata: unknown;
-  created_at: string;
-  resolved_at: string | null;
-  resolved_by: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
 }
 
 export interface AlertFilter {

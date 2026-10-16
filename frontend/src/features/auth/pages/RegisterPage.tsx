@@ -15,11 +15,11 @@ import { homePath } from "../labels";
 import type { LoginLocationState, RegisterRequest } from "../types";
 
 const emptyForm: RegisterRequest = {
-  display_name: "",
+  displayName: "",
   username: "",
   email: "",
   password: "",
-  password_confirmation: "",
+  passwordConfirmation: "",
 };
 
 /** Mirrors the backend rules so most mistakes are caught before the request. */
@@ -37,7 +37,7 @@ function validate(form: RegisterRequest): string | null {
   if (!/\p{L}/u.test(form.password) || !/\d/.test(form.password)) {
     return "Mật khẩu phải có ít nhất một chữ và một số.";
   }
-  if (form.password !== form.password_confirmation) {
+  if (form.password !== form.passwordConfirmation) {
     return "Xác nhận mật khẩu không khớp.";
   }
   return null;
@@ -54,7 +54,7 @@ export function RegisterPage() {
     mutationFn: () =>
       authApi.register({
         ...form,
-        display_name: form.display_name.trim(),
+        displayName: form.displayName.trim(),
         username: form.username.trim(),
         email: form.email.trim(),
       }),
@@ -96,8 +96,8 @@ export function RegisterPage() {
           <Field label="Họ tên">
             <input
               className={inputClass()}
-              value={form.display_name}
-              onChange={(event) => updateField("display_name", event.target.value)}
+              value={form.displayName}
+              onChange={(event) => updateField("displayName", event.target.value)}
               autoComplete="name"
               required
             />
@@ -135,8 +135,8 @@ export function RegisterPage() {
           </Field>
           <Field label="Xác nhận mật khẩu">
             <PasswordInput
-              value={form.password_confirmation}
-              onChange={(event) => updateField("password_confirmation", event.target.value)}
+              value={form.passwordConfirmation}
+              onChange={(event) => updateField("passwordConfirmation", event.target.value)}
               visible={showPassword}
               autoComplete="new-password"
               required

@@ -31,7 +31,7 @@ public enum ExportFormat {
         try {
             return valueOf(value.strip().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException | NullPointerException exception) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Định dạng xuất chỉ hỗ trợ pdf hoặc csv.");
+            throw new AppException(ErrorCode.EXPORT_FORMAT_INVALID);
         }
     }
 }

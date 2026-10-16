@@ -11,7 +11,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.chatbot.ChatbotChatResponse;
-import com.medicalchatbot.backend.dto.response.ChatResponse;
+import com.medicalchatbot.backend.dto.response.chat.ChatResponse;
 import com.medicalchatbot.backend.entity.ChatMemory;
 import org.junit.jupiter.api.Test;
 

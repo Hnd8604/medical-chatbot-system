@@ -37,7 +37,7 @@ export function AdminDashboardPage() {
     alerts.error ? "Không thể tải alert." : null,
   ].filter(Boolean);
   const openAlerts = alerts.data?.items ?? [];
-  const openAlertsTotal = alerts.data?.total_elements ?? 0;
+  const openAlertsTotal = alerts.data?.totalElements ?? 0;
   const cacheMetrics = cache.data;
 
   return (
@@ -58,10 +58,10 @@ export function AdminDashboardPage() {
       ) : (
         <div className="grid gap-7">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="Số user" value={formatNumber(users.data?.total_elements)} description="Tổng tài khoản trong hệ thống." />
+            <MetricCard label="Số user" value={formatNumber(users.data?.totalElements)} description="Tổng tài khoản trong hệ thống." />
             <MetricCard
               label="Request hôm nay"
-              value={requests.data ? formatNumber(requests.data.request_count) : "-"}
+              value={requests.data ? formatNumber(requests.data.requestCount) : "-"}
               description="Tổng request hôm nay."
             />
             <MetricCard
@@ -71,15 +71,15 @@ export function AdminDashboardPage() {
             />
             <MetricCard
               label="Cache hit rate"
-              value={formatPercent(cacheMetrics?.hit_rate_percentage)}
-              description={`${formatNumber(cacheMetrics?.total_cache_hits)} hit trên ${formatNumber(cacheMetrics?.total_requests)} request cache.`}
-              progress={cacheMetrics?.hit_rate_percentage ?? 0}
+              value={formatPercent(cacheMetrics?.hitRatePercentage)}
+              description={`${formatNumber(cacheMetrics?.totalCacheHits)} hit trên ${formatNumber(cacheMetrics?.totalRequests)} request cache.`}
+              progress={cacheMetrics?.hitRatePercentage ?? 0}
               progressTone="green"
             />
             <MetricCard
               label="Tiết kiệm ước tính"
-              value={formatUsd(cacheMetrics?.total_saved_cost_usd)}
-              description={`${formatNumber(cacheMetrics?.total_saved_tokens)} token đã tiết kiệm từ cache.`}
+              value={formatUsd(cacheMetrics?.totalSavedCostUsd)}
+              description={`${formatNumber(cacheMetrics?.totalSavedTokens)} token đã tiết kiệm từ cache.`}
             />
           </section>
 

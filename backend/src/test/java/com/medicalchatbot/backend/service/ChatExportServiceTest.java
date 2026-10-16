@@ -25,13 +25,16 @@ import com.medicalchatbot.backend.mapper.AuditLogMapper;
 import com.medicalchatbot.backend.mapper.ChatMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
 import com.medicalchatbot.backend.service.ChatExportService.ExportFile;
 import com.medicalchatbot.backend.support.TestProperties;
 import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -43,10 +46,10 @@ class ChatExportServiceTest {
     private static final String VIETNAMESE_ANSWER = "Bệnh nhân đang dùng Amlodipine 5 mg, uống một viên mỗi ngày.";
 
     @Mock
-    private ChatSessionRepository chatSessionRepository;
+    private UserRepository userRepository;
 
     @Mock
-    private CurrentUserService currentUserService;
+    private ChatSessionRepository chatSessionRepository;
 
     @Mock
     private AuditLogRepository auditLogRepository;
@@ -59,15 +62,20 @@ class ChatExportServiceTest {
     void setUp() {
         service = new ChatExportService(
                 chatSessionRepository,
-                new ChatSessionService(chatSessionRepository, currentUserService, new ChatMapper()),
-                currentUserService,
+                userRepository,
+                new ChatSessionService(chatSessionRepository, Mappers.getMapper(ChatMapper.class)),
                 new TranscriptRenderer(),
-                new AuditService(auditLogRepository, new AuditLogMapper(), new ObjectMapper()),
+                new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), new ObjectMapper()),
                 TestProperties.app()
         );
         user = TestUsers.user(UserRole.USER);
         session = ChatSession.builder().id(UUID.randomUUID()).user(user).title("Thuốc đang dùng").build();
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
+    }
+
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
     }
 
     @Test

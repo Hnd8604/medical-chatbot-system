@@ -1,7 +1,7 @@
 import { api } from "@/shared/api/client";
 import type { QuotaPolicy, QuotaPolicyRequest } from "./types";
 
-const BASE = "/api/admin/quota-policies";
+const BASE = "/admin/quota-policies";
 
 export const quotaPolicyKeys = {
   list: () => ["admin", "quota-policies"] as const,

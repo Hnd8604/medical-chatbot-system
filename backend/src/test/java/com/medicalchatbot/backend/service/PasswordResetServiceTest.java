@@ -10,9 +10,9 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medicalchatbot.backend.dto.request.ForgotPasswordRequest;
-import com.medicalchatbot.backend.dto.request.ResetPasswordRequest;
-import com.medicalchatbot.backend.dto.request.VerifyResetCodeRequest;
+import com.medicalchatbot.backend.dto.request.auth.ForgotPasswordRequest;
+import com.medicalchatbot.backend.dto.request.auth.ResetPasswordRequest;
+import com.medicalchatbot.backend.dto.request.auth.VerifyResetCodeRequest;
 import com.medicalchatbot.backend.entity.AuditLog;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserRole;
@@ -26,6 +26,7 @@ import com.medicalchatbot.backend.support.TestUsers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -52,7 +53,7 @@ class PasswordResetServiceTest {
 
     @BeforeEach
     void setUp() {
-        AuditService auditService = new AuditService(auditLogRepository, new AuditLogMapper(), new ObjectMapper());
+        AuditService auditService = new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), new ObjectMapper());
         service = new PasswordResetService(userRepository, otpService, emailService, passwordEncoder,
                 refreshTokenService, new AuthAuditService(auditService));
         user = TestUsers.user(UserRole.USER);
@@ -61,14 +62,13 @@ class PasswordResetServiceTest {
     }
 
     @Test
-    void unknownEmailIsNotFound() {
+    void unknownEmailGetsTheSameAnswerWithoutACode() {
         when(userRepository.findByEmailIgnoreCase("ghost@demo.local")).thenReturn(Optional.empty());
 
-        AppException exception = assertThrows(AppException.class,
-                () -> service.sendResetCode(new ForgotPasswordRequest("Ghost@Demo.local")));
-
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
+        assertEquals(PasswordResetService.RESET_CODE_SENT,
+                service.sendResetCode(new ForgotPasswordRequest("Ghost@Demo.local")).message());
         verify(otpService, never()).issueCode(anyString());
+        verify(emailService, never()).sendPasswordResetCode(anyString(), anyString());
     }
 
     @Test
@@ -76,7 +76,8 @@ class PasswordResetServiceTest {
         when(userRepository.findByEmailIgnoreCase("user@demo.local")).thenReturn(Optional.of(user));
         when(otpService.issueCode("user@demo.local")).thenReturn(Optional.of("123456"));
 
-        service.sendResetCode(new ForgotPasswordRequest("User@Demo.local"));
+        assertEquals(PasswordResetService.RESET_CODE_SENT,
+                service.sendResetCode(new ForgotPasswordRequest("User@Demo.local")).message());
 
         verify(emailService).sendPasswordResetCode("user@demo.local", "123456");
         assertEquals("PASSWORD_RESET_REQUEST", capturedAudit().getAction());
@@ -87,20 +88,18 @@ class PasswordResetServiceTest {
         when(userRepository.findByEmailIgnoreCase("user@demo.local")).thenReturn(Optional.of(user));
         when(otpService.issueCode("user@demo.local")).thenReturn(Optional.empty());
 
-        assertEquals("Đã gửi mã đặt lại mật khẩu tới email của bạn.",
+        assertEquals(PasswordResetService.RESET_CODE_SENT,
                 service.sendResetCode(new ForgotPasswordRequest("user@demo.local")).message());
         verify(emailService, never()).sendPasswordResetCode(anyString(), anyString());
     }
 
     @Test
-    void lockedUserIsRejectedWithoutACode() {
+    void lockedUserGetsTheSameAnswerWithoutACode() {
         user.setStatus(UserStatus.LOCKED);
         when(userRepository.findByEmailIgnoreCase("user@demo.local")).thenReturn(Optional.of(user));
 
-        AppException exception = assertThrows(AppException.class,
-                () -> service.sendResetCode(new ForgotPasswordRequest("user@demo.local")));
-
-        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
+        assertEquals(PasswordResetService.RESET_CODE_SENT,
+                service.sendResetCode(new ForgotPasswordRequest("user@demo.local")).message());
         verify(otpService, never()).issueCode(anyString());
     }
 
@@ -142,7 +141,7 @@ class PasswordResetServiceTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.resetPassword(new ResetPasswordRequest("jti.secret", "NewPass123", "NewPass123")));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.RESET_TICKET_INVALID, exception.getErrorCode());
     }
 
     private AuditLog capturedAudit() {

@@ -6,13 +6,16 @@ import java.util.List;
 import com.medicalchatbot.backend.repository.projection.ErrorStat;
 import com.medicalchatbot.backend.repository.projection.IntentStat;
 import com.medicalchatbot.backend.repository.projection.PerformanceStat;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 /** Read-only aggregate queries for the admin analytics screens. */
 @Repository
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AnalyticsRepository {
 
     /** Top intents in the window, broken down per day; reads the intent recorded on chat audit entries. */
@@ -92,7 +95,7 @@ public class AnalyticsRepository {
               AND DATE(created_at) >= ? AND DATE(created_at) <= ?
             """;
 
-    private final JdbcTemplate jdbcTemplate;
+    JdbcTemplate jdbcTemplate;
 
     public List<IntentStat> findIntentStats(LocalDate from, LocalDate to, int limit) {
         return jdbcTemplate.query(INTENT_STATS_SQL, (rs, rowNum) -> new IntentStat(

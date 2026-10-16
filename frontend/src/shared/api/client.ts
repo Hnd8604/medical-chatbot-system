@@ -1,24 +1,22 @@
 import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
-import { API_BASE_URL } from "@/shared/config";
+import { API_ROOT } from "@/shared/config";
 import { expireSession, getAccessToken, getRefreshToken, setTokens } from "./tokens";
 import type { ApiEnvelope, ApiErrorBody, QueryParams } from "./types";
 
 const SUCCESS_CODE = 1000;
 const FALLBACK_MESSAGE = "Yêu cầu không thành công.";
 /** Endpoints whose 401 means bad credentials, not an expired access token. */
-const CREDENTIAL_ENDPOINTS = ["/api/auth/login", "/api/auth/refresh"];
+const CREDENTIAL_ENDPOINTS = ["/auth/login", "/auth/refresh"];
 
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: number;
-  readonly errorCode?: string;
 
-  constructor(status: number, message: string, code?: number, errorCode?: string) {
+  constructor(status: number, message: string, code?: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
-    this.errorCode = errorCode;
   }
 }
 
@@ -28,7 +26,7 @@ export function errorMessage(error: unknown, fallback = FALLBACK_MESSAGE): strin
 }
 
 const http = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_ROOT,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -51,13 +49,13 @@ async function refreshAccessToken(): Promise<string | null> {
   }
   try {
     // Plain axios so that a failing refresh does not re-enter the 401 interceptor.
-    const { data } = await axios.post<ApiEnvelope<{ access_token: string; refresh_token: string }>>(
-      `${API_BASE_URL}/api/auth/refresh`,
-      { refresh_token: refreshToken },
+    const { data } = await axios.post<ApiEnvelope<{ accessToken: string; refreshToken: string }>>(
+      `${API_ROOT}/auth/refresh`,
+      { refreshToken },
     );
     const tokens = unwrap(data);
-    setTokens(tokens.access_token, tokens.refresh_token);
-    return tokens.access_token;
+    setTokens(tokens.accessToken, tokens.refreshToken);
+    return tokens.accessToken;
   } catch {
     return null;
   }
@@ -133,7 +131,7 @@ async function toApiError(error: unknown): Promise<ApiError> {
   const status = error.response?.status ?? 0;
   const body = await readErrorBody(error.response?.data);
   if (body?.message) {
-    return new ApiError(status, body.message, body.code, body.error_code);
+    return new ApiError(status, body.message, body.code);
   }
   if (!error.response) {
     return new ApiError(0, "Không thể kết nối tới máy chủ.");
@@ -204,5 +202,5 @@ export const api = {
 export function apiUrl(path: string, params?: QueryParams): string {
   const entries = Object.entries(compact(params) ?? {}).map(([key, value]) => [key, String(value)]);
   const query = new URLSearchParams(entries).toString();
-  return `${API_BASE_URL}${path}${query ? `?${query}` : ""}`;
+  return `${API_ROOT}${path}${query ? `?${query}` : ""}`;
 }

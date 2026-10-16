@@ -1,6 +1,6 @@
 package com.medicalchatbot.backend.exception;
 
-import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
+import com.medicalchatbot.backend.dto.response.usage.QuotaStatusResponse;
 import lombok.Getter;
 
 /** The user has used up a daily limit of their quota policy. */

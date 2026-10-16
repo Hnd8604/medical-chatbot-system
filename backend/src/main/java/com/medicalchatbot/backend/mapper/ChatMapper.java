@@ -4,72 +4,48 @@ import java.util.List;
 
 import com.medicalchatbot.backend.dto.chatbot.ContextMessage;
 import com.medicalchatbot.backend.dto.chatbot.ConversationContext;
-import com.medicalchatbot.backend.dto.response.ChatMessageResponse;
-import com.medicalchatbot.backend.dto.response.ChatSessionResponse;
+import com.medicalchatbot.backend.dto.response.chat.ChatMessageResponse;
+import com.medicalchatbot.backend.dto.response.chat.ChatSessionResponse;
 import com.medicalchatbot.backend.entity.ChatMemory;
 import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatSessionSummaryProjection;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-@Component
-public class ChatMapper {
+@Mapper
+public interface ChatMapper {
 
-    public ConversationContext toConversationContext(
+    @Mapping(target = "memorySummary", source = "memory.summary")
+    ConversationContext toConversationContext(
             ChatMemory memory,
             List<ChatContextMessageProjection> recentMessages,
             int totalMessageCount
-    ) {
-        return new ConversationContext(
-                memory.summary(),
-                memory.activePatientId(),
-                memory.lastIntent(),
-                memory.lastToolName(),
-                memory.lastResourceType(),
-                memory.lastResourceId(),
-                recentMessages.stream()
-                        .map(message -> new ContextMessage(message.role(), message.content()))
-                        .toList(),
-                totalMessageCount
-        );
-    }
+    );
 
-    public List<ChatSessionResponse> toSessionResponses(List<ChatSessionSummaryProjection> sessions) {
-        return sessions.stream()
-                .map(session -> new ChatSessionResponse(
-                        session.id(),
-                        session.title(),
-                        session.createdAt(),
-                        session.updatedAt(),
-                        session.activePatientId(),
-                        session.messageCount(),
-                        session.lastMessagePreview()
-                ))
-                .toList();
-    }
+    ContextMessage toContextMessage(ChatContextMessageProjection message);
 
-    public List<ChatMessageResponse> toMessageResponses(List<ChatMessageProjection> messages) {
-        return messages.stream().map(ChatMapper::toMessageResponse).toList();
-    }
+    List<ChatSessionResponse> toSessionResponses(List<ChatSessionSummaryProjection> sessions);
 
-    private static ChatMessageResponse toMessageResponse(ChatMessageProjection message) {
-        ChatMessageResponse.Feedback feedback = message.feedbackRating() == null
+    ChatSessionResponse toSessionResponse(ChatSessionSummaryProjection session);
+
+    List<ChatMessageResponse> toMessageResponses(List<ChatMessageProjection> messages);
+
+    @Mapping(target = "feedback", source = ".")
+    @Mapping(target = "grounding", source = ".")
+    ChatMessageResponse toMessageResponse(ChatMessageProjection message);
+
+    /** Only messages that were rated carry feedback. */
+    default ChatMessageResponse.Feedback toFeedback(ChatMessageProjection message) {
+        return message.feedbackRating() == null
                 ? null
                 : new ChatMessageResponse.Feedback(message.feedbackRating(), message.feedbackComment());
-        ChatMessageResponse.Grounding grounding = message.groundingChecked() == null
+    }
+
+    /** Only answers whose grounding was checked carry the result. */
+    default ChatMessageResponse.Grounding toGrounding(ChatMessageProjection message) {
+        return message.groundingChecked() == null
                 ? null
                 : new ChatMessageResponse.Grounding(message.groundingChecked(), message.groundingPassed());
-        return new ChatMessageResponse(
-                message.id(),
-                message.role(),
-                message.content(),
-                message.createdAt(),
-                feedback,
-                message.responseStatus(),
-                message.traceId(),
-                message.answerSource(),
-                grounding,
-                message.llmUnavailableReason()
-        );
     }
 }

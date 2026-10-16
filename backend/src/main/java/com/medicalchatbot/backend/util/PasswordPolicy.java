@@ -26,17 +26,13 @@ public final class PasswordPolicy {
     public static void validate(String password, String confirmation) {
         int passwordBytes = password.getBytes(StandardCharsets.UTF_8).length;
         if (passwordBytes < MIN_BYTES || passwordBytes > MAX_BYTES) {
-            throw invalid("Mật khẩu phải có từ 8 đến 72 byte.");
+            throw new AppException(ErrorCode.PASSWORD_LENGTH_INVALID);
         }
         if (!HAS_LETTER.matcher(password).find() || !HAS_DIGIT.matcher(password).find()) {
-            throw invalid("Mật khẩu phải có ít nhất một chữ và một số.");
+            throw new AppException(ErrorCode.PASSWORD_TOO_WEAK);
         }
         if (!password.equals(confirmation)) {
-            throw invalid("Xác nhận mật khẩu không khớp.");
+            throw new AppException(ErrorCode.PASSWORD_CONFIRMATION_MISMATCH);
         }
-    }
-
-    private static AppException invalid(String message) {
-        return new AppException(ErrorCode.INVALID_ARGUMENT, message);
     }
 }

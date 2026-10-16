@@ -12,9 +12,7 @@ public enum CostSource implements PersistedEnum {
     /** Có call gateway không báo cost: call đó ghi 0, tổng bị thiếu. */
     UNAVAILABLE("unavailable"),
     /** Không có LLM call nào (cache hit, câu template...). */
-    NONE("none"),
-    /** Dòng usage_logs trước V10: cost do Spring ước tính theo bảng giá cũ. */
-    LEGACY_ESTIMATE("legacy_estimate");
+    NONE("none");
 
     private final String value;
 

@@ -1,20 +1,13 @@
 package com.medicalchatbot.backend.mapper;
 
-import com.medicalchatbot.backend.dto.response.NotificationResponse;
+import com.medicalchatbot.backend.dto.response.notification.NotificationResponse;
 import com.medicalchatbot.backend.entity.Notification;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-@Component
-public class NotificationMapper {
+@Mapper
+public interface NotificationMapper {
 
-    public NotificationResponse toResponse(Notification notification) {
-        return new NotificationResponse(
-                notification.getId(),
-                notification.getType(),
-                notification.getTitle(),
-                notification.getContent(),
-                notification.isRead(),
-                notification.getCreatedAt()
-        );
-    }
+    @Mapping(target = "isRead", source = "read")
+    NotificationResponse toNotificationResponse(Notification notification);
 }

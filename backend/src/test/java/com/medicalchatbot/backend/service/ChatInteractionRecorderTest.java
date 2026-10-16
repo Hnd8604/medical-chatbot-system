@@ -33,6 +33,7 @@ import com.medicalchatbot.backend.support.TestUsers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -60,7 +61,7 @@ class ChatInteractionRecorderTest {
         recorder = new ChatInteractionRecorder(
                 usageLogRepository,
                 llmCallUsageRepository,
-                new AuditService(auditLogRepository, new AuditLogMapper(), objectMapper),
+                new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), objectMapper),
                 new ChatAuditMapper(objectMapper, responseMapper),
                 objectMapper
         );
@@ -96,7 +97,7 @@ class ChatInteractionRecorderTest {
         assertEquals(UsageStatus.SUCCESS, usageLog.getStatus());
         assertEquals(1400, usageLog.getInputTokens());
         assertEquals(230, usageLog.getOutputTokens());
-        assertEquals(new BigDecimal("0.000697"), usageLog.getEstimatedCostUsd());
+        assertEquals(new BigDecimal("0.000697"), usageLog.getCostUsd());
         assertEquals(CostSource.GATEWAY, usageLog.getCostSource());
         assertEquals("trace-1", usageLog.getTraceId());
         assertEquals(125, usageLog.getLatencyMs());
@@ -133,7 +134,7 @@ class ChatInteractionRecorderTest {
                 """);
 
         UsageLog usageLog = capturedUsageLog();
-        assertEquals(new BigDecimal("0.000000"), usageLog.getEstimatedCostUsd());
+        assertEquals(new BigDecimal("0.000000"), usageLog.getCostUsd());
         assertEquals(CostSource.NONE, usageLog.getCostSource());
         assertEquals(1500, usageLog.getSavedTokens());
         assertEquals(new BigDecimal("0.001200"), usageLog.getSavedCostUsd());
@@ -167,7 +168,7 @@ class ChatInteractionRecorderTest {
                 """);
 
         UsageLog usageLog = capturedUsageLog();
-        assertEquals(new BigDecimal("0.000078"), usageLog.getEstimatedCostUsd());
+        assertEquals(new BigDecimal("0.000078"), usageLog.getCostUsd());
         assertEquals(CostSource.UNAVAILABLE, usageLog.getCostSource());
         List<LlmCallUsage> calls = capturedCalls();
         assertEquals(CostSource.GATEWAY, calls.get(0).getCostSource());
@@ -202,7 +203,7 @@ class ChatInteractionRecorderTest {
         assertEquals(UsageStatus.FAILED, usageLog.getStatus());
         assertEquals("chatbot-service HTTP 502", usageLog.getErrorMessage());
         assertNull(usageLog.getSession());
-        assertEquals(new BigDecimal("0.000057"), usageLog.getEstimatedCostUsd());
+        assertEquals(new BigDecimal("0.000057"), usageLog.getCostUsd());
         assertEquals(CostSource.GATEWAY, usageLog.getCostSource());
         assertEquals(1, capturedCalls().size());
 

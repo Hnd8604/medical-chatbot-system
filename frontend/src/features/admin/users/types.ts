@@ -1,19 +1,19 @@
 import type { UserRole, UserStatus } from "@/features/auth/types";
 
 export interface PatientLink {
-  fhir_patient_id: string;
+  fhirPatientId: string;
   relationship: string;
-  is_primary: boolean;
+  isPrimary: boolean;
 }
 
 export interface AdminUser {
   id: string;
   username: string;
   email: string;
-  display_name: string;
+  displayName: string;
   role: UserRole;
   status: UserStatus;
-  created_at: string;
-  updated_at: string;
-  patient_links: PatientLink[];
+  createdAt: string;
+  updatedAt: string;
+  patientLinks: PatientLink[];
 }

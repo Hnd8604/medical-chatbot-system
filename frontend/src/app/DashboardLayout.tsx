@@ -58,7 +58,7 @@ export function DashboardLayout() {
   const { logout } = useAuth();
   const user = useSignedInUser();
   const isAdmin = user.role === "ADMIN";
-  const displayName = user.display_name || user.username;
+  const displayName = user.displayName || user.username;
 
   return (
     <div className="min-h-screen bg-background lg:flex">

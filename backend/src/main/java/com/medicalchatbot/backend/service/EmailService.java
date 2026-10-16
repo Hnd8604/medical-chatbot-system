@@ -1,9 +1,14 @@
 package com.medicalchatbot.backend.service;
 
 import com.medicalchatbot.backend.config.properties.PasswordResetProperties;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -16,14 +21,17 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class EmailService {
 
-    private final ObjectProvider<JavaMailSender> mailSender;
-    private final PasswordResetProperties properties;
+    ObjectProvider<JavaMailSender> mailSender;
+    PasswordResetProperties properties;
+    @Qualifier(TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
+    TaskExecutor taskExecutor;
 
     /**
-     * Delivery failures are only logged: the forgot-password answer must not reveal whether the
-     * email exists or whether sending worked.
+     * Fire-and-forget, and delivery failures are only logged: neither the forgot-password answer
+     * nor how long it takes may reveal whether the email exists or whether sending worked.
      */
     public void sendPasswordResetCode(String toEmail, String code) {
         JavaMailSender sender = mailSender.getIfAvailable();
@@ -46,6 +54,10 @@ public class EmailService {
 
                 Medical Chatbot
                 """.formatted(code, properties.otpTtlMinutes()));
+        taskExecutor.execute(() -> deliver(sender, message, toEmail));
+    }
+
+    private static void deliver(JavaMailSender sender, SimpleMailMessage message, String toEmail) {
         try {
             sender.send(message);
         } catch (MailException exception) {

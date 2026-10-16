@@ -11,16 +11,16 @@ import type {
 
 export const authApi = {
   login: (usernameOrEmail: string, password: string) =>
-    api.post<LoginResponse>("/api/auth/login", { username_or_email: usernameOrEmail, password }),
-  logout: () => api.post("/api/auth/logout"),
-  me: () => api.get<AuthUser>("/api/auth/me"),
-  updateProfile: (body: UpdateProfileRequest) => api.put<AuthUser>("/api/auth/me", body),
-  register: (body: RegisterRequest) => api.post<AuthUser>("/api/auth/register", body),
+    api.post<LoginResponse>("/auth/login", { usernameOrEmail, password }),
+  logout: () => api.post("/auth/logout"),
+  me: () => api.get<AuthUser>("/users/my-info"),
+  updateProfile: (body: UpdateProfileRequest) => api.put<AuthUser>("/users/my-info", body),
+  register: (body: RegisterRequest) => api.post<AuthUser>("/auth/register", body),
   /** Revokes every session of the user, so the client has to sign in again. */
-  changePassword: (body: ChangePasswordRequest) => api.post("/api/auth/change-password", body),
-  linkPatient: (body: LinkPatientRequest) => api.post<AuthUser>("/api/auth/link-patient", body),
-  sendResetCode: (email: string) => api.post<{ message: string }>("/api/auth/forgot-password", { email }),
+  changePassword: (body: ChangePasswordRequest) => api.put("/auth/password/change", body),
+  linkPatient: (body: LinkPatientRequest) => api.post<AuthUser>("/users/my-patient-link", body),
+  sendResetCode: (email: string) => api.post<{ message: string }>("/auth/password/reset/init", { email }),
   verifyResetCode: (email: string, code: string) =>
-    api.post<{ reset_ticket: string }>("/api/auth/verify-reset-code", { email, code }),
-  resetPassword: (body: ResetPasswordRequest) => api.post("/api/auth/reset-password", body),
+    api.post<{ resetTicket: string }>("/auth/password/reset/verify-otp", { email, code }),
+  resetPassword: (body: ResetPasswordRequest) => api.post("/auth/password/reset/confirm", body),
 };

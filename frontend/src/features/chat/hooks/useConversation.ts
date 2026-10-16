@@ -9,11 +9,11 @@ function localId(): string {
 
 function outcomeOf(source: ResponseOutcome): ResponseOutcome {
   return {
-    response_status: source.response_status,
-    trace_id: source.trace_id,
-    answer_source: source.answer_source,
+    responseStatus: source.responseStatus,
+    traceId: source.traceId,
+    answerSource: source.answerSource,
     grounding: source.grounding,
-    llm_unavailable_reason: source.llm_unavailable_reason,
+    llmUnavailableReason: source.llmUnavailableReason,
   };
 }
 
@@ -22,7 +22,7 @@ function fromHistory(message: ChatMessage): MessageView {
     id: message.id,
     role: message.role === "user" ? "user" : "assistant",
     content: message.content,
-    createdAt: message.created_at,
+    createdAt: message.createdAt,
     rateable: message.role !== "user",
     feedback: message.feedback,
     outcome: outcomeOf(message),
@@ -31,17 +31,17 @@ function fromHistory(message: ChatMessage): MessageView {
 
 function fromAnswer(response: ChatResponse, fallbackId: string): MessageView {
   return {
-    id: response.message_id || fallbackId,
+    id: response.messageId || fallbackId,
     role: "assistant",
     content: response.answer || "Không có nội dung phản hồi.",
     createdAt: new Date().toISOString(),
-    rateable: Boolean(response.message_id),
+    rateable: Boolean(response.messageId),
     outcome: outcomeOf(response),
-    patientChoice: response.needs_patient_selection
+    patientChoice: response.needsPatientSelection
       ? {
-          candidates: parsePatientCandidates(response.patient_candidates),
-          raw: response.patient_candidates,
-          pendingQuestion: response.pending_question,
+          candidates: parsePatientCandidates(response.patientCandidates),
+          raw: response.patientCandidates,
+          pendingQuestion: response.pendingQuestion,
         }
       : undefined,
   };
@@ -73,8 +73,8 @@ export function useConversation() {
       { id: pendingId, role: "assistant", content: "Đang xử lý câu hỏi...", pending: true },
     ]);
     try {
-      const response = await chatApi.send({ session_id: sessionId, patient_id: patientId, message: text });
-      setSessionId(response.session_id);
+      const response = await chatApi.send({ sessionId: sessionId, patientId: patientId, message: text });
+      setSessionId(response.sessionId);
       setLastResponse(response);
       replaceMessage(pendingId, () => fromAnswer(response, pendingId));
       return response;

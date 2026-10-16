@@ -16,9 +16,9 @@ export const adminUserKeys = {
 };
 
 export const adminUserApi = {
-  list: (params: UserListParams) => api.get<PageResponse<AdminUser>>("/api/admin/users", { ...params }),
+  list: (params: UserListParams) => api.get<PageResponse<AdminUser>>("/admin/users", { ...params }),
   updateRole: (userId: string, role: UserRole) =>
-    api.patch<AdminUser>(`/api/admin/users/${encodeURIComponent(userId)}/role`, { role }),
+    api.patch<AdminUser>(`/admin/users/${encodeURIComponent(userId)}/role`, { role }),
   updateStatus: (userId: string, status: UserStatus) =>
-    api.patch<AdminUser>(`/api/admin/users/${encodeURIComponent(userId)}/status`, { status }),
+    api.patch<AdminUser>(`/admin/users/${encodeURIComponent(userId)}/status`, { status }),
 };

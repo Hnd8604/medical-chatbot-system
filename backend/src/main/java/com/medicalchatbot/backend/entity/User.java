@@ -1,8 +1,5 @@
 package com.medicalchatbot.backend.entity;
 
-import java.time.OffsetDateTime;
-import java.util.UUID;
-
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
 import jakarta.persistence.Column;
@@ -10,71 +7,55 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
 
 @Entity
 @Table(name = "app_users")
 @Getter
 @Setter
-@Builder
+@SuperBuilder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class User {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class User extends BaseEntity {
 
     @Column(nullable = false, unique = true, length = 100)
-    private String username;
+    String username;
 
     @Column(unique = true, length = 255)
-    private String email;
+    String email;
 
     @Column(name = "display_name", nullable = false, length = 255)
-    private String displayName;
+    String displayName;
 
     @Column(name = "password_hash", nullable = false, length = 255)
-    private String passwordHash;
+    String passwordHash;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private UserRole role = UserRole.USER;
+    UserRole role = UserRole.USER;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private UserStatus status = UserStatus.ACTIVE;
+    UserStatus status = UserStatus.ACTIVE;
 
     /** Bumped on logout/password change so every JWT issued before becomes invalid. */
     @Column(name = "token_version", nullable = false)
-    private int tokenVersion;
+    int tokenVersion;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "quota_policy_id")
-    private QuotaPolicy quotaPolicy;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    QuotaPolicy quotaPolicy;
 
     public boolean isActive() {
         return status == UserStatus.ACTIVE;

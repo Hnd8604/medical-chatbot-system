@@ -3,11 +3,11 @@
 FROM maven:3.9.9-eclipse-temurin-21 AS builder
 WORKDIR /build
 
-COPY pom.xml .
-RUN mvn -B -q dependency:go-offline || true
-
+# The Maven repository is a BuildKit cache: dependencies are downloaded once, not on every build,
+# and a resolution failure fails the build instead of being hidden.
+COPY pom.xml lombok.config ./
 COPY src ./src
-RUN mvn -B -q clean package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q package -DskipTests
 RUN cp target/*.jar app.jar && \
     java -Djarmode=tools -jar app.jar extract --layers --launcher --destination extracted
 
@@ -26,11 +26,12 @@ USER appuser
 
 ENV TZ=Asia/Ho_Chi_Minh \
     SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom"
+    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
 
 EXPOSE 8081
 
+# Readiness: the app is up and both PostgreSQL and Redis answer.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=10 \
-  CMD curl -fsS http://127.0.0.1:8081/actuator/health | grep -q '"status":"UP"' || exit 1
+  CMD curl -fsS http://127.0.0.1:8081/api/v1/actuator/health/readiness | grep -q '"status":"UP"' || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -cp . org.springframework.boot.loader.launch.JarLauncher"]

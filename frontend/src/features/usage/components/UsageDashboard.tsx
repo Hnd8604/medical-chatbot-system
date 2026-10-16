@@ -15,9 +15,9 @@ function remainingPercent(remaining: number | string, limit: number | string): n
 
 function isLowQuota(quota: QuotaStatus): boolean {
   const lowest = Math.min(
-    remainingPercent(quota.remaining_requests, quota.daily_request_limit),
-    remainingPercent(quota.remaining_tokens, quota.daily_token_limit),
-    remainingPercent(quota.remaining_cost_usd, quota.daily_cost_limit_usd),
+    remainingPercent(quota.remainingRequests, quota.dailyRequestLimit),
+    remainingPercent(quota.remainingTokens, quota.dailyTokenLimit),
+    remainingPercent(quota.remainingCostUsd, quota.dailyCostLimitUsd),
   );
   return !quota.allowed || lowest <= LOW_QUOTA_PERCENT;
 }
@@ -33,9 +33,9 @@ export function UsageDashboard({ quota, cost, loading }: UsageDashboardProps) {
     return <LoadingPanel label="Đang tải dữ liệu usage..." />;
   }
 
-  const requestPercent = usagePercent(quota?.used_requests, quota?.daily_request_limit);
-  const tokenPercent = usagePercent(quota?.used_tokens, quota?.daily_token_limit);
-  const costPercent = usagePercent(quota?.used_cost_usd, quota?.daily_cost_limit_usd);
+  const requestPercent = usagePercent(quota?.usedRequests, quota?.dailyRequestLimit);
+  const tokenPercent = usagePercent(quota?.usedTokens, quota?.dailyTokenLimit);
+  const costPercent = usagePercent(quota?.usedCostUsd, quota?.dailyCostLimitUsd);
 
   return (
     <div className="grid gap-7">
@@ -48,7 +48,7 @@ export function UsageDashboard({ quota, cost, loading }: UsageDashboardProps) {
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {quota.allowed
                   ? "Tài khoản đang gần hết giới hạn trong ngày. Hãy cân nhắc rút gọn câu hỏi hoặc chờ quota được làm mới."
-                  : quota.blocked_reason || "Tài khoản đã vượt giới hạn sử dụng trong ngày."}
+                  : quota.blockedReason || "Tài khoản đã vượt giới hạn sử dụng trong ngày."}
               </p>
             </div>
           </div>
@@ -58,22 +58,22 @@ export function UsageDashboard({ quota, cost, loading }: UsageDashboardProps) {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           label="Request hôm nay"
-          value={`${formatNumber(quota?.used_requests)}/${formatNumber(quota?.daily_request_limit)}`}
-          description={`${formatNumber(quota?.remaining_requests)} request còn lại trong ngày.`}
+          value={`${formatNumber(quota?.usedRequests)}/${formatNumber(quota?.dailyRequestLimit)}`}
+          description={`${formatNumber(quota?.remainingRequests)} request còn lại trong ngày.`}
           progress={requestPercent}
           progressTone={usageTone(requestPercent)}
         />
         <MetricCard
           label="Token hôm nay"
-          value={`${formatNumber(quota?.used_tokens)}/${formatNumber(quota?.daily_token_limit)}`}
-          description={`${formatNumber(quota?.used_input_tokens)} input, ${formatNumber(quota?.used_output_tokens)} output.`}
+          value={`${formatNumber(quota?.usedTokens)}/${formatNumber(quota?.dailyTokenLimit)}`}
+          description={`${formatNumber(quota?.usedInputTokens)} input, ${formatNumber(quota?.usedOutputTokens)} output.`}
           progress={tokenPercent}
           progressTone={usageTone(tokenPercent)}
         />
         <MetricCard
           label="Chi phí hôm nay"
-          value={formatUsd(quota?.used_cost_usd)}
-          description={`Giới hạn ngày: ${formatUsd(quota?.daily_cost_limit_usd)}.`}
+          value={formatUsd(quota?.usedCostUsd)}
+          description={`Giới hạn ngày: ${formatUsd(quota?.dailyCostLimitUsd)}.`}
           progress={costPercent}
           progressTone={usageTone(costPercent, "green")}
         />
@@ -88,19 +88,19 @@ export function UsageDashboard({ quota, cost, loading }: UsageDashboardProps) {
               value={requestPercent}
               tone={requestPercent >= 90 ? "red" : "blue"}
               label="Request"
-              hint={`${formatNumber(quota?.used_requests)}/${formatNumber(quota?.daily_request_limit)} · ${Math.round(requestPercent)}%`}
+              hint={`${formatNumber(quota?.usedRequests)}/${formatNumber(quota?.dailyRequestLimit)} · ${Math.round(requestPercent)}%`}
             />
             <ProgressBar
               value={tokenPercent}
               tone={tokenPercent >= 90 ? "red" : "blue"}
               label="Token"
-              hint={`${formatNumber(quota?.used_tokens)}/${formatNumber(quota?.daily_token_limit)} · ${Math.round(tokenPercent)}%`}
+              hint={`${formatNumber(quota?.usedTokens)}/${formatNumber(quota?.dailyTokenLimit)} · ${Math.round(tokenPercent)}%`}
             />
             <ProgressBar
               value={costPercent}
               tone={costPercent >= 90 ? "red" : "green"}
               label="Chi phí"
-              hint={`${formatUsd(quota?.used_cost_usd)}/${formatUsd(quota?.daily_cost_limit_usd)} · ${Math.round(costPercent)}%`}
+              hint={`${formatUsd(quota?.usedCostUsd)}/${formatUsd(quota?.dailyCostLimitUsd)} · ${Math.round(costPercent)}%`}
             />
           </div>
         </div>

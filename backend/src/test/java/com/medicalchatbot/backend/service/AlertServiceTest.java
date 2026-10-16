@@ -24,6 +24,7 @@ import com.medicalchatbot.backend.repository.AlertRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -41,7 +42,7 @@ class AlertServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AlertService(alertRepository, new AlertMapper(), telegramClient);
+        service = new AlertService(alertRepository, Mappers.getMapper(AlertMapper.class), telegramClient);
     }
 
     @Test

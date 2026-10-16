@@ -28,10 +28,10 @@ interface FormValues {
 function initialValues(policy: QuotaPolicy | null): FormValues {
   return {
     name: policy?.name ?? "",
-    requestLimit: policy ? String(policy.daily_request_limit) : "",
-    tokenLimit: policy ? String(policy.daily_token_limit) : "",
-    costLimit: policy ? String(policy.daily_cost_limit_usd) : "",
-    rateLimit: policy?.rate_limit_per_minute != null ? String(policy.rate_limit_per_minute) : "",
+    requestLimit: policy ? String(policy.dailyRequestLimit) : "",
+    tokenLimit: policy ? String(policy.dailyTokenLimit) : "",
+    costLimit: policy ? String(policy.dailyCostLimitUsd) : "",
+    rateLimit: policy?.rateLimitPerMinute != null ? String(policy.rateLimitPerMinute) : "",
   };
 }
 
@@ -48,10 +48,10 @@ function toRequest(values: FormValues): QuotaPolicyRequest | string {
   }
   return {
     name: values.name.trim(),
-    daily_request_limit: requests,
-    daily_token_limit: tokens,
-    daily_cost_limit_usd: cost,
-    rate_limit_per_minute: numberOrNull(values.rateLimit),
+    dailyRequestLimit: requests,
+    dailyTokenLimit: tokens,
+    dailyCostLimitUsd: cost,
+    rateLimitPerMinute: numberOrNull(values.rateLimit),
   };
 }
 

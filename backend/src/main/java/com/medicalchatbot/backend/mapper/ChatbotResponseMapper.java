@@ -8,18 +8,21 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.dto.chatbot.ChatbotChatResponse;
-import com.medicalchatbot.backend.dto.response.ChatResponse;
+import com.medicalchatbot.backend.dto.response.chat.ChatResponse;
 import com.medicalchatbot.backend.entity.ChatMemory;
 import com.medicalchatbot.backend.util.TextUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 /** Turns a chatbot-service reply into the API response, stored message metadata and session memory. */
 @Component
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatbotResponseMapper {
 
-    private final ObjectMapper objectMapper;
+    ObjectMapper objectMapper;
 
     public ChatResponse toResponse(UUID sessionId, UUID messageId, ChatbotChatResponse reply) {
         return new ChatResponse(

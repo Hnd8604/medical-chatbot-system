@@ -1,25 +1,25 @@
 export interface AuditLog {
   id: string;
-  user_id: string | null;
-  session_id: string | null;
+  userId: string | null;
+  sessionId: string | null;
   action: string;
-  resource_type: string | null;
-  resource_id: string | null;
+  resourceType: string | null;
+  resourceId: string | null;
   metadata: unknown;
-  created_at: string;
+  createdAt: string;
 }
 
 /** Values the filter selects offer, as known by the backend. */
 export interface AuditLogFilterOptions {
   actions: string[];
-  resource_types: string[];
+  resourceTypes: string[];
 }
 
 export interface AuditLogFilter {
-  user_id: string;
+  userId: string;
   action: string;
-  resource_type: string;
-  resource_id: string;
+  resourceType: string;
+  resourceId: string;
   /** Local dates (yyyy-MM-dd); converted to instants for the API. */
   from: string;
   to: string;

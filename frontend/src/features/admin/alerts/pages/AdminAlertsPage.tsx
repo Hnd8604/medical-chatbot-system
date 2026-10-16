@@ -70,7 +70,7 @@ export function AdminAlertsPage() {
             </FilterField>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="blue">{formatNumber(alerts.data?.total_elements)} alert</Badge>
+            <Badge tone="blue">{formatNumber(alerts.data?.totalElements)} alert</Badge>
             <Button type="button" size="sm" variant="primary" onClick={applyFilter} disabled={alerts.isFetching}>
               {alerts.isFetching ? <Spinner /> : <ListFilter className="h-4 w-4" />}
               Áp dụng
@@ -104,10 +104,10 @@ export function AdminAlertsPage() {
           </div>
         )}
 
-        {(alerts.data?.total_pages ?? 0) > 1 ? (
+        {(alerts.data?.totalPages ?? 0) > 1 ? (
           <Pagination
             page={filter.page}
-            totalPages={alerts.data?.total_pages ?? 1}
+            totalPages={alerts.data?.totalPages ?? 1}
             disabled={alerts.isFetching}
             onPageChange={(page) => setFilter((current) => ({ ...current, page }))}
           />

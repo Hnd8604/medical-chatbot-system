@@ -1,13 +1,16 @@
 package com.medicalchatbot.backend.service;
 
-import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.config.properties.JwtProperties;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.util.SecureTokens.OpaqueToken;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -15,33 +18,31 @@ import org.springframework.stereotype.Service;
  * Opaque, rotating refresh tokens stored in Redis.
  *
  * <p>Clients receive {@code {jti}.{secret}}; Redis keeps only the SHA-256 of the secret and every
- * key expires with the token, so no cleanup job is needed. {@link #rotate} deletes the presented
- * token, so a replayed token is rejected.</p>
+ * key expires with the token, so no cleanup job is needed. {@link #rotate} reads and deletes the
+ * presented token in one step: a replayed token is rejected, and of two parallel refreshes with the
+ * same token only one succeeds.</p>
  */
 @Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class RefreshTokenService {
 
     private static final String TOKEN_KEY_PREFIX = "refresh_token:";
     private static final String USER_SET_PREFIX = "refresh_token:user:";
     private static final String SEPARATOR = "|";
 
-    private final StringRedisTemplate redisTemplate;
-    private final Duration ttl;
-
-    public RefreshTokenService(StringRedisTemplate redisTemplate, JwtProperties jwtProperties) {
-        this.redisTemplate = redisTemplate;
-        this.ttl = jwtProperties.refreshTokenTtl();
-    }
+    StringRedisTemplate redisTemplate;
+    JwtProperties jwtProperties;
 
     /** Stores a new refresh token for the user and returns its raw value (shown to the client once). */
     public String issue(User user) {
         OpaqueToken token = OpaqueToken.generate();
         String value = String.join(SEPARATOR, user.getId().toString(), Integer.toString(user.getTokenVersion()), token.secretHash());
-        redisTemplate.opsForValue().set(tokenKey(token.id()), value, ttl);
+        redisTemplate.opsForValue().set(tokenKey(token.id()), value, jwtProperties.refreshTokenTtl());
 
         String userSetKey = userSetKey(user.getId());
         redisTemplate.opsForSet().add(userSetKey, token.id());
-        redisTemplate.expire(userSetKey, ttl);
+        redisTemplate.expire(userSetKey, jwtProperties.refreshTokenTtl());
         return token.value();
     }
 
@@ -53,24 +54,20 @@ public class RefreshTokenService {
      */
     public TokenOwner rotate(String rawToken) {
         OpaqueToken token = OpaqueToken.parse(rawToken).orElseThrow(RefreshTokenService::invalidToken);
-        String key = tokenKey(token.id());
-        String stored = redisTemplate.opsForValue().get(key);
+        String stored = redisTemplate.opsForValue().getAndDelete(tokenKey(token.id()));
         if (stored == null) {
-            throw AppException.unauthorized("Phiên đăng nhập đã hết hạn hoặc không hợp lệ.");
+            throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
         }
 
         String[] parts = stored.split("\\|", 3);
         if (parts.length != 3) {
-            redisTemplate.delete(key);
             throw invalidToken();
         }
+        UUID userId = UUID.fromString(parts[0]);
+        redisTemplate.opsForSet().remove(userSetKey(userId), token.id());
         if (!token.matches(parts[2])) {
             throw invalidToken();
         }
-
-        UUID userId = UUID.fromString(parts[0]);
-        redisTemplate.delete(key);
-        redisTemplate.opsForSet().remove(userSetKey(userId), token.id());
         return new TokenOwner(userId, Integer.parseInt(parts[1]));
     }
 
@@ -93,7 +90,7 @@ public class RefreshTokenService {
     }
 
     private static AppException invalidToken() {
-        return AppException.unauthorized("Refresh token không hợp lệ.");
+        return new AppException(ErrorCode.REFRESH_TOKEN_INVALID);
     }
 
     public record TokenOwner(UUID userId, int tokenVersion) {

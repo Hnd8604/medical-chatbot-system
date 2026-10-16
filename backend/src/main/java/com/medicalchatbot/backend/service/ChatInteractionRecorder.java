@@ -20,12 +20,14 @@ import com.medicalchatbot.backend.enums.AuditAction;
 import com.medicalchatbot.backend.enums.AuditResource;
 import com.medicalchatbot.backend.enums.CostSource;
 import com.medicalchatbot.backend.enums.UsageStatus;
-import com.medicalchatbot.backend.mapper.ChatAuditMapper;
 import com.medicalchatbot.backend.mapper.ChatAuditMapper.ChatAudit;
+import com.medicalchatbot.backend.mapper.ChatAuditMapper;
 import com.medicalchatbot.backend.repository.LlmCallUsageRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.util.TextUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,19 +42,20 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatInteractionRecorder {
 
     private static final int COST_SCALE = 6;
     private static final String FAILED_ANSWER_SOURCE = "error";
     private static final String DEFAULT_ANSWER_SOURCE = "llm";
 
-    private final UsageLogRepository usageLogRepository;
-    private final LlmCallUsageRepository llmCallUsageRepository;
-    private final AuditService auditService;
-    private final ChatAuditMapper chatAuditMapper;
-    private final ObjectMapper objectMapper;
+    UsageLogRepository usageLogRepository;
+    LlmCallUsageRepository llmCallUsageRepository;
+    AuditService auditService;
+    ChatAuditMapper chatAuditMapper;
+    ObjectMapper objectMapper;
 
-    /** Runs inside the chat transaction: usage and audit are only kept if the whole turn is. */
+    /** Runs inside the transaction that stores the answer: usage and audit are only kept with it. */
     public void recordCompletedTurn(
             User user,
             ChatSession session,
@@ -80,10 +83,10 @@ public class ChatInteractionRecorder {
 
     /**
      * Records the LLM calls a turn paid for before chatbot-service failed (it answers 403/5xx with
-     * {@code llm_calls}). Runs in its own transaction because the chat transaction rolls back.
+     * {@code llm_calls}). Runs in its own transaction, independent of the turn that failed.
      *
-     * @param existingSession session that existed before this turn, or null — never one created
-     *                        in the failing chat transaction, because that one is rolled back
+     * @param existingSession session that existed before this turn, or null — never one opened by
+     *                        the failing turn, because that one is discarded
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFailedTurn(User user, ChatSession existingSession, int httpStatus, byte[] errorBody, long latencyMs) {
@@ -93,7 +96,7 @@ public class ChatInteractionRecorder {
 
     /**
      * Records the LLM calls of a turn chatbot-service answered but Spring failed to store: the money
-     * was spent even though the chat transaction rolls back. Same session rule as {@link #recordFailedTurn}.
+     * was spent even though the turn is discarded. Same session rule as {@link #recordFailedTurn}.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordUnsavedTurn(User user, ChatSession existingSession, ChatbotChatResponse reply, long latencyMs) {
@@ -132,7 +135,7 @@ public class ChatInteractionRecorder {
         metadata.put("error", errorMessage)
                 .put("latency_ms", latencyMs)
                 .put("llm_call_count", calls.size())
-                .put("cost_usd", usageLog.getEstimatedCostUsd())
+                .put("cost_usd", usageLog.getCostUsd())
                 .put("cost_source", usageLog.getCostSource().value());
         auditService.record(user, existingSession, AuditAction.CHAT_FAILED, AuditResource.CHAT_SESSION,
                 existingSession != null ? existingSession.getId().toString() : null, metadata);
@@ -154,7 +157,7 @@ public class ChatInteractionRecorder {
                 .latencyMs((int) Math.min(Math.max(0, latencyMs), Integer.MAX_VALUE))
                 .inputTokens(turn.calls().stream().mapToInt(ChatbotLlmCall::inputTokens).sum())
                 .outputTokens(turn.calls().stream().mapToInt(ChatbotLlmCall::outputTokens).sum())
-                .estimatedCostUsd(totalCost)
+                .costUsd(totalCost)
                 .costSource(CostSource.aggregate(costs.stream().map(CallCost::source).toList()))
                 .traceId(TextUtils.truncate(turn.traceId(), 64))
                 .errorMessage(turn.errorMessage())

@@ -3,7 +3,7 @@ import { api } from "@/shared/api/client";
 import type { DateRange } from "@/shared/lib/dates";
 
 function userPath(userId: string) {
-  return `/api/admin/users/${encodeURIComponent(userId)}`;
+  return `/admin/users/${encodeURIComponent(userId)}`;
 }
 
 export const userUsageKeys = {

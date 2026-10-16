@@ -9,6 +9,6 @@ export const usageKeys = {
 };
 
 export const usageApi = {
-  quota: () => api.get<QuotaStatus>("/api/usage/quota"),
-  costs: (range: DateRange) => api.get<CostSummary>("/api/usage/costs", { ...range }),
+  quota: () => api.get<QuotaStatus>("/usage/quota"),
+  costs: (range: DateRange) => api.get<CostSummary>("/usage/costs", { ...range }),
 };

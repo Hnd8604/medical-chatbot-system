@@ -2,7 +2,9 @@ package com.medicalchatbot.backend.service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -23,7 +25,9 @@ import com.medicalchatbot.backend.enums.BackupTrigger;
 import com.medicalchatbot.backend.repository.BackupHistoryRepository;
 import com.medicalchatbot.backend.repository.RestoreHistoryRepository;
 import com.medicalchatbot.backend.service.BackupService.RestoreJob;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -34,16 +38,19 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BackupJobRunner {
 
     private static final String BACKUP_RESULT_PREFIX = "BACKUP_RESULT_JSON=";
     private static final String RESTORE_RESULT_PREFIX = "RESTORE_RESULT_JSON=";
     private static final int OUTPUT_SNIPPET_LENGTH = 500;
+    /** How long a killed script may take to release its output file. */
+    private static final Duration KILL_GRACE = Duration.ofSeconds(5);
 
-    private final BackupHistoryRepository backupHistoryRepository;
-    private final RestoreHistoryRepository restoreHistoryRepository;
-    private final ObjectMapper objectMapper;
-    private final BackupProperties properties;
+    BackupHistoryRepository backupHistoryRepository;
+    RestoreHistoryRepository restoreHistoryRepository;
+    ObjectMapper objectMapper;
+    BackupProperties properties;
 
     public void runBackup(UUID backupId, BackupTrigger trigger) {
         try {
@@ -135,14 +142,41 @@ public class BackupJobRunner {
         String script = Path.of(scriptPath).toAbsolutePath().normalize().toString().replace('\\', '/');
         List<String> command = new ArrayList<>(List.of(properties.bashPath(), script));
         command.addAll(List.of(arguments));
+        return execute(command, properties.timeout());
+    }
 
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        if (!process.waitFor(properties.timeout().toMillis(), TimeUnit.MILLISECONDS)) {
-            process.destroyForcibly();
-            return ScriptResult.TIMED_OUT;
+    /**
+     * Runs the command with its output written to a temporary file. Reading a pipe only once the
+     * process has exited would deadlock: when the OS pipe buffer is full the script blocks on its
+     * next write and never exits, until the timeout kills it.
+     */
+    static ScriptResult execute(List<String> command, Duration timeout) throws IOException, InterruptedException {
+        Path outputFile = Files.createTempFile("backup-job-", ".log");
+        try {
+            Process process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .redirectOutput(outputFile.toFile())
+                    .start();
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                // pg_dump & co. are children of the script and would otherwise keep running.
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly().waitFor(KILL_GRACE.toMillis(), TimeUnit.MILLISECONDS);
+                return ScriptResult.TIMED_OUT;
+            }
+            // Decoded leniently: tool output is not guaranteed to be valid UTF-8.
+            String output = new String(Files.readAllBytes(outputFile), StandardCharsets.UTF_8);
+            return new ScriptResult(false, process.exitValue(), output);
+        } finally {
+            deleteQuietly(outputFile);
         }
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        return new ScriptResult(false, process.exitValue(), output);
+    }
+
+    private static void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException exception) {
+            log.warn("Could not delete the temporary script output {}", file);
+        }
     }
 
     private Optional<JsonNode> parseResult(String output, String prefix) {
@@ -163,13 +197,13 @@ public class BackupJobRunner {
 
     /**
      * Restoring the app DB also restores its {@code restore_history} table, which may no longer
-     * contain the row of this restore; it is then recreated with the same id.
+     * contain the row of this restore; a new row is then recorded with the job's data. (Ids are
+     * generated: saving an entity with a preset id merges it instead of inserting that id.)
      */
     private RestoreHistory loadOrRecreate(RestoreJob job) {
         return restoreHistoryRepository.findById(job.restoreId()).orElseGet(() -> {
-            log.warn("restore_history {} was overwritten by the restore; recreating it", job.restoreId());
+            log.warn("restore_history {} was overwritten by the restore; recording it again", job.restoreId());
             return RestoreHistory.builder()
-                    .id(job.restoreId())
                     .backupId(job.backupId())
                     .triggeredBy(job.triggeredBy())
                     .startedAt(job.startedAt() != null ? job.startedAt() : OffsetDateTime.now())
@@ -255,7 +289,7 @@ public class BackupJobRunner {
         return (output.length() > OUTPUT_SNIPPET_LENGTH ? output.substring(0, OUTPUT_SNIPPET_LENGTH) : output).trim();
     }
 
-    private record ScriptResult(boolean timedOut, int exitCode, String output) {
+    record ScriptResult(boolean timedOut, int exitCode, String output) {
 
         static final ScriptResult TIMED_OUT = new ScriptResult(true, -1, "");
     }

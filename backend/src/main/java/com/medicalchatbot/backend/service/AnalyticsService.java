@@ -6,21 +6,27 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import com.medicalchatbot.backend.config.properties.AppProperties;
-import com.medicalchatbot.backend.dto.response.CacheMetricsResponse;
-import com.medicalchatbot.backend.dto.response.ErrorAnalyticsResponse;
-import com.medicalchatbot.backend.dto.response.IntentAnalyticsResponse;
-import com.medicalchatbot.backend.dto.response.PerformanceAnalyticsResponse;
-import com.medicalchatbot.backend.dto.response.RequestCountResponse;
+import com.medicalchatbot.backend.dto.response.analytics.CacheMetricsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.ErrorAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.IntentAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.PerformanceAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.RequestCountResponse;
 import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AnalyticsRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.projection.CacheMetricsProjection;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 /** Aggregates for the admin dashboard and analytics screens. */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@PreAuthorize("hasRole('ADMIN')")
 public class AnalyticsService {
 
     private static final int DEFAULT_DAYS = 7;
@@ -28,9 +34,9 @@ public class AnalyticsService {
     private static final int MAX_LIMIT = 20;
     private static final int DEFAULT_CACHE_WINDOW_DAYS = 30;
 
-    private final AnalyticsRepository analyticsRepository;
-    private final UsageLogRepository usageLogRepository;
-    private final AppProperties appProperties;
+    AnalyticsRepository analyticsRepository;
+    UsageLogRepository usageLogRepository;
+    AppProperties appProperties;
 
     public List<IntentAnalyticsResponse> intents(LocalDate from, LocalDate to, int limit) {
         DateRange range = DateRange.of(from, to, today());
@@ -65,7 +71,7 @@ public class AnalyticsService {
         OffsetDateTime end = endDate != null ? endDate : OffsetDateTime.now(appProperties.timezone());
         OffsetDateTime start = startDate != null ? startDate : end.minusDays(DEFAULT_CACHE_WINDOW_DAYS);
         if (start.isAfter(end)) {
-            throw AppException.invalid("Ngày bắt đầu phải trước ngày kết thúc.");
+            throw new AppException(ErrorCode.DATE_RANGE_INVALID);
         }
         CacheMetricsProjection metrics = usageLogRepository.getCacheMetrics(start, end);
         return CacheMetricsResponse.of(
@@ -91,10 +97,11 @@ public class AnalyticsService {
             LocalDate end = to != null ? to : today;
             LocalDate start = from != null ? from : end.minusDays(DEFAULT_DAYS - 1L);
             if (start.isAfter(end)) {
-                throw AppException.invalid("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.");
+                throw new AppException(ErrorCode.DATE_RANGE_INVALID);
             }
             if (ChronoUnit.DAYS.between(start, end) + 1 > MAX_RANGE_DAYS) {
-                throw AppException.invalid("Khoảng thời gian phân tích không được vượt quá " + MAX_RANGE_DAYS + " ngày.");
+                throw new AppException(ErrorCode.DATE_RANGE_TOO_LONG,
+                        "Khoảng thời gian phân tích không được vượt quá " + MAX_RANGE_DAYS + " ngày.");
             }
             return new DateRange(start, end);
         }

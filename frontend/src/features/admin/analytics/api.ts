@@ -2,7 +2,7 @@ import { api } from "@/shared/api/client";
 import type { DateRange } from "@/shared/lib/dates";
 import type { AnalyticsFilter, CacheMetrics, ErrorStat, IntentStat, PerformanceStat, RequestCount } from "./types";
 
-const BASE = "/api/admin/analytics";
+const BASE = "/admin/analytics";
 
 export const analyticsKeys = {
   all: ["admin", "analytics"] as const,

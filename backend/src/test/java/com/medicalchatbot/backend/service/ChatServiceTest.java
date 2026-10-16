@@ -1,8 +1,10 @@
 package com.medicalchatbot.backend.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,9 +27,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.client.ChatbotServiceClient;
 import com.medicalchatbot.backend.dto.chatbot.ChatbotChatRequest;
 import com.medicalchatbot.backend.dto.chatbot.ChatbotChatResponse;
-import com.medicalchatbot.backend.dto.request.ChatRequest;
-import com.medicalchatbot.backend.dto.response.ChatResponse;
-import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
+import com.medicalchatbot.backend.dto.request.chat.ChatRequest;
+import com.medicalchatbot.backend.dto.response.chat.ChatResponse;
+import com.medicalchatbot.backend.dto.response.usage.QuotaStatusResponse;
 import com.medicalchatbot.backend.entity.AuditLog;
 import com.medicalchatbot.backend.entity.ChatMemory;
 import com.medicalchatbot.backend.entity.ChatMessage;
@@ -50,22 +53,32 @@ import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.LlmCallUsageRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
 import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
 @ExtendWith(MockitoExtension.class)
 class ChatServiceTest {
 
+    private static final UUID QUESTION_ID = UUID.fromString("00000000-0000-0000-0000-000000000800");
     private static final UUID ASSISTANT_MESSAGE_ID = UUID.fromString("00000000-0000-0000-0000-000000000801");
+
+    @Mock
+    private UserRepository userRepository;
 
     @Mock
     private ChatSessionRepository chatSessionRepository;
@@ -92,9 +105,6 @@ class ChatServiceTest {
     private QuotaService quotaService;
 
     @Mock
-    private CurrentUserService currentUserService;
-
-    @Mock
     private AlertService alertService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -107,17 +117,16 @@ class ChatServiceTest {
         ChatInteractionRecorder recorder = new ChatInteractionRecorder(
                 usageLogRepository,
                 llmCallUsageRepository,
-                new AuditService(auditLogRepository, new AuditLogMapper(), objectMapper),
+                new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), objectMapper),
                 new ChatAuditMapper(objectMapper, responseMapper),
                 objectMapper
         );
-        ChatMapper chatMapper = new ChatMapper();
-        service = new ChatService(
+        ChatMapper chatMapper = Mappers.getMapper(ChatMapper.class);
+        ChatTurnService turnService = new ChatTurnService(
                 chatSessionRepository,
                 chatMessageRepository,
-                chatbotServiceClient,
-                new ChatSessionService(chatSessionRepository, currentUserService, chatMapper),
-                currentUserService,
+                userRepository,
+                new ChatSessionService(chatSessionRepository, chatMapper),
                 quotaService,
                 new PatientScopeService(userPatientLinkRepository),
                 recorder,
@@ -125,7 +134,26 @@ class ChatServiceTest {
                 chatMapper,
                 responseMapper
         );
+        service = new ChatService(turnService, chatbotServiceClient, recorder);
         doctor = TestUsers.user(UserRole.DOCTOR);
+    }
+
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
+    }
+
+    @Test
+    void theChatbotIsAskedOutsideTheTransactionsOfTheTurn() throws NoSuchMethodException {
+        // A transaction around chat() would hold a pooled connection for the whole chatbot call.
+        assertFalse(ChatService.class.isAnnotationPresent(Transactional.class));
+        assertFalse(ChatService.class.getMethod("chat", ChatRequest.class).isAnnotationPresent(Transactional.class));
+        for (String step : List.of("prepare", "complete", "discard")) {
+            boolean transactional = Arrays.stream(ChatTurnService.class.getMethods())
+                    .filter(method -> method.getName().equals(step))
+                    .allMatch(method -> method.isAnnotationPresent(Transactional.class));
+            assertTrue(transactional, step + " must run in its own transaction");
+        }
     }
 
     @Test
@@ -191,7 +219,7 @@ class ChatServiceTest {
 
     @Test
     void exceededQuotaRejectsTheTurnBeforeAnythingIsStored() {
-        when(currentUserService.requireCurrentUser()).thenReturn(doctor);
+        TestUsers.signIn(doctor, userRepository);
         when(quotaService.assertQuotaAvailable(doctor)).thenThrow(new QuotaExceededException(blockedStatus()));
 
         assertThrows(QuotaExceededException.class,
@@ -222,13 +250,13 @@ class ChatServiceTest {
     @Test
     void userCannotAskAboutAnotherPatient() {
         User user = TestUsers.user(UserRole.USER);
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(userPatientLinkRepository.findPatientIdsByUserId(user.getId())).thenReturn(List.of("BN2026-00001"));
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.chat(new ChatRequest(null, "Patient/BN2026-00002", "Thuốc của BN2026-00002")));
 
-        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
+        assertEquals(ErrorCode.PATIENT_ACCESS_DENIED, exception.getErrorCode());
         verify(chatSessionRepository, never()).save(any());
         verify(chatbotServiceClient, never()).chat(any());
     }
@@ -236,13 +264,13 @@ class ChatServiceTest {
     @Test
     void unknownSessionIsNotFound() {
         UUID sessionId = UUID.randomUUID();
-        when(currentUserService.requireCurrentUser()).thenReturn(doctor);
+        TestUsers.signIn(doctor, userRepository);
         when(chatSessionRepository.findByIdAndUserId(sessionId, doctor.getId())).thenReturn(Optional.empty());
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.chat(new ChatRequest(sessionId, null, "?")));
 
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
+        assertEquals(ErrorCode.CHAT_SESSION_NOT_EXISTED, exception.getErrorCode());
     }
 
     @Test
@@ -271,7 +299,7 @@ class ChatServiceTest {
         assertEquals(session, usageLog.getSession());
         assertEquals(UsageStatus.SUCCESS, usageLog.getStatus());
         assertEquals(1300, usageLog.getInputTokens());
-        assertEquals(new BigDecimal("0.000057"), usageLog.getEstimatedCostUsd());
+        assertEquals(new BigDecimal("0.000057"), usageLog.getCostUsd());
         assertEquals("trace-603", usageLog.getTraceId());
         AuditLog audit = savedAudit();
         assertEquals("SEARCH_PATIENTS", audit.getAction());
@@ -296,10 +324,46 @@ class ChatServiceTest {
 
         UsageLog usageLog = savedUsageLog();
         assertEquals(UsageStatus.FAILED, usageLog.getStatus());
-        assertEquals(new BigDecimal("0.000057"), usageLog.getEstimatedCostUsd());
-        // The session created in the failing transaction is rolled back, so it must not be referenced.
+        assertEquals(new BigDecimal("0.000057"), usageLog.getCostUsd());
+        // The session opened by the failing turn is discarded, so it must not be referenced.
         assertNull(usageLog.getSession());
         assertEquals("CHAT_FAILED", savedAudit().getAction());
+    }
+
+    @Test
+    void failedTurnDiscardsTheSessionItOpened() {
+        ChatSession session = newSession(doctor);
+        when(chatbotServiceClient.chat(any())).thenThrow(new ResourceAccessException("connection refused"));
+
+        assertThrows(ResourceAccessException.class,
+                () -> service.chat(new ChatRequest(null, null, "danh sách bệnh nhân")));
+
+        verify(chatSessionRepository).deleteByIdAndUserId(session.getId(), doctor.getId());
+        verify(chatMessageRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void failedTurnInAnExistingSessionDiscardsOnlyItsQuestion() {
+        ChatSession session = existingSession(doctor, ChatMemory.EMPTY);
+        when(chatbotServiceClient.chat(any())).thenThrow(HttpServerErrorException.create(
+                HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], null));
+
+        assertThrows(HttpServerErrorException.class,
+                () -> service.chat(new ChatRequest(session.getId(), null, "huyết áp")));
+
+        verify(chatMessageRepository).deleteById(QUESTION_ID);
+        verify(chatSessionRepository, never()).deleteByIdAndUserId(any(), any());
+    }
+
+    @Test
+    void failingCleanupDoesNotHideTheChatbotError() {
+        ChatSession session = newSession(doctor);
+        when(chatbotServiceClient.chat(any())).thenThrow(new ResourceAccessException("connection refused"));
+        when(chatSessionRepository.deleteByIdAndUserId(session.getId(), doctor.getId()))
+                .thenThrow(new IllegalStateException("db down"));
+
+        assertThrows(ResourceAccessException.class,
+                () -> service.chat(new ChatRequest(null, null, "danh sách bệnh nhân")));
     }
 
     @Test
@@ -324,8 +388,9 @@ class ChatServiceTest {
 
         UsageLog usageLog = savedUsageLog();
         assertEquals(UsageStatus.FAILED, usageLog.getStatus());
-        assertEquals(new BigDecimal("0.001200"), usageLog.getEstimatedCostUsd());
+        assertEquals(new BigDecimal("0.001200"), usageLog.getCostUsd());
         assertNull(usageLog.getSession());
+        verify(chatSessionRepository).deleteByIdAndUserId(any(), eq(doctor.getId()));
     }
 
     @Test
@@ -373,7 +438,7 @@ class ChatServiceTest {
 
     private ChatSession existingSession(User user, ChatMemory memory) {
         ChatSession session = ChatSession.builder().id(UUID.randomUUID()).user(user).memory(memory).build();
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(chatSessionRepository.findByIdAndUserId(session.getId(), user.getId())).thenReturn(Optional.of(session));
         assistantMessagesGetAnId();
         return session;
@@ -381,9 +446,11 @@ class ChatServiceTest {
 
     private ChatSession newSession(User user) {
         ChatSession session = ChatSession.builder().id(UUID.randomUUID()).user(user).build();
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(chatSessionRepository.save(any(ChatSession.class))).thenReturn(session);
         when(chatSessionRepository.findRecentMessages(eq(session.getId()), eq(user.getId()), anyInt())).thenReturn(List.of());
+        // The step that stores the answer reloads the session the turn opened.
+        lenient().when(chatSessionRepository.findByIdAndUserId(session.getId(), user.getId())).thenReturn(Optional.of(session));
         assistantMessagesGetAnId();
         return session;
     }
@@ -391,9 +458,7 @@ class ChatServiceTest {
     private void assistantMessagesGetAnId() {
         lenient().when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
             ChatMessage message = invocation.getArgument(0);
-            if (message.getRole() == ChatMessageRole.ASSISTANT) {
-                message.setId(ASSISTANT_MESSAGE_ID);
-            }
+            message.setId(message.getRole() == ChatMessageRole.ASSISTANT ? ASSISTANT_MESSAGE_ID : QUESTION_ID);
             return message;
         });
     }

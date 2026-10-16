@@ -1,24 +1,13 @@
 package com.medicalchatbot.backend.mapper;
 
-import com.medicalchatbot.backend.dto.response.AlertResponse;
+import com.medicalchatbot.backend.dto.response.admin.AlertResponse;
 import com.medicalchatbot.backend.entity.Alert;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-@Component
-public class AlertMapper {
+@Mapper
+public interface AlertMapper {
 
-    public AlertResponse toResponse(Alert alert) {
-        return new AlertResponse(
-                alert.getId(),
-                alert.getSource(),
-                alert.getAlertType(),
-                alert.getSeverity(),
-                alert.getStatus(),
-                alert.getMessage(),
-                alert.getMetadataJson(),
-                alert.getCreatedAt(),
-                alert.getResolvedAt(),
-                alert.getResolvedBy()
-        );
-    }
+    @Mapping(target = "metadata", source = "metadataJson")
+    AlertResponse toAlertResponse(Alert alert);
 }

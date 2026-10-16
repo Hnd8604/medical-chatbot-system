@@ -71,8 +71,8 @@ export function ChatPage() {
         patientId: staff ? (options.patientId ?? patientPanel.activePatientId) : null,
         visibleMessage: options.visibleMessage,
       });
-      if (staff && response.patient_id) {
-        patientPanel.selectPatient(response.patient_id);
+      if (staff && response.patientId) {
+        patientPanel.selectPatient(response.patientId);
       }
       // Each answer changes the history list, today's usage and possibly quota notifications.
       void sessions.refresh();
@@ -106,8 +106,8 @@ export function ChatPage() {
     setActionError(null);
     try {
       await conversation.open(session.id);
-      if (staff && session.active_patient_id) {
-        patientPanel.selectPatient(session.active_patient_id);
+      if (staff && session.activePatientId) {
+        patientPanel.selectPatient(session.activePatientId);
       }
     } catch (error) {
       setActionError(errorMessage(error, "Không thể tải tin nhắn của hội thoại."));
@@ -165,7 +165,7 @@ export function ChatPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 h-full min-h-0 overflow-hidden">
             <ChatWindow
               staff={staff}
-              displayName={user.display_name || user.username}
+              displayName={user.displayName || user.username}
               messages={conversation.messages}
               sending={conversation.sending}
               rightPanelOpen={rightPanelOpen}
@@ -190,7 +190,7 @@ export function ChatPage() {
                     <NotificationPopover
                       open={notificationOpen}
                       notifications={notifications.notifications}
-                      unreadCount={notifications.unread_count}
+                      unreadCount={notifications.unreadCount}
                       onToggle={() => setNotificationOpen((open) => !open)}
                       onMarkRead={notifications.markRead}
                       onMarkAllRead={notifications.markAllRead}

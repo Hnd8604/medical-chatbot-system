@@ -8,7 +8,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.config.properties.AppProperties;
-import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
+import com.medicalchatbot.backend.dto.response.usage.QuotaStatusResponse;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertType;
 import com.medicalchatbot.backend.enums.AuditAction;
@@ -23,8 +23,12 @@ import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.projection.QuotaLimitsProjection;
 import com.medicalchatbot.backend.repository.projection.UsageTotalsProjection;
 import com.medicalchatbot.backend.security.AuthenticatedUser;
+import com.medicalchatbot.backend.util.SecurityUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 /**
@@ -35,6 +39,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class QuotaService {
 
     /** Users are warned (once a day) when any daily usage reaches this share of its limit. */
@@ -42,24 +47,24 @@ public class QuotaService {
     /** Chat requests per minute for a policy without its own rate limit. */
     private static final int DEFAULT_RATE_LIMIT_PER_MINUTE = 5;
 
-    private final UserRepository userRepository;
-    private final QuotaPolicyRepository quotaPolicyRepository;
-    private final UsageLogRepository usageLogRepository;
-    private final CurrentUserService currentUserService;
-    private final AuditService auditService;
-    private final AlertService alertService;
-    private final NotificationService notificationService;
-    private final AppProperties appProperties;
-    private final ObjectMapper objectMapper;
+    UserRepository userRepository;
+    QuotaPolicyRepository quotaPolicyRepository;
+    UsageLogRepository usageLogRepository;
+    AuditService auditService;
+    AlertService alertService;
+    NotificationService notificationService;
+    AppProperties appProperties;
+    ObjectMapper objectMapper;
 
     public QuotaStatusResponse currentUserStatus() {
-        AuthenticatedUser principal = currentUserService.requirePrincipal();
+        AuthenticatedUser principal = SecurityUtils.currentUser();
         return status(principal.id(), principal.username());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public QuotaStatusResponse userStatus(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> AppException.notFound("Không tìm thấy người dùng."));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         return status(user.getId(), user.getUsername());
     }
 
@@ -102,8 +107,7 @@ public class QuotaService {
 
     private QuotaStatusResponse status(UUID userId, String username) {
         QuotaLimitsProjection limits = quotaPolicyRepository.findLimitsByUserId(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR,
-                        "Không tìm thấy quota policy cho người dùng."));
+                .orElseThrow(() -> new AppException(ErrorCode.QUOTA_POLICY_NOT_CONFIGURED));
         ZoneId zone = appProperties.timezone();
         OffsetDateTime startOfDay = OffsetDateTime.now(zone).toLocalDate().atStartOfDay(zone).toOffsetDateTime();
         UsageTotalsProjection usage = usageLogRepository.summarizeUsage(userId, startOfDay, startOfDay.plusDays(1));

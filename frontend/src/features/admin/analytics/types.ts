@@ -13,27 +13,27 @@ export interface IntentStat {
 export interface ErrorStat {
   date: string;
   service: string;
-  error_type: string;
+  errorType: string;
   count: number;
 }
 
 export interface PerformanceStat {
   model: string;
-  avg_latency: number;
-  p95_latency: number;
-  p99_latency: number;
+  avgLatency: number;
+  p95Latency: number;
+  p99Latency: number;
 }
 
 export interface RequestCount {
   from: string;
   to: string;
-  request_count: number;
+  requestCount: number;
 }
 
 export interface CacheMetrics {
-  total_requests: number;
-  total_cache_hits: number;
-  total_saved_tokens: number;
-  total_saved_cost_usd: number | string;
-  hit_rate_percentage: number;
+  totalRequests: number;
+  totalCacheHits: number;
+  totalSavedTokens: number;
+  totalSavedCostUsd: number | string;
+  hitRatePercentage: number;
 }

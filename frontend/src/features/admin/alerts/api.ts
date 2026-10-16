@@ -8,6 +8,6 @@ export const alertKeys = {
 };
 
 export const alertApi = {
-  list: (filter: AlertFilter) => api.get<PageResponse<Alert>>("/api/admin/alerts", { ...filter, sort: "createdAt,desc" }),
-  resolve: (alertId: string) => api.patch(`/api/admin/alerts/${encodeURIComponent(alertId)}/resolve`),
+  list: (filter: AlertFilter) => api.get<PageResponse<Alert>>("/admin/alerts", { ...filter, sort: "createdAt,desc" }),
+  resolve: (alertId: string) => api.put(`/admin/alerts/${encodeURIComponent(alertId)}/resolve`),
 };

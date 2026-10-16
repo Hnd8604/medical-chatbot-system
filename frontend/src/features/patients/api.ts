@@ -30,7 +30,7 @@ function searchCriteria(term: string): QueryParams {
     return { phone: term, limit: SEARCH_LIMIT };
   }
   if (isDateLike(term)) {
-    return { birth_date: term, limit: SEARCH_LIMIT };
+    return { birthDate: term, limit: SEARCH_LIMIT };
   }
   return { name: term, limit: SEARCH_LIMIT };
 }
@@ -52,16 +52,16 @@ export const patientApi = {
   async search(term: string): Promise<FhirResource[]> {
     if (looksLikePatientId(term)) {
       const id = normalizePatientId(term) ?? term;
-      const patient = await api.get<FhirResource>(`/api/patients/${encodeURIComponent(id)}`);
+      const patient = await api.get<FhirResource>(`/patients/${encodeURIComponent(id)}`);
       return isPatient(patient) ? [patient] : [];
     }
-    const result = await api.get<unknown>("/api/patients", searchCriteria(term));
+    const result = await api.get<unknown>("/patients", searchCriteria(term));
     return resourceList(result, "patients").filter(isPatient);
   },
 
   /** Doctors and admins only. */
   async profile(patientId: string): Promise<PatientProfile> {
-    const path = `/api/patients/${encodeURIComponent(patientId)}`;
+    const path = `/patients/${encodeURIComponent(patientId)}`;
     const [patient, encounters, observations, conditions, medications] = await Promise.all([
       api.get<FhirResource>(path),
       api.get<unknown>(`${path}/encounters`, { limit: 5 }),
@@ -81,7 +81,7 @@ export const patientApi = {
         observations: unknown;
         conditions: unknown;
         medications: unknown;
-      }>("/api/me/patient/profile");
+      }>("/users/my-patient-profile");
       return toProfile(profile.patient ?? null, profile);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {

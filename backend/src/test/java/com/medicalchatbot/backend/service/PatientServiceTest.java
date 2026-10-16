@@ -15,14 +15,16 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.client.ChatbotServiceClient;
-import com.medicalchatbot.backend.dto.request.PatientSearchRequest;
-import com.medicalchatbot.backend.dto.response.SelfPatientProfileResponse;
+import com.medicalchatbot.backend.dto.request.patient.PatientSearchRequest;
+import com.medicalchatbot.backend.dto.response.patient.SelfPatientProfileResponse;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.PatientResource;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
+import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,10 +35,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PatientServiceTest {
 
     @Mock
-    private ChatbotServiceClient chatbotServiceClient;
+    private UserRepository userRepository;
 
     @Mock
-    private CurrentUserService currentUserService;
+    private ChatbotServiceClient chatbotServiceClient;
 
     @Mock
     private PatientScopeService patientScopeService;
@@ -46,7 +48,12 @@ class PatientServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PatientService(chatbotServiceClient, currentUserService, patientScopeService);
+        service = new PatientService(chatbotServiceClient, patientScopeService, userRepository);
+    }
+
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
     }
 
     @Test
@@ -72,7 +79,7 @@ class PatientServiceTest {
     @Test
     void currentUserProfileUsesThePrimaryLinkedPatient() throws Exception {
         User user = TestUsers.user(UserRole.USER);
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(patientScopeService.linkedPatientIds(user)).thenReturn(List.of("BN2026-00007", "BN2026-00009"));
         when(chatbotServiceClient.getPatient("BN2026-00007")).thenReturn(objectMapper.readTree("{\"id\":\"BN2026-00007\"}"));
 
@@ -87,12 +94,12 @@ class PatientServiceTest {
     @Test
     void currentUserProfileWithoutLinkIsNotFound() {
         User user = TestUsers.user(UserRole.USER);
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(patientScopeService.linkedPatientIds(user)).thenReturn(List.of());
 
         AppException exception = assertThrows(AppException.class, () -> service.currentUserProfile());
 
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.getErrorCode());
+        assertEquals(ErrorCode.PATIENT_PROFILE_NOT_LINKED, exception.getErrorCode());
         verify(chatbotServiceClient, never()).getPatientResources(any(), eq(PatientResource.ENCOUNTERS), anyInt());
     }
 }

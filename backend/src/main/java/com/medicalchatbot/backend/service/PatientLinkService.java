@@ -6,8 +6,8 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.medicalchatbot.backend.client.ChatbotServiceClient;
-import com.medicalchatbot.backend.dto.request.LinkPatientRequest;
-import com.medicalchatbot.backend.dto.response.AuthUserResponse;
+import com.medicalchatbot.backend.dto.request.patient.LinkPatientRequest;
+import com.medicalchatbot.backend.dto.response.auth.AuthUserResponse;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.PatientRelationship;
@@ -16,9 +16,13 @@ import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.mapper.UserMapper;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.util.PatientIds;
+import com.medicalchatbot.backend.util.SecurityUtils;
 import com.medicalchatbot.backend.util.TextUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,15 +36,14 @@ import org.springframework.web.client.RestClientResponseException;
  */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PatientLinkService {
 
-    private static final String MISMATCH = "Thông tin xác minh hồ sơ không khớp.";
-
-    private final CurrentUserService currentUserService;
-    private final UserPatientLinkRepository userPatientLinkRepository;
-    private final ChatbotServiceClient chatbotServiceClient;
-    private final UserMapper userMapper;
-    private final AuthAuditService authAudit;
+    UserRepository userRepository;
+    UserPatientLinkRepository userPatientLinkRepository;
+    ChatbotServiceClient chatbotServiceClient;
+    UserMapper userMapper;
+    AuthAuditService authAudit;
 
     /** A USER account must link its own patient record before it can chat. */
     public boolean isOnboardingRequired(User user) {
@@ -49,9 +52,10 @@ public class PatientLinkService {
 
     @Transactional
     public AuthUserResponse linkCurrentUser(LinkPatientRequest request) {
-        User user = currentUserService.requireCurrentUser();
+        User user = userRepository.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_EXISTED));
         if (user.getRole() != UserRole.USER) {
-            throw AppException.forbidden("Chỉ tài khoản USER mới cần liên kết hồ sơ bệnh nhân.");
+            throw new AppException(ErrorCode.PATIENT_LINK_NOT_ALLOWED);
         }
         Verification verification = Verification.of(request);
 
@@ -60,16 +64,16 @@ public class PatientLinkService {
             boolean samePatient = existingLinks.stream()
                     .anyMatch(link -> PatientIds.same(link.getFhirPatientId(), verification.patientId()));
             if (!samePatient) {
-                throw AppException.conflict("Tài khoản đã được liên kết với hồ sơ FHIR khác.");
+                throw new AppException(ErrorCode.ACCOUNT_LINKED_TO_OTHER_PATIENT);
             }
             return userMapper.toAuthUserResponse(user, false);
         }
 
         if (!verification.matches(fetchPatient(verification.patientId()))) {
-            throw new AppException(ErrorCode.UNPROCESSABLE_ENTITY, MISMATCH);
+            throw new AppException(ErrorCode.PATIENT_VERIFICATION_FAILED);
         }
         if (userPatientLinkRepository.existsSelfLinkForOtherUser(verification.patientId(), user.getId())) {
-            throw AppException.conflict("Hồ sơ bệnh nhân này đã được liên kết với tài khoản khác.");
+            throw new AppException(ErrorCode.PATIENT_LINKED_TO_OTHER_ACCOUNT);
         }
 
         try {
@@ -80,7 +84,7 @@ public class PatientLinkService {
                     .primaryLink(true)
                     .build());
         } catch (DataIntegrityViolationException exception) {
-            throw new AppException(ErrorCode.CONFLICT, "Hồ sơ bệnh nhân này đã được liên kết.", exception);
+            throw new AppException(ErrorCode.PATIENT_LINKED_TO_OTHER_ACCOUNT, exception);
         }
 
         authAudit.patientLinked(user, verification.patientId());
@@ -92,13 +96,11 @@ public class PatientLinkService {
         try {
             return chatbotServiceClient.getPatient(patientId);
         } catch (HttpClientErrorException exception) {
-            throw new AppException(ErrorCode.UNPROCESSABLE_ENTITY, MISMATCH, exception);
+            throw new AppException(ErrorCode.PATIENT_VERIFICATION_FAILED, exception);
         } catch (RestClientResponseException exception) {
-            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR,
-                    "Không thể xác minh hồ sơ bệnh nhân từ FHIR service.", exception);
+            throw new AppException(ErrorCode.PATIENT_VERIFICATION_UNAVAILABLE, exception);
         } catch (RestClientException exception) {
-            throw new AppException(ErrorCode.UPSTREAM_SERVICE_ERROR,
-                    "Không thể kết nối FHIR service để xác minh hồ sơ.", exception);
+            throw new AppException(ErrorCode.PATIENT_VERIFICATION_UNAVAILABLE, exception);
         }
     }
 
@@ -108,17 +110,17 @@ public class PatientLinkService {
         static Verification of(LinkPatientRequest request) {
             String patientId = PatientIds.normalize(request.patientId());
             if (patientId == null) {
-                throw AppException.invalid("Mã bệnh nhân không hợp lệ.");
+                throw new AppException(ErrorCode.PATIENT_ID_INVALID);
             }
             String birthDate = TextUtils.strip(request.birthDate());
             try {
                 LocalDate.parse(birthDate);
             } catch (DateTimeParseException exception) {
-                throw AppException.invalid("Ngày sinh phải có định dạng YYYY-MM-DD.");
+                throw new AppException(ErrorCode.BIRTH_DATE_INVALID);
             }
             String phone = normalizePhone(request.phone());
             if (phone.length() < 8 || phone.length() > 15) {
-                throw AppException.invalid("Số điện thoại không hợp lệ.");
+                throw new AppException(ErrorCode.PHONE_INVALID);
             }
             return new Verification(patientId, birthDate, phone);
         }

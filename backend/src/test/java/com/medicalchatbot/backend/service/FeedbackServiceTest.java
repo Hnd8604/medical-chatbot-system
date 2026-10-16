@@ -11,8 +11,8 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.request.FeedbackRequest;
-import com.medicalchatbot.backend.dto.response.FeedbackResponse;
+import com.medicalchatbot.backend.dto.request.chat.FeedbackRequest;
+import com.medicalchatbot.backend.dto.response.chat.FeedbackResponse;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.MessageFeedback;
 import com.medicalchatbot.backend.entity.User;
@@ -22,7 +22,9 @@ import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,13 +36,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 class FeedbackServiceTest {
 
     @Mock
+    private UserRepository userRepository;
+
+    @Mock
     private MessageFeedbackRepository feedbackRepository;
 
     @Mock
     private ChatMessageRepository chatMessageRepository;
-
-    @Mock
-    private CurrentUserService currentUserService;
 
     private FeedbackService service;
     private User user;
@@ -49,16 +51,21 @@ class FeedbackServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new FeedbackService(feedbackRepository, chatMessageRepository, currentUserService);
+        service = new FeedbackService(feedbackRepository, chatMessageRepository, userRepository);
         user = TestUsers.user(UserRole.USER);
         messageId = UUID.randomUUID();
         message = ChatMessage.builder().id(messageId).role(ChatMessageRole.ASSISTANT).content("answer").build();
     }
 
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
+    }
+
     @Test
     void createAllowsAnOwnedAssistantMessage() {
         UUID feedbackId = UUID.randomUUID();
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(chatMessageRepository.findAssistantMessageOwnedByUser(messageId, user.getId())).thenReturn(Optional.of(message));
         when(feedbackRepository.existsByMessageIdAndUserId(messageId, user.getId())).thenReturn(false);
         when(feedbackRepository.saveAndFlush(any(MessageFeedback.class))).thenAnswer(invocation -> {
@@ -74,32 +81,32 @@ class FeedbackServiceTest {
 
     @Test
     void createDoesNotRevealMissingNonAssistantOrForeignMessage() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(chatMessageRepository.findAssistantMessageOwnedByUser(messageId, user.getId())).thenReturn(Optional.empty());
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.create(messageId, new FeedbackRequest(4, null)));
 
-        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.MESSAGE_NOT_EXISTED);
         verifyNoInteractions(feedbackRepository);
     }
 
     @Test
     void createRejectsExistingFeedback() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(chatMessageRepository.findAssistantMessageOwnedByUser(messageId, user.getId())).thenReturn(Optional.of(message));
         when(feedbackRepository.existsByMessageIdAndUserId(messageId, user.getId())).thenReturn(true);
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.create(messageId, new FeedbackRequest(4, null)));
 
-        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONFLICT);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FEEDBACK_EXISTED);
         verify(feedbackRepository, never()).saveAndFlush(any(MessageFeedback.class));
     }
 
     @Test
     void createMapsConcurrentDuplicateToConflict() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(chatMessageRepository.findAssistantMessageOwnedByUser(messageId, user.getId())).thenReturn(Optional.of(message));
         when(feedbackRepository.existsByMessageIdAndUserId(messageId, user.getId())).thenReturn(false);
         when(feedbackRepository.saveAndFlush(any(MessageFeedback.class)))
@@ -108,14 +115,14 @@ class FeedbackServiceTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.create(messageId, new FeedbackRequest(4, null)));
 
-        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CONFLICT);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FEEDBACK_EXISTED);
     }
 
     @Test
     void updateUsesTheOwnershipAwareLookup() {
         MessageFeedback feedback = MessageFeedback.builder().id(UUID.randomUUID()).message(message).user(user)
                 .rating(2).comment("Old").build();
-        when(currentUserService.requireCurrentUserId()).thenReturn(user.getId());
+        TestUsers.signIn(user);
         when(feedbackRepository.findOwnedFeedback(messageId, user.getId())).thenReturn(Optional.of(feedback));
 
         FeedbackResponse response = service.update(messageId, new FeedbackRequest(5, "Updated"));
@@ -127,19 +134,19 @@ class FeedbackServiceTest {
 
     @Test
     void updateDoesNotRevealForeignFeedback() {
-        when(currentUserService.requireCurrentUserId()).thenReturn(user.getId());
+        TestUsers.signIn(user);
         when(feedbackRepository.findOwnedFeedback(messageId, user.getId())).thenReturn(Optional.empty());
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.update(messageId, new FeedbackRequest(5, null)));
 
-        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FEEDBACK_NOT_EXISTED);
     }
 
     @Test
     void deleteUsesTheOwnershipAwareLookup() {
         MessageFeedback feedback = MessageFeedback.builder().message(message).user(user).rating(5).build();
-        when(currentUserService.requireCurrentUserId()).thenReturn(user.getId());
+        TestUsers.signIn(user);
         when(feedbackRepository.findOwnedFeedback(messageId, user.getId())).thenReturn(Optional.of(feedback));
 
         service.delete(messageId);

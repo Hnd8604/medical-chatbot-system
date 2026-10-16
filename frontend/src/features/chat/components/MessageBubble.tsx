@@ -17,18 +17,18 @@ function responseNotices(outcome: ResponseOutcome | undefined): Notice[] {
     return [];
   }
   const notices: Notice[] = [];
-  if (outcome.response_status === "tool_error") {
+  if (outcome.responseStatus === "tool_error") {
     notices.push({ tone: "danger", text: "Không truy xuất được dữ liệu do sự cố hệ thống." });
-  } else if (outcome.response_status === "partial") {
+  } else if (outcome.responseStatus === "partial") {
     notices.push({ tone: "warning", text: "Một phần dữ liệu chưa truy xuất được; câu trả lời có thể chưa đầy đủ." });
-  } else if (outcome.llm_unavailable_reason) {
+  } else if (outcome.llmUnavailableReason) {
     notices.push({ tone: "muted", text: "Trả lời ở chế độ rút gọn (không dùng AI) do dịch vụ AI tạm không khả dụng." });
   }
   // Only a failed check is reported: cached and template answers are not re-checked, so a
   // "verified" label would come and go for the same answer.
   if (outcome.grounding?.checked && outcome.grounding.passed === false) {
     notices.push(
-      outcome.answer_source === "template_grounding_fallback"
+      outcome.answerSource === "template_grounding_fallback"
         ? {
             tone: "muted",
             text: "Câu trả lời do AI viết có dữ kiện không khớp hồ sơ nên đã được thay bằng nội dung lấy trực tiếp từ dữ liệu.",
@@ -60,8 +60,8 @@ function ResponseNotices({ outcome }: { outcome: ResponseOutcome | undefined }) 
           )}
         >
           <p>{notice.text}</p>
-          {index === 0 && outcome?.trace_id ? (
-            <p className="mt-1 font-mono text-[11px] text-muted-foreground">Mã tra cứu: {outcome.trace_id}</p>
+          {index === 0 && outcome?.traceId ? (
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground">Mã tra cứu: {outcome.traceId}</p>
           ) : null}
         </div>
       ))}

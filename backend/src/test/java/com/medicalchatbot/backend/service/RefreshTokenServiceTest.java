@@ -76,33 +76,34 @@ class RefreshTokenServiceTest {
         ArgumentCaptor<String> value = ArgumentCaptor.forClass(String.class);
         verify(valueOps).set(key.capture(), value.capture(), eq(TTL));
 
-        when(valueOps.get(key.getValue())).thenReturn(value.getValue());
+        // GETDEL hands the stored value out once; Redis has nothing left for the replay.
+        when(valueOps.getAndDelete(key.getValue())).thenReturn(value.getValue()).thenReturn(null);
         RefreshTokenService.TokenOwner owner = service.rotate(token);
 
         assertEquals(user.getId(), owner.userId());
         assertEquals(7, owner.tokenVersion());
-        verify(redisTemplate).delete(key.getValue());
+        verify(setOps).remove(eq("refresh_token:user:" + user.getId()), eq(key.getValue().substring("refresh_token:".length())));
 
-        when(valueOps.get(key.getValue())).thenReturn(null);
         AppException exception = assertThrows(AppException.class, () -> service.rotate(token));
-        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, exception.getErrorCode());
+        assertEquals(ErrorCode.REFRESH_TOKEN_INVALID, exception.getErrorCode());
     }
 
     @Test
     void rotateRejectsMalformedToken() {
         AppException exception = assertThrows(AppException.class, () -> service.rotate("khong-co-dau-cham"));
 
-        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, exception.getErrorCode());
+        assertEquals(ErrorCode.REFRESH_TOKEN_INVALID, exception.getErrorCode());
     }
 
     @Test
     void rotateRejectsTamperedSecret() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.get("refresh_token:some-jti")).thenReturn(UUID.randomUUID() + "|0|deadbeef");
+        when(redisTemplate.opsForSet()).thenReturn(setOps);
+        when(valueOps.getAndDelete("refresh_token:some-jti")).thenReturn(UUID.randomUUID() + "|0|deadbeef");
 
         AppException exception = assertThrows(AppException.class, () -> service.rotate("some-jti.wrong-secret"));
 
-        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, exception.getErrorCode());
+        assertEquals(ErrorCode.REFRESH_TOKEN_INVALID, exception.getErrorCode());
     }
 
     @Test

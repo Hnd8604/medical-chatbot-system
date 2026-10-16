@@ -29,11 +29,11 @@ function CardHeader({ icon, title, children }: { icon: React.ReactNode; title: s
 function ProfileForm() {
   const { setUser } = useAuth();
   const user = useSignedInUser();
-  const [displayName, setDisplayName] = useState(user.display_name);
+  const [displayName, setDisplayName] = useState(user.displayName);
   const [email, setEmail] = useState(user.email ?? "");
 
   const updateProfile = useMutation({
-    mutationFn: () => authApi.updateProfile({ display_name: displayName, email }),
+    mutationFn: () => authApi.updateProfile({ displayName: displayName, email }),
     onSuccess: setUser,
   });
 

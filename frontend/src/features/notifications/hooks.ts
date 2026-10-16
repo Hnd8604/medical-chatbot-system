@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notificationApi, notificationKeys, openNotificationStream } from "./api";
 import type { NotificationList } from "./types";
 
-const EMPTY: NotificationList = { unread_count: 0, notifications: [] };
+const EMPTY: NotificationList = { unreadCount: 0, notifications: [] };
 
 /** Notifications of the signed-in user, kept live through the server-sent event stream. */
 export function useNotifications() {
@@ -19,7 +19,7 @@ export function useNotifications() {
             current.notifications.some((item) => item.id === notification.id)
               ? current
               : {
-                  unread_count: current.unread_count + 1,
+                  unreadCount: current.unreadCount + 1,
                   notifications: [notification, ...current.notifications],
                 },
           ),

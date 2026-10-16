@@ -7,9 +7,9 @@ export const notificationKeys = {
 };
 
 export const notificationApi = {
-  list: () => api.get<NotificationList>("/api/notifications"),
-  markRead: (id: string) => api.post(`/api/notifications/${encodeURIComponent(id)}/read`),
-  markAllRead: () => api.post("/api/notifications/read-all"),
+  list: () => api.get<NotificationList>("/notifications"),
+  markRead: (id: string) => api.put(`/notifications/${encodeURIComponent(id)}/read`),
+  markAllRead: () => api.put("/notifications/read-all"),
 };
 
 interface StreamHandlers {
@@ -27,7 +27,7 @@ export function openNotificationStream({ onConnected, onNotification }: StreamHa
   if (!token) {
     return () => {};
   }
-  const source = new EventSource(apiUrl("/api/notifications/stream", { token }));
+  const source = new EventSource(apiUrl("/notifications/stream", { token }));
   source.addEventListener("connected", onConnected);
   source.addEventListener("notification", (event) => {
     try {

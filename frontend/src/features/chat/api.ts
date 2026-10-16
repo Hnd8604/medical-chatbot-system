@@ -10,17 +10,17 @@ export const chatKeys = {
 };
 
 function feedbackPath(messageId: string) {
-  return `/api/chat/messages/${encodeURIComponent(messageId)}/feedback`;
+  return `/chat/messages/${encodeURIComponent(messageId)}/feedback`;
 }
 
 function sessionPath(sessionId: string) {
-  return `/api/chat/sessions/${encodeURIComponent(sessionId)}`;
+  return `/chat/sessions/${encodeURIComponent(sessionId)}`;
 }
 
 export const chatApi = {
-  send: (body: ChatRequest) => api.post<ChatResponse>("/api/chat", body),
+  send: (body: ChatRequest) => api.post<ChatResponse>("/chat", body),
 
-  sessions: (query: string) => api.get<ChatSession[]>("/api/chat/sessions", { query, limit: SESSION_LIST_LIMIT }),
+  sessions: (query: string) => api.get<ChatSession[]>("/chat/sessions", { query, limit: SESSION_LIST_LIMIT }),
   messages: (sessionId: string) => api.get<ChatMessage[]>(`${sessionPath(sessionId)}/messages`),
   rename: (sessionId: string, title: string) => api.patch<{ id: string; title: string }>(sessionPath(sessionId), { title }),
   remove: (sessionId: string) => api.delete(sessionPath(sessionId)),
@@ -31,5 +31,5 @@ export const chatApi = {
 
   /** Every session created in the range, as one PDF or CSV file. */
   exportHistory: (range: DateRange, format: ExportFormat) =>
-    api.download("/api/chat/sessions/export", { ...range, format }, `lich_su_hoi_thoai_${range.from}_${range.to}.${format}`),
+    api.download("/chat/sessions/export", { ...range, format }, `lich_su_hoi_thoai_${range.from}_${range.to}.${format}`),
 };

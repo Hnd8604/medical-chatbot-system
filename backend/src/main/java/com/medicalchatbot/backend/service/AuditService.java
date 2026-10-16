@@ -6,9 +6,9 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.medicalchatbot.backend.dto.response.AuditLogFiltersResponse;
-import com.medicalchatbot.backend.dto.response.AuditLogResponse;
 import com.medicalchatbot.backend.dto.response.PageResponse;
+import com.medicalchatbot.backend.dto.response.admin.AuditLogFiltersResponse;
+import com.medicalchatbot.backend.dto.response.admin.AuditLogResponse;
 import com.medicalchatbot.backend.entity.AuditLog;
 import com.medicalchatbot.backend.entity.ChatSession;
 import com.medicalchatbot.backend.entity.User;
@@ -16,8 +16,11 @@ import com.medicalchatbot.backend.enums.AuditAction;
 import com.medicalchatbot.backend.enums.AuditResource;
 import com.medicalchatbot.backend.mapper.AuditLogMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 /** Writes and searches the audit trail of security- and PHI-relevant actions. */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AuditService {
 
-    private final AuditLogRepository auditLogRepository;
-    private final AuditLogMapper auditLogMapper;
-    private final ObjectMapper objectMapper;
+    AuditLogRepository auditLogRepository;
+    AuditLogMapper auditLogMapper;
+    ObjectMapper objectMapper;
 
     /** Starts a metadata object; callers add the fields specific to their event. */
     public ObjectNode metadata() {
@@ -78,6 +82,7 @@ public class AuditService {
         record(user, null, action, resource, resourceId, metadata);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public PageResponse<AuditLogResponse> search(
             UUID userId,
@@ -90,10 +95,11 @@ public class AuditService {
     ) {
         return PageResponse.of(
                 auditLogRepository.search(userId, action, resourceType, resourceId, fromDate, toDate, pageable),
-                auditLogMapper::toResponse
+                auditLogMapper::toAuditLogResponse
         );
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public AuditLogFiltersResponse filters() {
         return new AuditLogFiltersResponse(
                 Arrays.stream(AuditAction.values()).map(Enum::name).toList(),

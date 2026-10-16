@@ -37,14 +37,14 @@ export function OnboardingPage() {
 
   const linkPatient = useMutation({
     mutationFn: () =>
-      authApi.linkPatient({ patient_id: patientId.trim(), birth_date: birthDate.trim(), phone: phone.trim() }),
+      authApi.linkPatient({ patientId: patientId.trim(), birthDate: birthDate.trim(), phone: phone.trim() }),
     onSuccess: (linkedUser) => {
       setUser(linkedUser);
       navigate("/chat", { replace: true });
     },
   });
 
-  if (user.role !== "USER" || !user.onboarding_required) {
+  if (user.role !== "USER" || !user.onboardingRequired) {
     return <Navigate to="/chat" replace />;
   }
 
@@ -102,7 +102,7 @@ export function OnboardingPage() {
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.15em] text-accent">Onboarding</p>
               <h2 className="mt-2 font-display text-3xl">Liên kết hồ sơ bệnh nhân</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{user.display_name || user.username}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{user.displayName || user.username}</p>
             </div>
             <Button type="button" variant="ghost" size="icon" aria-label="Đăng xuất" onClick={() => void logout()}>
               <LogOut className="h-5 w-5" />

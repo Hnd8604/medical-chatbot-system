@@ -1,22 +1,13 @@
 package com.medicalchatbot.backend.mapper;
 
-import com.medicalchatbot.backend.dto.response.AuditLogResponse;
+import com.medicalchatbot.backend.dto.response.admin.AuditLogResponse;
 import com.medicalchatbot.backend.entity.AuditLog;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-@Component
-public class AuditLogMapper {
+@Mapper
+public interface AuditLogMapper {
 
-    public AuditLogResponse toResponse(AuditLog auditLog) {
-        return new AuditLogResponse(
-                auditLog.getId(),
-                auditLog.getUserId(),
-                auditLog.getSessionId(),
-                auditLog.getAction(),
-                auditLog.getResourceType(),
-                auditLog.getResourceId(),
-                auditLog.getMetadataJson(),
-                auditLog.getCreatedAt()
-        );
-    }
+    @Mapping(target = "metadata", source = "metadataJson")
+    AuditLogResponse toAuditLogResponse(AuditLog auditLog);
 }

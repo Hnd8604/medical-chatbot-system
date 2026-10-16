@@ -12,35 +12,18 @@ public class AppException extends RuntimeException {
     private final ErrorCode errorCode;
 
     public AppException(ErrorCode errorCode) {
-        this(errorCode, null, null);
-    }
-
-    public AppException(ErrorCode errorCode, String message) {
-        this(errorCode, message, null);
-    }
-
-    public AppException(ErrorCode errorCode, String message, Throwable cause) {
-        super(message != null ? message : errorCode.getDefaultMessage(), cause);
+        super(errorCode.getMessage());
         this.errorCode = errorCode;
     }
 
-    public static AppException notFound(String message) {
-        return new AppException(ErrorCode.RESOURCE_NOT_FOUND, message);
+    /** Replaces the default message, e.g. to name the offending value. */
+    public AppException(ErrorCode errorCode, String customMessage) {
+        super(customMessage != null ? customMessage : errorCode.getMessage());
+        this.errorCode = errorCode;
     }
 
-    public static AppException invalid(String message) {
-        return new AppException(ErrorCode.INVALID_ARGUMENT, message);
-    }
-
-    public static AppException conflict(String message) {
-        return new AppException(ErrorCode.CONFLICT, message);
-    }
-
-    public static AppException forbidden(String message) {
-        return new AppException(ErrorCode.ACCESS_DENIED, message);
-    }
-
-    public static AppException unauthorized(String message) {
-        return new AppException(ErrorCode.AUTHENTICATION_REQUIRED, message);
+    public AppException(ErrorCode errorCode, Throwable cause) {
+        super(errorCode.getMessage(), cause);
+        this.errorCode = errorCode;
     }
 }

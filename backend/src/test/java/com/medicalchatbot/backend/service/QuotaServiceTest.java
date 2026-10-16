@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
+import com.medicalchatbot.backend.dto.response.usage.QuotaStatusResponse;
 import com.medicalchatbot.backend.entity.AuditLog;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AlertType;
@@ -30,12 +30,12 @@ import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.projection.QuotaLimitsProjection;
 import com.medicalchatbot.backend.repository.projection.UsageTotalsProjection;
-import com.medicalchatbot.backend.security.AuthenticatedUser;
 import com.medicalchatbot.backend.support.TestProperties;
 import com.medicalchatbot.backend.support.TestUsers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,9 +51,6 @@ class QuotaServiceTest {
 
     @Mock
     private UsageLogRepository usageLogRepository;
-
-    @Mock
-    private CurrentUserService currentUserService;
 
     @Mock
     private AuditLogRepository auditLogRepository;
@@ -74,8 +71,7 @@ class QuotaServiceTest {
                 userRepository,
                 quotaPolicyRepository,
                 usageLogRepository,
-                currentUserService,
-                new AuditService(auditLogRepository, new AuditLogMapper(), objectMapper),
+                new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), objectMapper),
                 alertService,
                 notificationService,
                 TestProperties.app(),
@@ -86,8 +82,7 @@ class QuotaServiceTest {
 
     @Test
     void currentUserStatusReturnsRemainingQuota() {
-        when(currentUserService.requirePrincipal())
-                .thenReturn(new AuthenticatedUser(user.getId(), "user_demo", UserRole.USER));
+        TestUsers.signIn(user);
         givenPolicyAndUsage(new QuotaLimitsProjection("user_standard", 30, 1000, new BigDecimal("0.50")),
                 new UsageTotalsProjection(12, 100, 50, new BigDecimal("0.25")));
 

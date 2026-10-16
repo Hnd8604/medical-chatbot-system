@@ -73,19 +73,19 @@ export function AuditLogList({ logs, usernameOf }: AuditLogListProps) {
             return (
               <div key={log.id}>
                 <article className="grid grid-cols-[10rem_12rem_10rem_1fr_8rem_1.4fr] gap-4 px-4 py-3 text-sm">
-                  <span className="text-muted-foreground">{formatDateTime(log.created_at)}</span>
+                  <span className="text-muted-foreground">{formatDateTime(log.createdAt)}</span>
                   <span>
                     <Badge tone={actionTone(log.action)}>{log.action}</Badge>
                   </span>
-                  <span className="min-w-0 truncate font-mono text-xs text-foreground">{usernameOf(log.user_id)}</span>
+                  <span className="min-w-0 truncate font-mono text-xs text-foreground">{usernameOf(log.userId)}</span>
                   <span className="min-w-0">
-                    <span className="block font-semibold text-foreground">{log.resource_type || "-"}</span>
-                    <span className="block truncate font-mono text-xs text-muted-foreground" title={log.resource_id || undefined}>
-                      {log.resource_id || "-"}
+                    <span className="block font-semibold text-foreground">{log.resourceType || "-"}</span>
+                    <span className="block truncate font-mono text-xs text-muted-foreground" title={log.resourceId || undefined}>
+                      {log.resourceId || "-"}
                     </span>
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground" title={log.session_id || undefined}>
-                    {shortId(log.session_id)}
+                  <span className="font-mono text-xs text-muted-foreground" title={log.sessionId || undefined}>
+                    {shortId(log.sessionId)}
                   </span>
                   <span className="min-w-0">
                     <span className="line-clamp-2 font-mono text-xs text-muted-foreground" title={fullMetadata}>
@@ -114,22 +114,22 @@ export function AuditLogList({ logs, usernameOf }: AuditLogListProps) {
             <article key={log.id} className="rounded-lg border border-border bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <Badge tone={actionTone(log.action)}>{log.action}</Badge>
-                <span className="text-xs text-muted-foreground">{formatDateTime(log.created_at)}</span>
+                <span className="text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</span>
               </div>
               <div className="mt-4 grid gap-2 text-sm">
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">User</span>
-                  <span className="font-mono text-xs text-foreground">{usernameOf(log.user_id)}</span>
+                  <span className="font-mono text-xs text-foreground">{usernameOf(log.userId)}</span>
                 </div>
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Resource</span>
                   <span className="min-w-0 truncate text-right font-semibold text-foreground">
-                    {log.resource_type || "-"} / {log.resource_id || "-"}
+                    {log.resourceType || "-"} / {log.resourceId || "-"}
                   </span>
                 </div>
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Session</span>
-                  <span className="font-mono text-xs text-muted-foreground">{shortId(log.session_id)}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{shortId(log.sessionId)}</span>
                 </div>
                 <p className="mt-2 line-clamp-3 font-mono text-xs text-muted-foreground" title={fullMetadata}>
                   {metadataPreview(log.metadata)}

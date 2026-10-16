@@ -13,7 +13,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medicalchatbot.backend.client.ChatbotServiceClient;
-import com.medicalchatbot.backend.dto.request.LinkPatientRequest;
+import com.medicalchatbot.backend.dto.request.patient.LinkPatientRequest;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.entity.UserPatientLink;
 import com.medicalchatbot.backend.enums.PatientRelationship;
@@ -24,10 +24,13 @@ import com.medicalchatbot.backend.mapper.AuditLogMapper;
 import com.medicalchatbot.backend.mapper.UserMapper;
 import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -44,7 +47,7 @@ class PatientLinkServiceTest {
             """;
 
     @Mock
-    private CurrentUserService currentUserService;
+    private UserRepository userRepository;
 
     @Mock
     private UserPatientLinkRepository userPatientLinkRepository;
@@ -61,15 +64,20 @@ class PatientLinkServiceTest {
 
     @BeforeEach
     void setUp() {
-        AuditService auditService = new AuditService(auditLogRepository, new AuditLogMapper(), objectMapper);
-        service = new PatientLinkService(currentUserService, userPatientLinkRepository, chatbotServiceClient,
-                new UserMapper(), new AuthAuditService(auditService));
+        AuditService auditService = new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), objectMapper);
+        service = new PatientLinkService(userRepository, userPatientLinkRepository, chatbotServiceClient,
+                Mappers.getMapper(UserMapper.class), new AuthAuditService(auditService));
         user = TestUsers.user(UserRole.USER);
+    }
+
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
     }
 
     @Test
     void createsSelfPrimaryLinkWhenVerificationMatches() throws Exception {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(userPatientLinkRepository.findSelfLinksByUserId(user.getId())).thenReturn(List.of());
         when(chatbotServiceClient.getPatient("BN2026-00001")).thenReturn(objectMapper.readTree(PATIENT_JSON));
         when(userPatientLinkRepository.existsSelfLinkForOtherUser("BN2026-00001", user.getId())).thenReturn(false);
@@ -87,20 +95,20 @@ class PatientLinkServiceTest {
 
     @Test
     void rejectsMismatchedVerification() throws Exception {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(userPatientLinkRepository.findSelfLinksByUserId(user.getId())).thenReturn(List.of());
         when(chatbotServiceClient.getPatient("BN2026-00001")).thenReturn(objectMapper.readTree(PATIENT_JSON));
 
         AppException exception = assertThrows(AppException.class, () -> service.linkCurrentUser(
                 new LinkPatientRequest("BN2026-00001", "2004-01-01", "0900000001")));
 
-        assertEquals(ErrorCode.UNPROCESSABLE_ENTITY, exception.getErrorCode());
+        assertEquals(ErrorCode.PATIENT_VERIFICATION_FAILED, exception.getErrorCode());
         verify(userPatientLinkRepository, never()).saveAndFlush(any());
     }
 
     @Test
     void unknownPatientLooksLikeAMismatch() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(userPatientLinkRepository.findSelfLinksByUserId(user.getId())).thenReturn(List.of());
         when(chatbotServiceClient.getPatient("BN2026-09999"))
                 .thenThrow(HttpClientErrorException.create(HttpStatus.NOT_FOUND, "Not Found", null, null, null));
@@ -108,24 +116,24 @@ class PatientLinkServiceTest {
         AppException exception = assertThrows(AppException.class, () -> service.linkCurrentUser(
                 new LinkPatientRequest("BN2026-09999", "2003-01-01", "0900000001")));
 
-        assertEquals(ErrorCode.UNPROCESSABLE_ENTITY, exception.getErrorCode());
+        assertEquals(ErrorCode.PATIENT_VERIFICATION_FAILED, exception.getErrorCode());
     }
 
     @Test
     void unreachableFhirServiceIsAnUpstreamError() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(userPatientLinkRepository.findSelfLinksByUserId(user.getId())).thenReturn(List.of());
         when(chatbotServiceClient.getPatient("BN2026-00001")).thenThrow(new ResourceAccessException("down"));
 
         AppException exception = assertThrows(AppException.class, () -> service.linkCurrentUser(
                 new LinkPatientRequest("BN2026-00001", "2003-01-01", "0900000001")));
 
-        assertEquals(ErrorCode.UPSTREAM_SERVICE_ERROR, exception.getErrorCode());
+        assertEquals(ErrorCode.PATIENT_VERIFICATION_UNAVAILABLE, exception.getErrorCode());
     }
 
     @Test
     void relinkingTheSamePatientIsIdempotent() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(userPatientLinkRepository.findSelfLinksByUserId(user.getId())).thenReturn(List.of(
                 UserPatientLink.builder().user(user).fhirPatientId("BN2026-00001").primaryLink(true).build()));
 
@@ -137,12 +145,12 @@ class PatientLinkServiceTest {
 
     @Test
     void staffAccountsDoNotLinkPatients() {
-        when(currentUserService.requireCurrentUser()).thenReturn(TestUsers.user(UserRole.DOCTOR));
+        TestUsers.signIn(TestUsers.user(UserRole.DOCTOR), userRepository);
 
         AppException exception = assertThrows(AppException.class, () -> service.linkCurrentUser(
                 new LinkPatientRequest("BN2026-00001", "2003-01-01", "0900000001")));
 
-        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
+        assertEquals(ErrorCode.PATIENT_LINK_NOT_ALLOWED, exception.getErrorCode());
     }
 
     @Test

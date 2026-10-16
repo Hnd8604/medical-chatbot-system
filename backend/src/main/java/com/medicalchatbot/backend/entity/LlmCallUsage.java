@@ -1,8 +1,6 @@
 package com.medicalchatbot.backend.entity;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.util.UUID;
 
 import com.medicalchatbot.backend.entity.converter.CostSourceConverter;
 import com.medicalchatbot.backend.enums.CostSource;
@@ -10,18 +8,14 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
+import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
 
 /**
  * Một LLM call trong một lượt chat (router / planner / answer / summary...). Cho phép báo
@@ -30,46 +24,38 @@ import org.hibernate.annotations.CreationTimestamp;
 @Entity
 @Table(name = "llm_call_usage")
 @Getter
-@Builder
+@SuperBuilder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class LlmCallUsage {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class LlmCallUsage extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "usage_log_id", nullable = false)
-    private UsageLog usageLog;
+    UsageLog usageLog;
 
     @Column(nullable = false, length = 50)
-    private String stage;
+    String stage;
 
     @Column(name = "llm_provider", length = 50)
-    private String llmProvider;
+    String llmProvider;
 
     @Column(name = "llm_model", length = 100)
-    private String llmModel;
+    String llmModel;
 
     @Column(name = "input_tokens", nullable = false)
-    private int inputTokens;
+    int inputTokens;
 
     @Column(name = "output_tokens", nullable = false)
-    private int outputTokens;
+    int outputTokens;
 
     @Column(name = "cost_usd", nullable = false, precision = 12, scale = 6)
-    private BigDecimal costUsd;
+    BigDecimal costUsd;
 
     /** {@link CostSource#GATEWAY} hoặc {@link CostSource#UNAVAILABLE}. */
     @Convert(converter = CostSourceConverter.class)
     @Column(name = "cost_source", nullable = false, length = 20)
-    private CostSource costSource;
+    CostSource costSource;
 
     @Column(name = "gateway_call_id", length = 100)
-    private String gatewayCallId;
-
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
+    String gatewayCallId;
 }

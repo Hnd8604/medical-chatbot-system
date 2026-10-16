@@ -70,9 +70,9 @@ function Breakdown({
 
 function LatencyCard({ stat, maxLatency }: { stat: PerformanceStat; maxLatency: number }) {
   const bars = [
-    { label: "Average", value: stat.avg_latency, color: "bg-accent" },
-    { label: "P95", value: stat.p95_latency, color: "bg-warning" },
-    { label: "P99", value: stat.p99_latency, color: "bg-danger" },
+    { label: "Average", value: stat.avgLatency, color: "bg-accent" },
+    { label: "P95", value: stat.p95Latency, color: "bg-warning" },
+    { label: "P99", value: stat.p99Latency, color: "bg-danger" },
   ];
   return (
     <article className="rounded-lg border border-border bg-white p-5 shadow-sm">
@@ -129,7 +129,7 @@ export function AdminAnalyticsPage() {
 
   const windowDays = rangeLength(filter);
   const performanceStats = performance.data ?? [];
-  const maxLatency = Math.max(1, ...performanceStats.map((stat) => stat.p99_latency || stat.p95_latency || stat.avg_latency || 0));
+  const maxLatency = Math.max(1, ...performanceStats.map((stat) => stat.p99Latency || stat.p95Latency || stat.avgLatency || 0));
 
   return (
     <>
@@ -172,7 +172,7 @@ export function AdminAnalyticsPage() {
         {tab === "error" ? (
           <AnalyticsShell title="Error analytics" icon={<AlertTriangle className="h-5 w-5" />} filter={filter} tone="red">
             <Breakdown
-              summaries={summarizeByKey(errors.data ?? [], (stat) => `${stat.service || "unknown"} · ${stat.error_type || "SYSTEM"}`)}
+              summaries={summarizeByKey(errors.data ?? [], (stat) => `${stat.service || "unknown"} · ${stat.errorType || "SYSTEM"}`)}
               loading={errors.isFetching}
               emptyText="Chưa có lỗi nổi bật."
               totalLabel="Tổng lỗi"

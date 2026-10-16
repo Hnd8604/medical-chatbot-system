@@ -282,7 +282,7 @@ Start-ManagedProcess `
     -WorkingDirectory $SpringDir `
     -Port 8081
 
-Wait-Http -Url "http://localhost:8081/api/health" -Retries 90 -DelaySeconds 2
+Wait-Http -Url "http://localhost:8081/api/v1/actuator/health" -Retries 90 -DelaySeconds 2
 
 
 Write-Step "Starting frontend"
@@ -298,7 +298,7 @@ Wait-Http -Url "http://localhost:5174" -Retries 30 -DelaySeconds 2
 if (-not $SkipFlowCheck) {
     Write-Step "Checking full chat flow through Spring"
     $loginBody = @{
-        username_or_email = "doctor_demo"
+        usernameOrEmail = "doctor_demo"
         password = "DoctorDemo123!"
     } | ConvertTo-Json
     $loginBytes = [System.Text.Encoding]::UTF8.GetBytes($loginBody)
@@ -307,27 +307,27 @@ if (-not $SkipFlowCheck) {
     $httpClient = [System.Net.Http.HttpClient]::new()
     $loginContent = [System.Net.Http.ByteArrayContent]::new($loginBytes)
     $loginContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/json; charset=utf-8")
-    $loginResponse = $httpClient.PostAsync("http://localhost:8081/api/auth/login", $loginContent).GetAwaiter().GetResult()
+    $loginResponse = $httpClient.PostAsync("http://localhost:8081/api/v1/auth/login", $loginContent).GetAwaiter().GetResult()
     $loginResponseBytes = $loginResponse.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
     $loginResponseText = [System.Text.Encoding]::UTF8.GetString($loginResponseBytes)
     if (-not $loginResponse.IsSuccessStatusCode) {
         throw "Full chat flow login failed with HTTP $([int]$loginResponse.StatusCode): $loginResponseText"
     }
     $login = $loginResponseText | ConvertFrom-Json
-    if (-not $login.result.access_token) {
+    if (-not $login.result.accessToken) {
         throw "Full chat flow login returned an invalid API envelope: $loginResponseText"
     }
-    $httpClient.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $login.result.access_token)
+    $httpClient.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $login.result.accessToken)
 
     $body = @{
         message = "Benh nhan BN2026-00001 dang dung thuoc gi?"
-        patient_id = "BN2026-00001"
+        patientId = "BN2026-00001"
     } | ConvertTo-Json
     $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 
     $content = [System.Net.Http.ByteArrayContent]::new($bodyBytes)
     $content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/json; charset=utf-8")
-    $httpResponse = $httpClient.PostAsync("http://localhost:8081/api/chat", $content).GetAwaiter().GetResult()
+    $httpResponse = $httpClient.PostAsync("http://localhost:8081/api/v1/chat", $content).GetAwaiter().GetResult()
     $responseBytes = $httpResponse.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
     $responseText = [System.Text.Encoding]::UTF8.GetString($responseBytes)
     if (-not $httpResponse.IsSuccessStatusCode) {
@@ -339,7 +339,7 @@ if (-not $SkipFlowCheck) {
     }
 
     Write-Host "Intent: $($response.result.intent)"
-    Write-Host "Tool: $($response.result.tool_name)"
+    Write-Host "Tool: $($response.result.toolName)"
     Write-Host "Answer: $($response.result.answer)"
 }
 

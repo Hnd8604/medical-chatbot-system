@@ -168,9 +168,9 @@ export function AdminBackupPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={STATUS_TONE[backup.status]}>{STATUS_LABEL[backup.status]}</Badge>
-                    <Badge tone="slate">{backup.trigger_type === "MANUAL" ? "Thủ công" : "Tự động"}</Badge>
-                    <span className="text-sm font-semibold text-foreground">{formatDateTime(backup.started_at)}</span>
-                    {backup.triggered_by ? <span className="text-xs text-muted-foreground">bởi {backup.triggered_by}</span> : null}
+                    <Badge tone="slate">{backup.triggerType === "MANUAL" ? "Thủ công" : "Tự động"}</Badge>
+                    <span className="text-sm font-semibold text-foreground">{formatDateTime(backup.startedAt)}</span>
+                    {backup.triggeredBy ? <span className="text-xs text-muted-foreground">bởi {backup.triggeredBy}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(backup.items ?? []).map((item) => (
@@ -181,16 +181,16 @@ export function AdminBackupPage() {
                       </DatabaseChip>
                     ))}
                   </div>
-                  {backup.error_message ? <p className="mt-2 text-xs text-danger">{backup.error_message}</p> : null}
-                  {backup.upload_target ? <p className="mt-1 text-xs text-muted-foreground">Đích: {backup.upload_target}</p> : null}
+                  {backup.errorMessage ? <p className="mt-2 text-xs text-danger">{backup.errorMessage}</p> : null}
+                  {backup.uploadTarget ? <p className="mt-1 text-xs text-muted-foreground">Đích: {backup.uploadTarget}</p> : null}
                 </div>
 
                 <div className="flex flex-col items-end gap-2 text-right text-sm text-muted-foreground lg:min-w-[8rem]">
                   <div>
                     <p className="font-semibold text-foreground">
-                      {backup.total_size_bytes != null ? formatBytes(backup.total_size_bytes) : "—"}
+                      {backup.totalSizeBytes != null ? formatBytes(backup.totalSizeBytes) : "—"}
                     </p>
-                    <p className="text-xs">Thời lượng {formatDuration(backup.started_at, backup.finished_at)}</p>
+                    <p className="text-xs">Thời lượng {formatDuration(backup.startedAt, backup.finishedAt)}</p>
                   </div>
                   {backup.status === "SUCCESS" || backup.status === "PARTIAL" ? (
                     <Button type="button" size="sm" variant="secondary" disabled={hasRunning} onClick={() => setRestoreTarget(backup)}>
@@ -217,8 +217,8 @@ export function AdminBackupPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={STATUS_TONE[job.status]}>{STATUS_LABEL[job.status]}</Badge>
-                    <span className="text-sm font-semibold text-foreground">{formatDateTime(job.started_at)}</span>
-                    {job.triggered_by ? <span className="text-xs text-muted-foreground">bởi {job.triggered_by}</span> : null}
+                    <span className="text-sm font-semibold text-foreground">{formatDateTime(job.startedAt)}</span>
+                    {job.triggeredBy ? <span className="text-xs text-muted-foreground">bởi {job.triggeredBy}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(job.items ?? []).map((item) => (
@@ -227,10 +227,10 @@ export function AdminBackupPage() {
                       </DatabaseChip>
                     ))}
                   </div>
-                  {job.error_message ? <p className="mt-2 text-xs text-danger">{job.error_message}</p> : null}
+                  {job.errorMessage ? <p className="mt-2 text-xs text-danger">{job.errorMessage}</p> : null}
                 </div>
                 <div className="text-right text-xs text-muted-foreground lg:min-w-[8rem]">
-                  Thời lượng {formatDuration(job.started_at, job.finished_at)}
+                  Thời lượng {formatDuration(job.startedAt, job.finishedAt)}
                 </div>
               </article>
             ))}

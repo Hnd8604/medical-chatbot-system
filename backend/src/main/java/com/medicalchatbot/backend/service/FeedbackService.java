@@ -2,8 +2,8 @@ package com.medicalchatbot.backend.service;
 
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.request.FeedbackRequest;
-import com.medicalchatbot.backend.dto.response.FeedbackResponse;
+import com.medicalchatbot.backend.dto.request.chat.FeedbackRequest;
+import com.medicalchatbot.backend.dto.response.chat.FeedbackResponse;
 import com.medicalchatbot.backend.entity.ChatMessage;
 import com.medicalchatbot.backend.entity.MessageFeedback;
 import com.medicalchatbot.backend.entity.User;
@@ -11,7 +11,11 @@ import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
+import com.medicalchatbot.backend.util.SecurityUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,17 +23,19 @@ import org.springframework.transaction.annotation.Transactional;
 /** Star ratings on assistant answers; a user rates an answer of their own sessions at most once. */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class FeedbackService {
 
-    private final MessageFeedbackRepository feedbackRepository;
-    private final ChatMessageRepository chatMessageRepository;
-    private final CurrentUserService currentUserService;
+    MessageFeedbackRepository feedbackRepository;
+    ChatMessageRepository chatMessageRepository;
+    UserRepository userRepository;
 
     @Transactional
     public FeedbackResponse create(UUID messageId, FeedbackRequest request) {
-        User user = currentUserService.requireCurrentUser();
+        User user = userRepository.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_EXISTED));
         ChatMessage message = chatMessageRepository.findAssistantMessageOwnedByUser(messageId, user.getId())
-                .orElseThrow(() -> AppException.notFound("Không tìm thấy tin nhắn."));
+                .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_EXISTED));
         if (feedbackRepository.existsByMessageIdAndUserId(messageId, user.getId())) {
             throw feedbackAlreadyExists(null);
         }
@@ -62,8 +68,8 @@ public class FeedbackService {
     }
 
     private MessageFeedback requireOwnFeedback(UUID messageId) {
-        return feedbackRepository.findOwnedFeedback(messageId, currentUserService.requireCurrentUserId())
-                .orElseThrow(() -> AppException.notFound("Không tìm thấy đánh giá."));
+        return feedbackRepository.findOwnedFeedback(messageId, SecurityUtils.currentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.FEEDBACK_NOT_EXISTED));
     }
 
     private static FeedbackResponse toResponse(MessageFeedback feedback, UUID messageId) {
@@ -71,6 +77,6 @@ public class FeedbackService {
     }
 
     private static AppException feedbackAlreadyExists(Throwable cause) {
-        return new AppException(ErrorCode.CONFLICT, "Câu trả lời này đã được đánh giá.", cause);
+        return new AppException(ErrorCode.FEEDBACK_EXISTED, cause);
     }
 }

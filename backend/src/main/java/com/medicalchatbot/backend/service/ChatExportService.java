@@ -14,31 +14,38 @@ import com.medicalchatbot.backend.enums.AuditAction;
 import com.medicalchatbot.backend.enums.AuditResource;
 import com.medicalchatbot.backend.enums.ExportFormat;
 import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
 import com.medicalchatbot.backend.service.TranscriptRenderer.Line;
 import com.medicalchatbot.backend.service.TranscriptRenderer.Transcript;
+import com.medicalchatbot.backend.util.SecurityUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Downloads of the user's own chat history. Every export is audited because it contains PHI. */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatExportService {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private final ChatSessionRepository chatSessionRepository;
-    private final ChatSessionService chatSessionService;
-    private final CurrentUserService currentUserService;
-    private final TranscriptRenderer transcriptRenderer;
-    private final AuditService auditService;
-    private final AppProperties appProperties;
+    ChatSessionRepository chatSessionRepository;
+    UserRepository userRepository;
+    ChatSessionService chatSessionService;
+    TranscriptRenderer transcriptRenderer;
+    AuditService auditService;
+    AppProperties appProperties;
 
     @Transactional
     public ExportFile exportSession(UUID sessionId, ExportFormat format) {
-        User user = currentUserService.requireCurrentUser();
+        User user = userRepository.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_EXISTED));
         ChatSession session = chatSessionService.requireOwnedSession(sessionId, user.getId());
         Transcript transcript = transcript(user, session.getId(), session.getTitle());
 
@@ -51,9 +58,10 @@ public class ChatExportService {
     @Transactional
     public ExportFile exportSessionsCreatedBetween(LocalDate from, LocalDate to, ExportFormat format) {
         if (from.isAfter(to)) {
-            throw AppException.invalid("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.");
+            throw new AppException(ErrorCode.DATE_RANGE_INVALID);
         }
-        User user = currentUserService.requireCurrentUser();
+        User user = userRepository.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_EXISTED));
         ZoneId zone = appProperties.timezone();
         OffsetDateTime start = from.atStartOfDay(zone).toOffsetDateTime();
         OffsetDateTime end = to.plusDays(1).atStartOfDay(zone).toOffsetDateTime();

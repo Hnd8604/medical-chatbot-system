@@ -18,6 +18,7 @@ public final class TestProperties {
     }
 
     public static AppProperties app(ZoneId timezone) {
-        return new AppProperties(timezone, new AppProperties.Cors(List.of("http://localhost:5174")));
+        return new AppProperties(timezone, new AppProperties.Cors(List.of("http://localhost:5174")),
+                new AppProperties.RateLimit(10));
     }
 }

@@ -50,7 +50,7 @@ export function ForgotPasswordPage() {
     mutationFn: () => authApi.verifyResetCode(email.trim(), code.trim()),
     onMutate: () => setError(null),
     onSuccess: (response) => {
-      setResetTicket(response.reset_ticket);
+      setResetTicket(response.resetTicket);
       setInfo(null);
       setStep("password");
     },
@@ -60,9 +60,9 @@ export function ForgotPasswordPage() {
   const resetPassword = useMutation({
     mutationFn: () =>
       authApi.resetPassword({
-        reset_ticket: resetTicket,
-        new_password: newPassword,
-        password_confirmation: passwordConfirmation,
+        resetTicket: resetTicket,
+        newPassword: newPassword,
+        passwordConfirmation: passwordConfirmation,
       }),
     onMutate: () => setError(null),
     onSuccess: () => {

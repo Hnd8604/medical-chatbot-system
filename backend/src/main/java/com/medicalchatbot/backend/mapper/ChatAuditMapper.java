@@ -28,12 +28,15 @@ import com.medicalchatbot.backend.dto.chatbot.ChatbotChatResponse;
 import com.medicalchatbot.backend.enums.AuditAction;
 import com.medicalchatbot.backend.enums.AuditResource;
 import com.medicalchatbot.backend.util.TextUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 /** Classifies a completed chat turn as an audit entry: which patient data was accessed and how. */
 @Component
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatAuditMapper {
 
     static final String ALL_PATIENTS_ID = "all_patients";
@@ -72,8 +75,8 @@ public class ChatAuditMapper {
             Map.entry("unsupported_question", new ToolAudit(ASK_UNSUPPORTED, AuditResource.CHAT_SESSION, Target.SESSION))
     );
 
-    private final ObjectMapper objectMapper;
-    private final ChatbotResponseMapper chatbotResponseMapper;
+    ObjectMapper objectMapper;
+    ChatbotResponseMapper chatbotResponseMapper;
 
     public ChatAudit toChatAudit(
             UUID sessionId,

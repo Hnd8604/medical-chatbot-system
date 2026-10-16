@@ -2,53 +2,63 @@ package com.medicalchatbot.backend.controller;
 
 import java.util.UUID;
 
-import com.medicalchatbot.backend.dto.response.NotificationListResponse;
-import com.medicalchatbot.backend.service.CurrentUserService;
+import com.medicalchatbot.backend.constant.ResponseMessage;
+import com.medicalchatbot.backend.dto.response.ApiResponse;
+import com.medicalchatbot.backend.dto.response.notification.NotificationListResponse;
 import com.medicalchatbot.backend.service.NotificationService;
 import com.medicalchatbot.backend.service.NotificationStreamService;
+import com.medicalchatbot.backend.util.SecurityUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import lombok.experimental.FieldDefaults;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
+@RequestMapping("/notifications")
 @RequiredArgsConstructor
-@RequestMapping("/api/notifications")
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Tag(name = "Notifications", description = "In-app notifications of the signed-in user")
 public class NotificationController {
 
-    private final NotificationService notificationService;
-    private final NotificationStreamService notificationStreamService;
-    private final CurrentUserService currentUserService;
+    NotificationService notificationService;
+    NotificationStreamService notificationStreamService;
 
     @GetMapping
-    public NotificationListResponse list() {
-        return notificationService.list(currentUserService.requireCurrentUserId());
+    @Operation(summary = "List my notifications", description = "Newest first, with the number of unread ones.")
+    public ApiResponse<NotificationListResponse> list() {
+        return ApiResponse.<NotificationListResponse>builder()
+                .result(notificationService.list(SecurityUtils.currentUserId()))
+                .message(ResponseMessage.GET_NOTIFICATIONS_SUCCESS)
+                .build();
     }
 
-    /**
-     * Server-Sent Events: {@code connected} once the stream is open, then one {@code notification}
-     * event per new notification. Accepts {@code ?token=} because EventSource cannot send headers.
-     */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Stream my notifications",
+            description = "Server-Sent Events: 'connected' once the stream is open, then one 'notification' event per "
+                    + "new notification. Accepts ?token= because EventSource cannot send headers.")
     public SseEmitter stream() {
-        return notificationStreamService.subscribe(currentUserService.requireCurrentUserId());
+        return notificationStreamService.subscribe(SecurityUtils.currentUserId());
     }
 
-    @PostMapping("/{id}/read")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void markAsRead(@PathVariable UUID id) {
-        notificationService.markAsRead(currentUserService.requireCurrentUserId(), id);
+    @PutMapping("/{id}/read")
+    @Operation(summary = "Mark a notification as read")
+    public ApiResponse<Void> markAsRead(@PathVariable UUID id) {
+        notificationService.markAsRead(SecurityUtils.currentUserId(), id);
+        return ApiResponse.<Void>builder().message(ResponseMessage.MARK_NOTIFICATION_READ_SUCCESS).build();
     }
 
-    @PostMapping("/read-all")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void markAllAsRead() {
-        notificationService.markAllAsRead(currentUserService.requireCurrentUserId());
+    @PutMapping("/read-all")
+    @Operation(summary = "Mark all my notifications as read")
+    public ApiResponse<Void> markAllAsRead() {
+        notificationService.markAllAsRead(SecurityUtils.currentUserId());
+        return ApiResponse.<Void>builder().message(ResponseMessage.MARK_ALL_NOTIFICATIONS_READ_SUCCESS).build();
     }
 }

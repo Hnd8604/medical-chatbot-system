@@ -97,7 +97,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                         coalesce(sum(request_count) filter (where status = 'success'), 0)::int as "requestCount",
                         coalesce(sum(input_tokens), 0)::int as "inputTokens",
                         coalesce(sum(output_tokens), 0)::int as "outputTokens",
-                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "costUsd"
+                        coalesce(sum(cost_usd), 0)::numeric(12, 6) as "costUsd"
                     from usage_logs
                     where user_id = :userId
                       and status in ('success', 'failed')
@@ -146,7 +146,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                             usage.request_count,
                             usage.input_tokens,
                             usage.output_tokens,
-                            usage.estimated_cost_usd
+                            usage.cost_usd
                         from usage_logs usage
                         where usage.user_id = :userId
                           and usage.status = 'success'
@@ -173,7 +173,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                         coalesce(sum(request_count) filter (where status = 'success'), 0)::int as "requestCount",
                         coalesce(sum(input_tokens), 0)::int as "inputTokens",
                         coalesce(sum(output_tokens), 0)::int as "outputTokens",
-                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "costUsd"
+                        coalesce(sum(cost_usd), 0)::numeric(12, 6) as "costUsd"
                     from (
                         select
                             cast(created_at at time zone :zoneId as date) as usage_date,
@@ -181,7 +181,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                             request_count,
                             input_tokens,
                             output_tokens,
-                            estimated_cost_usd
+                            cost_usd
                         from usage_logs
                         where user_id = :userId
                           and status in ('success', 'failed')

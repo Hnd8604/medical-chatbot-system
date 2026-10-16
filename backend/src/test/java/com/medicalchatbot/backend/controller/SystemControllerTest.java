@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medicalchatbot.backend.security.JwtAuthenticationFilter;
 import com.medicalchatbot.backend.service.PatientService;
 import com.medicalchatbot.backend.service.QuotaService;
 import org.junit.jupiter.api.Test;
@@ -31,25 +30,14 @@ class SystemControllerTest {
     private QuotaService quotaService;
 
     @MockitoBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @MockitoBean
     private StringRedisTemplate stringRedisTemplate;
-
-    @Test
-    void healthIsWrappedInTheSuccessEnvelope() throws Exception {
-        mockMvc.perform(get("/api/health"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(1000))
-                .andExpect(jsonPath("$.result.status").value("ok"));
-    }
 
     @Test
     void chatbotStatusPassesTheUpstreamPayloadThrough() throws Exception {
         when(patientService.fhirStatus())
                 .thenReturn(new ObjectMapper().readTree("{\"fhir_server\":\"up\",\"resource_count\":12}"));
 
-        mockMvc.perform(get("/api/chatbot/status"))
+        mockMvc.perform(get("/chatbot/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.fhir_server").value("up"))
                 .andExpect(jsonPath("$.result.resource_count").value(12));

@@ -57,16 +57,16 @@ export function AdminUsageCostPage() {
 
   const quotaData = quota.data;
   const costData = cost.data;
-  const requestPercent = usagePercent(quotaData?.used_requests, quotaData?.daily_request_limit);
-  const tokenPercent = usagePercent(quotaData?.used_tokens, quotaData?.daily_token_limit);
-  const costPercent = usagePercent(quotaData?.used_cost_usd, quotaData?.daily_cost_limit_usd);
+  const requestPercent = usagePercent(quotaData?.usedRequests, quotaData?.dailyRequestLimit);
+  const tokenPercent = usagePercent(quotaData?.usedTokens, quotaData?.dailyTokenLimit);
+  const costPercent = usagePercent(quotaData?.usedCostUsd, quotaData?.dailyCostLimitUsd);
   const models = useMemo(
-    () => [...(costData?.models ?? [])].sort((left, right) => numericValue(right.cost_usd) - numericValue(left.cost_usd)),
+    () => [...(costData?.models ?? [])].sort((left, right) => numericValue(right.costUsd) - numericValue(left.costUsd)),
     [costData],
   );
   const days = useMemo(() => [...(costData?.days ?? [])].sort((left, right) => right.date.localeCompare(left.date)), [costData]);
-  const maxModelCost = maxOf(models.map((model) => numericValue(model.cost_usd)));
-  const maxDayRequests = maxOf(days.map((day) => day.request_count));
+  const maxModelCost = maxOf(models.map((model) => numericValue(model.costUsd)));
+  const maxDayRequests = maxOf(days.map((day) => day.requestCount));
 
   const loading = quota.isFetching || cost.isFetching;
   const failure = lookup.error ?? quota.error ?? cost.error;
@@ -137,23 +137,23 @@ export function AdminUsageCostPage() {
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             label="Request/ngày"
-            value={`${formatNumber(quotaData?.used_requests)}/${formatNumber(quotaData?.daily_request_limit)}`}
+            value={`${formatNumber(quotaData?.usedRequests)}/${formatNumber(quotaData?.dailyRequestLimit)}`}
             progress={requestPercent}
             progressTone={usageTone(requestPercent, "blue", WARN_PERCENT)}
           />
           <MetricCard
             label="Token/ngày"
-            value={`${formatNumber(quotaData?.used_tokens)}/${formatNumber(quotaData?.daily_token_limit)}`}
+            value={`${formatNumber(quotaData?.usedTokens)}/${formatNumber(quotaData?.dailyTokenLimit)}`}
             progress={tokenPercent}
             progressTone={usageTone(tokenPercent, "blue", WARN_PERCENT)}
           />
           <MetricCard
             label="Cost/ngày"
-            value={formatUsd(quotaData?.used_cost_usd)}
+            value={formatUsd(quotaData?.usedCostUsd)}
             progress={costPercent}
             progressTone={usageTone(costPercent, "blue", WARN_PERCENT)}
           />
-          <MetricCard label="Cost range" value={formatUsd(costData?.cost_usd)} description={`${formatNumber(costData?.request_count)} request`} />
+          <MetricCard label="Cost range" value={formatUsd(costData?.costUsd)} description={`${formatNumber(costData?.requestCount)} request`} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -170,19 +170,19 @@ export function AdminUsageCostPage() {
                 label="Request"
                 value={requestPercent}
                 tone={usageTone(requestPercent, "blue", WARN_PERCENT)}
-                hint={`${formatNumber(quotaData?.used_requests)}/${formatNumber(quotaData?.daily_request_limit)} · ${Math.round(requestPercent)}%`}
+                hint={`${formatNumber(quotaData?.usedRequests)}/${formatNumber(quotaData?.dailyRequestLimit)} · ${Math.round(requestPercent)}%`}
               />
               <ProgressBar
                 label="Token"
                 value={tokenPercent}
                 tone={usageTone(tokenPercent, "blue", WARN_PERCENT)}
-                hint={`${formatNumber(quotaData?.used_tokens)}/${formatNumber(quotaData?.daily_token_limit)} · ${Math.round(tokenPercent)}%`}
+                hint={`${formatNumber(quotaData?.usedTokens)}/${formatNumber(quotaData?.dailyTokenLimit)} · ${Math.round(tokenPercent)}%`}
               />
               <ProgressBar
                 label="Cost"
                 value={costPercent}
                 tone={usageTone(costPercent, "blue", WARN_PERCENT)}
-                hint={`${formatUsd(quotaData?.used_cost_usd)}/${formatUsd(quotaData?.daily_cost_limit_usd)} · ${Math.round(costPercent)}%`}
+                hint={`${formatUsd(quotaData?.usedCostUsd)}/${formatUsd(quotaData?.dailyCostLimitUsd)} · ${Math.round(costPercent)}%`}
               />
             </div>
           </div>
@@ -197,17 +197,17 @@ export function AdminUsageCostPage() {
             ) : (
               <div className="grid gap-3">
                 {models.slice(0, 5).map((model) => (
-                  <div key={`${model.llm_provider}-${model.llm_model}`} className="rounded-lg border border-border bg-muted/40 p-3">
+                  <div key={`${model.llmProvider}-${model.llmModel}`} className="rounded-lg border border-border bg-muted/40 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{model.llm_model || "unknown"}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{model.llmModel || "unknown"}</p>
                         <p className="text-xs text-muted-foreground">
-                          {model.llm_provider || "unknown"} · {formatNumber(model.call_count)} call
+                          {model.llmProvider || "unknown"} · {formatNumber(model.callCount)} call
                         </p>
                       </div>
-                      <span className="font-semibold text-foreground">{formatUsd(model.cost_usd)}</span>
+                      <span className="font-semibold text-foreground">{formatUsd(model.costUsd)}</span>
                     </div>
-                    <ProgressBar value={(numericValue(model.cost_usd) / maxModelCost) * 100} tone="green" />
+                    <ProgressBar value={(numericValue(model.costUsd) / maxModelCost) * 100} tone="green" />
                   </div>
                 ))}
               </div>
@@ -228,19 +228,19 @@ export function AdminUsageCostPage() {
                 <article key={day.date} className="rounded-lg border border-border bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold text-foreground">{formatDate(day.date)}</span>
-                    <span className="font-mono text-sm text-accent">{formatNumber(day.request_count)} req</span>
+                    <span className="font-mono text-sm text-accent">{formatNumber(day.requestCount)} req</span>
                   </div>
-                  <p className="mt-2 text-lg font-semibold text-foreground">{formatUsd(day.cost_usd)}</p>
-                  <ProgressBar value={(day.request_count / maxDayRequests) * 100} />
+                  <p className="mt-2 text-lg font-semibold text-foreground">{formatUsd(day.costUsd)}</p>
+                  <ProgressBar value={(day.requestCount / maxDayRequests) * 100} />
                   <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
                     <div>
                       <dt className="text-muted-foreground">Token</dt>
-                      <dd className="font-mono font-semibold tabular-nums text-foreground">{formatNumber(day.total_tokens)}</dd>
+                      <dd className="font-mono font-semibold tabular-nums text-foreground">{formatNumber(day.totalTokens)}</dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">In / Out</dt>
                       <dd className="font-mono font-semibold tabular-nums text-foreground">
-                        {formatNumber(day.input_tokens)}/{formatNumber(day.output_tokens)}
+                        {formatNumber(day.inputTokens)}/{formatNumber(day.outputTokens)}
                       </dd>
                     </div>
                   </dl>
@@ -250,13 +250,13 @@ export function AdminUsageCostPage() {
           )}
         </section>
 
-        {costData?.cost_unavailable_models.length ? (
+        {costData?.costUnavailableModels.length ? (
           <section className="rounded-lg border border-warning/30 bg-warning/5 p-5">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="amber">Gateway không báo cost</Badge>
-              {costData.cost_unavailable_models.map((model) => (
-                <span key={`${model.llm_provider}-${model.llm_model}`} className="font-mono text-sm text-foreground">
-                  {model.llm_provider}/{model.llm_model} ({formatNumber(model.call_count)} call)
+              {costData.costUnavailableModels.map((model) => (
+                <span key={`${model.llmProvider}-${model.llmModel}`} className="font-mono text-sm text-foreground">
+                  {model.llmProvider}/{model.llmModel} ({formatNumber(model.callCount)} call)
                 </span>
               ))}
             </div>

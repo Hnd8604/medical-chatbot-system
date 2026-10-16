@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
 
-import com.medicalchatbot.backend.dto.response.ApiErrorResponse;
+import com.medicalchatbot.backend.dto.response.ApiResponse;
 import com.medicalchatbot.backend.enums.AlertType;
 import com.medicalchatbot.backend.service.AlertService;
 import com.medicalchatbot.backend.service.NotificationService;
@@ -24,6 +24,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BeanPropertyBindingResult;
+import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
@@ -56,11 +59,11 @@ class GlobalExceptionHandlerTest {
                 StandardCharsets.UTF_8
         );
 
-        ResponseEntity<ApiErrorResponse> response = handler.chatbotErrorResponse(exception);
+        ResponseEntity<ApiResponse<Void>> response = handler.handlingChatbotErrorResponse(exception);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().code()).isEqualTo(5002);
+        assertThat(response.getBody().code()).isEqualTo(ErrorCode.CHATBOT_SERVICE_ERROR.getCode());
         assertThat(response.getBody().message()).doesNotContain(sensitiveRemoteBody, "BN2026-00001");
         verify(alertService).raise(eq(AlertType.CHATBOT_SERVICE_5XX), contains("500"), isNull());
     }
@@ -70,9 +73,10 @@ class GlobalExceptionHandlerTest {
         when(alertServiceProvider.getIfAvailable()).thenReturn(alertService);
         doThrow(new IllegalStateException("db down")).when(alertService).raise(any(), any(), any());
 
-        ResponseEntity<ApiErrorResponse> response = handler.unhandled(new RuntimeException("boom"));
+        ResponseEntity<ApiResponse<Void>> response = handler.handlingUnhandled(new RuntimeException("boom"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody().code()).isEqualTo(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());
         assertThat(response.getBody().message()).doesNotContain("boom");
     }
 
@@ -87,32 +91,43 @@ class GlobalExceptionHandlerTest {
                 StandardCharsets.UTF_8
         );
 
-        ResponseEntity<ApiErrorResponse> response = handler.chatbotAccessDenied(exception);
+        ResponseEntity<ApiResponse<Void>> response = handler.handlingChatbotForbidden(exception);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody().code()).isEqualTo(1102);
-        assertThat(response.getBody().errorCode()).isEqualTo("FORBIDDEN");
+        assertThat(response.getBody().code()).isEqualTo(ErrorCode.UNAUTHORIZED.getCode());
         assertThat(response.getBody().message()).doesNotContain("tìm kiếm danh sách bệnh nhân");
     }
 
     @Test
-    void typedErrorKeepsStableNumericAndMachineCodes() {
-        ResponseEntity<ApiErrorResponse> response = handler.appException(
-                AppException.notFound("Không tìm thấy phiên chat."));
+    void applicationErrorUsesItsCodeStatusAndMessage() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handlingAppException(
+                new AppException(ErrorCode.CHAT_SESSION_NOT_EXISTED));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(response.getBody().code()).isEqualTo(9011);
-        assertThat(response.getBody().errorCode()).isEqualTo("NOT_FOUND");
-        assertThat(response.getBody().status()).isEqualTo(404);
-        assertThat(response.getBody().message()).isEqualTo("Không tìm thấy phiên chat.");
+        assertThat(response.getBody().code()).isEqualTo(2001);
+        assertThat(response.getBody().message()).isEqualTo("Không tìm thấy phiên trò chuyện.");
+        assertThat(response.getBody().result()).isNull();
     }
 
     @Test
     void serverSideApplicationErrorHidesItsMessage() {
-        ResponseEntity<ApiErrorResponse> response = handler.appException(
-                new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "SQL detail that must stay private"));
+        ResponseEntity<ApiResponse<Void>> response = handler.handlingAppException(
+                new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, "SQL detail that must stay private"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody().message()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR.getDefaultMessage());
+        assertThat(response.getBody().message()).isEqualTo(ErrorCode.UNCATEGORIZED_EXCEPTION.getMessage());
+    }
+
+    @Test
+    void invalidRequestBodyAnswersWithTheMessageOfTheFirstInvalidField() {
+        BindException exception = new BindException(new BeanPropertyBindingResult(new Object(), "registerRequest"));
+        exception.addError(new FieldError("registerRequest", "email", "Email không hợp lệ."));
+        exception.addError(new FieldError("registerRequest", "password", "Vui lòng nhập mật khẩu."));
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handlingBindException(exception);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().code()).isEqualTo(ErrorCode.VALIDATION_ERROR.getCode());
+        assertThat(response.getBody().message()).isEqualTo("Email không hợp lệ.");
     }
 }

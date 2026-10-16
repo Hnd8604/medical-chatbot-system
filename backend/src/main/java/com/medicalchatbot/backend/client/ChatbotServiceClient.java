@@ -3,8 +3,11 @@ package com.medicalchatbot.backend.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.medicalchatbot.backend.dto.chatbot.ChatbotChatRequest;
 import com.medicalchatbot.backend.dto.chatbot.ChatbotChatResponse;
-import com.medicalchatbot.backend.dto.request.PatientSearchRequest;
+import com.medicalchatbot.backend.dto.request.patient.PatientSearchRequest;
 import com.medicalchatbot.backend.enums.PatientResource;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -19,13 +22,12 @@ import org.springframework.web.util.UriBuilder;
  * handler.</p>
  */
 @Component
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatbotServiceClient {
 
-    private final RestClient restClient;
-
-    public ChatbotServiceClient(@Qualifier("chatbotRestClient") RestClient restClient) {
-        this.restClient = restClient;
-    }
+    @Qualifier("chatbotRestClient")
+    RestClient restClient;
 
     public ChatbotChatResponse chat(ChatbotChatRequest request) {
         return restClient.post()

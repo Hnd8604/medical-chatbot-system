@@ -26,7 +26,7 @@ export function ProtectedRoute() {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  if (user.role === "USER" && user.onboarding_required && location.pathname !== "/onboarding") {
+  if (user.role === "USER" && user.onboardingRequired && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
   }
   return <Outlet />;

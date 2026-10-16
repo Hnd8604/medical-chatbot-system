@@ -36,6 +36,10 @@ app:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS}
 
 logging:
+  # JSON logs (Elastic Common Schema) for a log collector; MDC fields such as requestId are included.
+  structured:
+    format:
+      console: ecs
   level:
     root: info
     com.medicalchatbot.backend: info

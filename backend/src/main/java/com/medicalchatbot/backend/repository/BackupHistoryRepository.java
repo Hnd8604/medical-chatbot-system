@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface BackupHistoryRepository extends JpaRepository<BackupHistory, UUID> {
@@ -13,4 +14,6 @@ public interface BackupHistoryRepository extends JpaRepository<BackupHistory, UU
     Page<BackupHistory> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     boolean existsByStatus(BackupStatus status);
+
+    List<BackupHistory> findAllByStatus(BackupStatus status);
 }

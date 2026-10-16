@@ -21,7 +21,7 @@ import type { AuditLogFilter } from "../types";
 
 const PAGE_SIZE = 15;
 const USER_OPTIONS = { page: 0, size: 100 };
-const NO_FILTER: AuditLogFilter = { user_id: "", action: "", resource_type: "", resource_id: "", from: "", to: "" };
+const NO_FILTER: AuditLogFilter = { userId: "", action: "", resourceType: "", resourceId: "", from: "", to: "" };
 
 function SelectFilter({
   label,
@@ -107,10 +107,10 @@ export function AdminAuditLogsPage() {
           <div className="grid gap-3 xl:grid-cols-[1fr_1fr_1fr_1fr_11rem_11rem_auto] xl:items-end">
             <SelectFilter
               label="User"
-              value={draft.user_id}
+              value={draft.userId}
               allLabel="Tất cả user"
               options={userItems.map((user) => ({ value: user.id, label: user.username }))}
-              onChange={(value) => update("user_id", value)}
+              onChange={(value) => update("userId", value)}
             />
             <SelectFilter
               label="Action"
@@ -121,10 +121,10 @@ export function AdminAuditLogsPage() {
             />
             <SelectFilter
               label="Resource"
-              value={draft.resource_type}
+              value={draft.resourceType}
               allLabel="Tất cả resource"
-              options={(options.data?.resource_types ?? []).map((type) => ({ value: type, label: type }))}
-              onChange={(value) => update("resource_type", value)}
+              options={(options.data?.resourceTypes ?? []).map((type) => ({ value: type, label: type }))}
+              onChange={(value) => update("resourceType", value)}
             />
             <label className="grid gap-1">
               <span className="text-xs font-medium text-muted-foreground">Resource ID</span>
@@ -132,9 +132,9 @@ export function AdminAuditLogsPage() {
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   className={inputClass("pl-10")}
-                  value={draft.resource_id}
+                  value={draft.resourceId}
                   placeholder="ID chính xác"
-                  onChange={(event) => update("resource_id", event.target.value)}
+                  onChange={(event) => update("resourceId", event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !invalidRange) apply(draft);
                   }}
@@ -177,7 +177,7 @@ export function AdminAuditLogsPage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <SectionLabel>Nhật ký</SectionLabel>
-              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(logs.data?.total_elements)} bản ghi</p>
+              <p className="mt-2 text-sm text-muted-foreground">{formatNumber(logs.data?.totalElements)} bản ghi</p>
             </div>
             <Badge tone={activeFilters ? "blue" : "slate"}>{activeFilters} filter</Badge>
           </div>
@@ -191,7 +191,7 @@ export function AdminAuditLogsPage() {
           )}
 
           <div className="mt-5">
-            <Pagination page={page} totalPages={logs.data?.total_pages ?? 1} disabled={logs.isFetching} onPageChange={setPage} />
+            <Pagination page={page} totalPages={logs.data?.totalPages ?? 1} disabled={logs.isFetching} onPageChange={setPage} />
           </div>
         </section>
       </div>

@@ -64,7 +64,7 @@ export function UserLookup({ value, onChange, onPick, onSubmit }: UserLookupProp
               >
                 <span className="text-sm font-medium text-foreground">{user.username}</span>
                 <span className="text-xs text-muted-foreground">
-                  {user.display_name}
+                  {user.displayName}
                   {user.email ? ` · ${user.email}` : ""}
                 </span>
               </button>
@@ -85,7 +85,7 @@ export async function findUser(term: string): Promise<AdminUser | null> {
   const { items } = await adminUserApi.list({ page: 0, size: SUGGESTION_LIMIT, search: query });
   const lower = query.toLowerCase();
   return (
-    items.find((user) => [user.username, user.email, user.display_name].some((value) => value?.toLowerCase() === lower)) ??
+    items.find((user) => [user.username, user.email, user.displayName].some((value) => value?.toLowerCase() === lower)) ??
     items[0] ??
     null
   );

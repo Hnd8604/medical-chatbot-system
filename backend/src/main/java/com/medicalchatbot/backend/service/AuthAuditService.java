@@ -4,18 +4,21 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.AuditAction;
 import com.medicalchatbot.backend.enums.AuditResource;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 
 /** Audit events of authentication and account management, named after what happened. */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AuthAuditService {
 
     private static final String SUCCESS = "success";
     private static final String FAILED = "failed";
 
-    private final AuditService auditService;
+    AuditService auditService;
 
     public void loginSucceeded(User user) {
         recordOnAccount(user, AuditAction.LOGIN_SUCCESS, auditService.metadata("login", SUCCESS));

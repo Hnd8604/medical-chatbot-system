@@ -8,16 +8,17 @@ import java.util.List;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.dto.chatbot.ConversationContext;
-import com.medicalchatbot.backend.dto.response.ChatMessageResponse;
+import com.medicalchatbot.backend.dto.response.chat.ChatMessageResponse;
 import com.medicalchatbot.backend.entity.ChatMemory;
 import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatSessionSummaryProjection;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 
 class ChatMapperTest {
 
-    private final ChatMapper mapper = new ChatMapper();
+    private final ChatMapper mapper = Mappers.getMapper(ChatMapper.class);
 
     @Test
     void buildsConversationContextFromMemoryAndRecentMessages() {

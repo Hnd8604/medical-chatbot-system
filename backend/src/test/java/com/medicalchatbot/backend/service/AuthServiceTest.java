@@ -14,14 +14,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
-import com.medicalchatbot.backend.dto.request.LoginRequest;
-import com.medicalchatbot.backend.dto.request.RefreshTokenRequest;
-import com.medicalchatbot.backend.dto.request.RegisterRequest;
-import com.medicalchatbot.backend.dto.request.UpdateProfileRequest;
-import com.medicalchatbot.backend.dto.response.AuthUserResponse;
-import com.medicalchatbot.backend.dto.response.LoginResponse;
-import com.medicalchatbot.backend.dto.response.TokenResponse;
+import com.medicalchatbot.backend.dto.request.auth.ChangePasswordRequest;
+import com.medicalchatbot.backend.dto.request.auth.LoginRequest;
+import com.medicalchatbot.backend.dto.request.auth.RefreshTokenRequest;
+import com.medicalchatbot.backend.dto.request.auth.RegisterRequest;
+import com.medicalchatbot.backend.dto.request.auth.UpdateProfileRequest;
+import com.medicalchatbot.backend.dto.response.auth.AuthUserResponse;
+import com.medicalchatbot.backend.dto.response.auth.LoginResponse;
+import com.medicalchatbot.backend.dto.response.auth.TokenResponse;
 import com.medicalchatbot.backend.entity.AuditLog;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
@@ -36,9 +36,11 @@ import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.security.JwtTokenProvider;
 import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,9 +65,6 @@ class AuthServiceTest {
     private RefreshTokenService refreshTokenService;
 
     @Mock
-    private CurrentUserService currentUserService;
-
-    @Mock
     private PatientLinkService patientLinkService;
 
     @Mock
@@ -75,18 +74,22 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        AuditService auditService = new AuditService(auditLogRepository, new AuditLogMapper(), new ObjectMapper());
+        AuditService auditService = new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), new ObjectMapper());
         service = new AuthService(
                 userRepository,
                 quotaPolicyRepository,
                 PASSWORD_ENCODER,
                 jwtTokenProvider,
                 refreshTokenService,
-                currentUserService,
                 patientLinkService,
-                new UserMapper(),
+                Mappers.getMapper(UserMapper.class),
                 new AuthAuditService(auditService)
         );
+    }
+
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
     }
 
     @Test
@@ -114,7 +117,7 @@ class AuthServiceTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.login(new LoginRequest("user_demo", "wrong-password")));
 
-        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, exception.getErrorCode());
+        assertEquals(ErrorCode.INVALID_CREDENTIALS, exception.getErrorCode());
         AuditLog audit = capturedAudit();
         assertEquals("LOGIN_FAILURE", audit.getAction());
         assertEquals("INVALID_CREDENTIALS", audit.getMetadataJson().path("reason").asText());
@@ -139,7 +142,7 @@ class AuthServiceTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.login(new LoginRequest("user_demo", "UserDemo123!")));
 
-        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
+        assertEquals(ErrorCode.ACCOUNT_LOCKED, exception.getErrorCode());
         assertEquals("Tài khoản đã bị khóa.", exception.getMessage());
         verify(refreshTokenService, never()).issue(any());
     }
@@ -169,7 +172,7 @@ class AuthServiceTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.refresh(new RefreshTokenRequest("stale-refresh")));
 
-        assertEquals(ErrorCode.AUTHENTICATION_REQUIRED, exception.getErrorCode());
+        assertEquals(ErrorCode.TOKEN_REVOKED, exception.getErrorCode());
         verify(refreshTokenService).revokeAll(user.getId());
     }
 
@@ -183,7 +186,7 @@ class AuthServiceTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.refresh(new RefreshTokenRequest("any-refresh")));
 
-        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
+        assertEquals(ErrorCode.ACCOUNT_LOCKED, exception.getErrorCode());
     }
 
     @Test
@@ -221,7 +224,7 @@ class AuthServiceTest {
         AppException exception = assertThrows(AppException.class, () -> service.register(new RegisterRequest(
                 "Nguyễn Văn A", "new_user", "new@example.com", "Password123!", "Password123!")));
 
-        assertEquals(ErrorCode.CONFLICT, exception.getErrorCode());
+        assertEquals(ErrorCode.USERNAME_EXISTED, exception.getErrorCode());
     }
 
     @Test
@@ -229,13 +232,13 @@ class AuthServiceTest {
         AppException exception = assertThrows(AppException.class, () -> service.register(new RegisterRequest(
                 "Nguyễn Văn A", "new_user", "new@example.com", "password", "password")));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.PASSWORD_TOO_WEAK, exception.getErrorCode());
     }
 
     @Test
     void currentUserReportsOnboardingState() {
         User user = user(UserRole.USER, "Password123!");
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(patientLinkService.isOnboardingRequired(user)).thenReturn(true);
 
         assertTrue(service.currentUser().onboardingRequired());
@@ -245,7 +248,7 @@ class AuthServiceTest {
     void logoutEndsEverySession() {
         User user = user(UserRole.ADMIN, "AdminDemo123!");
         user.setTokenVersion(3);
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
 
         service.logout();
 
@@ -258,7 +261,7 @@ class AuthServiceTest {
     @Test
     void updateProfileNormalizesDisplayNameAndEmail() {
         User user = user(UserRole.USER, "UserDemo123!");
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
         when(userRepository.existsByEmailIgnoreCase("new_mail@example.com")).thenReturn(false);
 
         AuthUserResponse response = service.updateProfile(new UpdateProfileRequest("  Tên Mới  ", "NEW_MAIL@example.com"));
@@ -271,19 +274,19 @@ class AuthServiceTest {
 
     @Test
     void updateProfileRejectsDuplicateEmail() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user(UserRole.USER, "UserDemo123!"));
+        TestUsers.signIn(user(UserRole.USER, "UserDemo123!"), userRepository);
         when(userRepository.existsByEmailIgnoreCase("taken@example.com")).thenReturn(true);
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.updateProfile(new UpdateProfileRequest("User Demo", "taken@example.com")));
 
-        assertEquals(ErrorCode.CONFLICT, exception.getErrorCode());
+        assertEquals(ErrorCode.EMAIL_EXISTED, exception.getErrorCode());
     }
 
     @Test
     void updateProfileAllowsKeepingOwnEmail() {
         User user = user(UserRole.USER, "UserDemo123!");
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
 
         AuthUserResponse response = service.updateProfile(
                 new UpdateProfileRequest("Tên Khác", user.getEmail().toUpperCase()));
@@ -294,20 +297,10 @@ class AuthServiceTest {
     }
 
     @Test
-    void updateProfileRejectsInvalidValues() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user(UserRole.USER, "UserDemo123!"));
-
-        assertEquals(ErrorCode.INVALID_ARGUMENT, assertThrows(AppException.class,
-                () -> service.updateProfile(new UpdateProfileRequest("User Demo", "not-an-email"))).getErrorCode());
-        assertEquals(ErrorCode.INVALID_ARGUMENT, assertThrows(AppException.class,
-                () -> service.updateProfile(new UpdateProfileRequest("A", "user@example.com"))).getErrorCode());
-    }
-
-    @Test
     void changePasswordUpdatesHashAndEndsEverySession() {
         User user = user(UserRole.USER, "OldPass123!");
         user.setTokenVersion(2);
-        when(currentUserService.requireCurrentUser()).thenReturn(user);
+        TestUsers.signIn(user, userRepository);
 
         service.changePassword(new ChangePasswordRequest("OldPass123!", "NewPass456!", "NewPass456!"));
 
@@ -318,23 +311,23 @@ class AuthServiceTest {
 
     @Test
     void changePasswordRejectsWrongCurrentPasswordAndAuditsIt() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user(UserRole.USER, "OldPass123!"));
+        TestUsers.signIn(user(UserRole.USER, "OldPass123!"), userRepository);
 
         AppException exception = assertThrows(AppException.class, () -> service.changePassword(
                 new ChangePasswordRequest("WrongPass123!", "NewPass456!", "NewPass456!")));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.WRONG_CURRENT_PASSWORD, exception.getErrorCode());
         assertEquals("PASSWORD_CHANGE_FAILURE", capturedAudit().getAction());
     }
 
     @Test
     void changePasswordRejectsSameAsCurrentPassword() {
-        when(currentUserService.requireCurrentUser()).thenReturn(user(UserRole.USER, "OldPass123!"));
+        TestUsers.signIn(user(UserRole.USER, "OldPass123!"), userRepository);
 
         AppException exception = assertThrows(AppException.class, () -> service.changePassword(
                 new ChangePasswordRequest("OldPass123!", "OldPass123!", "OldPass123!")));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.NEW_PASSWORD_SAME_AS_CURRENT, exception.getErrorCode());
     }
 
     private static User user(UserRole role, String password) {

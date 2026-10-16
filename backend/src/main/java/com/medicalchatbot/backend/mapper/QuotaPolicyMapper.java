@@ -1,30 +1,25 @@
 package com.medicalchatbot.backend.mapper;
 
-import com.medicalchatbot.backend.dto.request.QuotaPolicyRequest;
-import com.medicalchatbot.backend.dto.response.QuotaPolicyResponse;
+import com.medicalchatbot.backend.dto.request.admin.QuotaPolicyRequest;
+import com.medicalchatbot.backend.dto.response.admin.QuotaPolicyResponse;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
-@Component
-public class QuotaPolicyMapper {
+@Mapper
+public interface QuotaPolicyMapper {
 
-    public QuotaPolicyResponse toResponse(QuotaPolicy policy) {
-        return new QuotaPolicyResponse(
-                policy.getId(),
-                policy.getName(),
-                policy.getDailyRequestLimit(),
-                policy.getDailyTokenLimit(),
-                policy.getDailyCostLimitUsd(),
-                policy.getRateLimitPerMinute(),
-                policy.getCreatedAt()
-        );
-    }
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    QuotaPolicy toQuotaPolicy(QuotaPolicyRequest request);
 
-    public void applyRequest(QuotaPolicyRequest request, QuotaPolicy policy) {
-        policy.setName(request.name());
-        policy.setDailyRequestLimit(request.dailyRequestLimit());
-        policy.setDailyTokenLimit(request.dailyTokenLimit());
-        policy.setDailyCostLimitUsd(request.dailyCostLimitUsd());
-        policy.setRateLimitPerMinute(request.rateLimitPerMinute());
-    }
+    QuotaPolicyResponse toQuotaPolicyResponse(QuotaPolicy policy);
+
+    /** Full replace: an omitted {@code rateLimitPerMinute} goes back to the system default. */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    void updateQuotaPolicy(@MappingTarget QuotaPolicy policy, QuotaPolicyRequest request);
 }

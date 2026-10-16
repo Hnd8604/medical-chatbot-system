@@ -8,7 +8,7 @@ import com.medicalchatbot.backend.enums.UserRole;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-/** Principal of a request authenticated by {@link JwtAuthenticationFilter}. */
+/** Principal of a request authenticated with an access token (see {@link UserJwtAuthenticationConverter}). */
 public record AuthenticatedUser(UUID id, String username, UserRole role) implements Principal {
 
     @Override

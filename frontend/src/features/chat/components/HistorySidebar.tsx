@@ -191,7 +191,7 @@ export function HistorySidebar(props: HistorySidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const displayName = user.display_name || user.username;
+  const displayName = user.displayName || user.username;
   const shortName = initials(displayName) || "U";
 
   if (collapsed) {

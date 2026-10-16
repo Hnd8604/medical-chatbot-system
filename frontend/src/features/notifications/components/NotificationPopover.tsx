@@ -56,10 +56,10 @@ export function NotificationPopover({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <strong className="text-sm text-foreground">{item.title}</strong>
-                    {!item.is_read ? <span className="mt-1 h-2 w-2 rounded-full bg-accent" /> : null}
+                    {!item.isRead ? <span className="mt-1 h-2 w-2 rounded-full bg-accent" /> : null}
                   </div>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.content}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(item.created_at)}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</p>
                 </button>
               ))
             )}

@@ -14,9 +14,8 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
-  jackson:
-    # Mọi JSON của REST API (request lẫn response) dùng snake_case.
-    property-naming-strategy: SNAKE_CASE
+  # JSON của REST API dùng camelCase (mặc định của Jackson). DTO gửi/nhận với chatbot-service
+  # (Python) tự khai báo snake_case bằng @JsonNaming.
   data:
     redis:
       timeout: 2s
@@ -42,6 +41,9 @@ spring:
 
 server:
   port: ${SERVER_PORT:8081}
+  servlet:
+    # Mọi endpoint (kể cả actuator, Swagger) nằm dưới /api/v1; controller chỉ khai báo phần sau đó.
+    context-path: /api/v1
   shutdown: graceful
   error:
     include-message: never
@@ -52,17 +54,35 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # health: công khai (liveness/readiness cho Docker/K8s); prometheus, info: chỉ ADMIN (SecurityConfig).
+        include: health,info,prometheus
   health:
     mail:
       enabled: false
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        # Sẵn sàng nhận request khi cả PostgreSQL và Redis đều dùng được.
+        readiness:
+          include: readinessState,db,redis
+  observations:
+    key-values:
+      application: ${spring.application.name}
+
+logging:
+  pattern:
+    # Mỗi dòng log mang request id (RequestIdFilter) để lần theo một request.
+    correlation: "[%X{requestId:-}] "
 
 app:
   # Ngày của quota (request/token/cost), báo cáo chi phí và xuất lịch sử tính theo timezone này.
-  timezone: ${APP_TIMEZONE:${APP_QUOTA_TIMEZONE:Asia/Ho_Chi_Minh}}
+  timezone: ${APP_TIMEZONE:Asia/Ho_Chi_Minh}
+  rate-limit:
+    # Login, đăng ký, quên/đặt lại mật khẩu: số request mỗi phút trên mỗi endpoint, theo IP client.
+    auth-requests-per-minute: ${APP_AUTH_RATE_LIMIT_PER_MINUTE:10}
 
 chatbot:
   service:
@@ -91,7 +111,7 @@ backup:
   script-path: ${BACKUP_SCRIPT_PATH:../infra/scripts/backup.sh}
   restore-script-path: ${BACKUP_RESTORE_SCRIPT_PATH:../infra/scripts/restore-auto.sh}
   bash-path: ${BACKUP_BASH_PATH:bash}
-  timeout: ${BACKUP_TIMEOUT:${BACKUP_TIMEOUT_MINUTES:10}m}
+  timeout: ${BACKUP_TIMEOUT:10m}
 
 springdoc:
   api-docs:

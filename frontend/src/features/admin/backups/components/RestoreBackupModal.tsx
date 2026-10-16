@@ -40,7 +40,7 @@ export function RestoreBackupModal({ backup, submitting, onConfirm, onClose }: R
               <p className="font-semibold">Không thể hoàn tác.</p>
               <p className="mt-1 text-muted-foreground">
                 App DB và HAPI DB sẽ bị ghi đè bằng bản sao lưu lúc{" "}
-                <span className="font-medium text-foreground">{formatDateTime(backup.started_at)}</span>. HAPI sẽ được khởi động
+                <span className="font-medium text-foreground">{formatDateTime(backup.startedAt)}</span>. HAPI sẽ được khởi động
                 lại trong quá trình này.
               </p>
             </div>

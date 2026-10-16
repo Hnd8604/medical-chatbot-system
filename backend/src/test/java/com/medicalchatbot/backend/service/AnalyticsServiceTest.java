@@ -11,11 +11,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.medicalchatbot.backend.dto.response.CacheMetricsResponse;
-import com.medicalchatbot.backend.dto.response.ErrorAnalyticsResponse;
-import com.medicalchatbot.backend.dto.response.IntentAnalyticsResponse;
-import com.medicalchatbot.backend.dto.response.PerformanceAnalyticsResponse;
-import com.medicalchatbot.backend.dto.response.RequestCountResponse;
+import com.medicalchatbot.backend.dto.response.analytics.CacheMetricsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.ErrorAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.IntentAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.PerformanceAnalyticsResponse;
+import com.medicalchatbot.backend.dto.response.analytics.RequestCountResponse;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.AnalyticsRepository;
@@ -99,7 +99,7 @@ class AnalyticsServiceTest {
     void rejectsInvertedRangeBeforeQuerying() {
         AppException exception = assertThrows(AppException.class, () -> service.intents(TO, FROM, 10));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.DATE_RANGE_INVALID, exception.getErrorCode());
         verifyNoInteractions(analyticsRepository);
     }
 
@@ -108,7 +108,7 @@ class AnalyticsServiceTest {
         AppException exception = assertThrows(AppException.class,
                 () -> service.requestCount(FROM, FROM.plusDays(90)));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.DATE_RANGE_TOO_LONG, exception.getErrorCode());
         verifyNoInteractions(analyticsRepository);
     }
 

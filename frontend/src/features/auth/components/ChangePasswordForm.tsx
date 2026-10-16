@@ -22,9 +22,9 @@ export function ChangePasswordForm() {
   const changePassword = useMutation({
     mutationFn: () =>
       authApi.changePassword({
-        current_password: currentPassword,
-        new_password: newPassword,
-        password_confirmation: passwordConfirmation,
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        passwordConfirmation: passwordConfirmation,
       }),
     // The backend revoked every session, so the user signs in again with the new password.
     onSuccess: async () => {

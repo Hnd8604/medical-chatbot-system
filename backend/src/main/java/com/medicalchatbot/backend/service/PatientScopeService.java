@@ -7,10 +7,13 @@ import com.medicalchatbot.backend.entity.ChatMemory;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.util.PatientIds;
 import com.medicalchatbot.backend.util.TextUtils;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,9 +22,10 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PatientScopeService {
 
-    private final UserPatientLinkRepository userPatientLinkRepository;
+    UserPatientLinkRepository userPatientLinkRepository;
 
     /**
      * @param requestedPatientId patient explicitly selected for this turn, may be null
@@ -37,10 +41,10 @@ public class PatientScopeService {
 
         List<String> allowedPatientIds = linkedPatientIds(user);
         if (allowedPatientIds.isEmpty()) {
-            throw AppException.forbidden("Tài khoản USER chưa được liên kết với hồ sơ FHIR nào.");
+            throw new AppException(ErrorCode.PATIENT_LINK_REQUIRED);
         }
         if (requested != null && !allowedPatientIds.contains(requested)) {
-            throw AppException.forbidden("Tài khoản USER chỉ được truy cập hồ sơ FHIR đã liên kết với chính mình.");
+            throw new AppException(ErrorCode.PATIENT_ACCESS_DENIED);
         }
         String effectivePatientId = TextUtils.firstNonBlank(
                 requested,

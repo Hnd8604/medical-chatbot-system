@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medicalchatbot.backend.dto.response.AdminUserResponse;
 import com.medicalchatbot.backend.dto.response.PageResponse;
+import com.medicalchatbot.backend.dto.response.admin.AdminUserResponse;
 import com.medicalchatbot.backend.entity.AuditLog;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.entity.UserPatientLink;
@@ -29,9 +29,11 @@ import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.support.TestUsers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -49,9 +51,6 @@ class AdminUserServiceTest {
     private UserPatientLinkRepository userPatientLinkRepository;
 
     @Mock
-    private CurrentUserService currentUserService;
-
-    @Mock
     private AuditLogRepository auditLogRepository;
 
     private AdminUserService service;
@@ -63,42 +62,46 @@ class AdminUserServiceTest {
         service = new AdminUserService(
                 userRepository,
                 userPatientLinkRepository,
-                currentUserService,
-                new AuditService(auditLogRepository, new AuditLogMapper(), objectMapper),
-                new UserMapper()
+                new AuditService(auditLogRepository, Mappers.getMapper(AuditLogMapper.class), objectMapper),
+                Mappers.getMapper(UserMapper.class)
         );
         admin = TestUsers.user(UserRole.ADMIN);
     }
 
+    @AfterEach
+    void signOut() {
+        TestUsers.signOut();
+    }
+
     @Test
     void adminCannotLockSelf() {
-        when(currentUserService.requireCurrentUser()).thenReturn(admin);
+        TestUsers.signIn(admin, userRepository);
         when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.updateStatus(admin.getId(), UserStatus.LOCKED));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.CANNOT_DEACTIVATE_SELF, exception.getErrorCode());
         assertEquals(UserStatus.ACTIVE, admin.getStatus());
         verify(auditLogRepository, never()).save(any());
     }
 
     @Test
     void adminCannotDemoteSelf() {
-        when(currentUserService.requireCurrentUser()).thenReturn(admin);
+        TestUsers.signIn(admin, userRepository);
         when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
 
         AppException exception = assertThrows(AppException.class,
                 () -> service.updateRole(admin.getId(), UserRole.DOCTOR));
 
-        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
+        assertEquals(ErrorCode.CANNOT_DEMOTE_SELF, exception.getErrorCode());
         assertEquals(UserRole.ADMIN, admin.getRole());
     }
 
     @Test
     void adminCanUpdateAnotherUsersRoleAndStatusWithAudit() {
         User target = TestUsers.user(UserRole.DOCTOR);
-        when(currentUserService.requireCurrentUser()).thenReturn(admin);
+        TestUsers.signIn(admin, userRepository);
         when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
 
         AdminUserResponse roleResponse = service.updateRole(target.getId(), UserRole.USER);

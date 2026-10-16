@@ -1,61 +1,98 @@
 package com.medicalchatbot.backend.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.medicalchatbot.backend.constant.ResponseMessage;
+import com.medicalchatbot.backend.dto.request.patient.PatientSearchRequest;
+import com.medicalchatbot.backend.dto.response.ApiResponse;
 import com.medicalchatbot.backend.enums.PatientResource;
-import com.medicalchatbot.backend.dto.request.PatientSearchRequest;
 import com.medicalchatbot.backend.service.PatientService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
+import lombok.experimental.FieldDefaults;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** FHIR patient data for staff (DOCTOR/ADMIN). Payloads are passed through from chatbot-service. */
-@Validated
+/** FHIR payloads are passed through from chatbot-service unchanged. */
 @RestController
+@RequestMapping("/patients")
 @RequiredArgsConstructor
-@RequestMapping("/api/patients")
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Tag(name = "Patients", description = "FHIR patient records for medical staff (DOCTOR, ADMIN)")
 public class PatientController {
 
-    private final PatientService patientService;
+    PatientService patientService;
 
     @GetMapping
-    public JsonNode search(
+    @Operation(summary = "Search patients", description = "Blank criteria are ignored.")
+    public ApiResponse<JsonNode> search(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String phone,
-            @RequestParam(name = "birth_date", required = false) String birthDate,
+            @RequestParam(required = false) String birthDate,
             @RequestParam(required = false) String identifier,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit
     ) {
-        return patientService.searchPatients(new PatientSearchRequest(name, phone, birthDate, identifier, limit));
+        return ApiResponse.<JsonNode>builder()
+                .result(patientService.searchPatients(new PatientSearchRequest(name, phone, birthDate, identifier, limit)))
+                .message(ResponseMessage.SEARCH_PATIENTS_SUCCESS)
+                .build();
     }
 
     @GetMapping("/{patientId}")
-    public JsonNode patient(@PathVariable String patientId) {
-        return patientService.getPatient(patientId);
+    @Operation(summary = "Get a patient")
+    public ApiResponse<JsonNode> patient(@PathVariable String patientId) {
+        return ApiResponse.<JsonNode>builder()
+                .result(patientService.getPatient(patientId))
+                .message(ResponseMessage.GET_PATIENT_SUCCESS)
+                .build();
     }
 
     @GetMapping("/{patientId}/observations")
-    public JsonNode observations(@PathVariable String patientId, @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit) {
-        return patientService.getResources(patientId, PatientResource.OBSERVATIONS, limit);
+    @Operation(summary = "Get a patient's observations", description = "Most recent first.")
+    public ApiResponse<JsonNode> observations(
+            @PathVariable String patientId,
+            @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit
+    ) {
+        return resources(patientId, PatientResource.OBSERVATIONS, limit, ResponseMessage.GET_OBSERVATIONS_SUCCESS);
     }
 
     @GetMapping("/{patientId}/conditions")
-    public JsonNode conditions(@PathVariable String patientId, @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit) {
-        return patientService.getResources(patientId, PatientResource.CONDITIONS, limit);
+    @Operation(summary = "Get a patient's conditions")
+    public ApiResponse<JsonNode> conditions(
+            @PathVariable String patientId,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit
+    ) {
+        return resources(patientId, PatientResource.CONDITIONS, limit, ResponseMessage.GET_CONDITIONS_SUCCESS);
     }
 
     @GetMapping("/{patientId}/encounters")
-    public JsonNode encounters(@PathVariable String patientId, @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit) {
-        return patientService.getResources(patientId, PatientResource.ENCOUNTERS, limit);
+    @Operation(summary = "Get a patient's encounters", description = "Most recent first.")
+    public ApiResponse<JsonNode> encounters(
+            @PathVariable String patientId,
+            @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit
+    ) {
+        return resources(patientId, PatientResource.ENCOUNTERS, limit, ResponseMessage.GET_ENCOUNTERS_SUCCESS);
     }
 
     @GetMapping("/{patientId}/medications")
-    public JsonNode medications(@PathVariable String patientId, @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit) {
-        return patientService.getResources(patientId, PatientResource.MEDICATIONS, limit);
+    @Operation(summary = "Get a patient's medications")
+    public ApiResponse<JsonNode> medications(
+            @PathVariable String patientId,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit
+    ) {
+        return resources(patientId, PatientResource.MEDICATIONS, limit, ResponseMessage.GET_MEDICATIONS_SUCCESS);
+    }
+
+    private ApiResponse<JsonNode> resources(String patientId, PatientResource resource, int limit, String message) {
+        return ApiResponse.<JsonNode>builder()
+                .result(patientService.getResources(patientId, resource, limit))
+                .message(message)
+                .build();
     }
 }

@@ -5,15 +5,17 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.config.properties.AppProperties;
-import com.medicalchatbot.backend.dto.response.NotificationListResponse;
-import com.medicalchatbot.backend.dto.response.NotificationResponse;
+import com.medicalchatbot.backend.dto.response.notification.NotificationListResponse;
 import com.medicalchatbot.backend.entity.Notification;
 import com.medicalchatbot.backend.enums.NotificationType;
 import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.mapper.NotificationMapper;
 import com.medicalchatbot.backend.repository.NotificationRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,13 +24,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class NotificationService {
 
-    private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
-    private final NotificationStreamService notificationStreamService;
-    private final NotificationMapper notificationMapper;
-    private final AppProperties appProperties;
+    NotificationRepository notificationRepository;
+    UserRepository userRepository;
+    NotificationStreamService notificationStreamService;
+    NotificationMapper notificationMapper;
+    AppProperties appProperties;
 
     @Transactional
     public void notify(UUID userId, NotificationType type, String title, String content) {
@@ -39,7 +42,7 @@ public class NotificationService {
                 .content(content)
                 .build());
         log.info("Created {} notification for user {}", type, userId);
-        notificationStreamService.publish(userId, notificationMapper.toResponse(saved));
+        notificationStreamService.publish(userId, notificationMapper.toNotificationResponse(saved));
     }
 
     @Transactional(readOnly = true)
@@ -47,7 +50,7 @@ public class NotificationService {
         return new NotificationListResponse(
                 notificationRepository.countByUserIdAndReadFalse(userId),
                 notificationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                        .map(notificationMapper::toResponse)
+                        .map(notificationMapper::toNotificationResponse)
                         .toList()
         );
     }
@@ -56,7 +59,7 @@ public class NotificationService {
     public void markAsRead(UUID userId, UUID notificationId) {
         // Another user's notification is reported as missing rather than forbidden.
         Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId)
-                .orElseThrow(() -> AppException.notFound("Không tìm thấy thông báo."));
+                .orElseThrow(() -> new AppException(ErrorCode.NOTIFICATION_NOT_EXISTED));
         notification.setRead(true);
     }
 

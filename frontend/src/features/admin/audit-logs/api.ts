@@ -3,7 +3,7 @@ import type { PageResponse } from "@/shared/api/types";
 import { endOfDayIso, startOfDayIso } from "@/shared/lib/dates";
 import type { AuditLog, AuditLogFilter, AuditLogFilterOptions } from "./types";
 
-const BASE = "/api/admin/audit-logs";
+const BASE = "/admin/audit-logs";
 
 export const auditLogKeys = {
   all: ["admin", "audit-logs"] as const,

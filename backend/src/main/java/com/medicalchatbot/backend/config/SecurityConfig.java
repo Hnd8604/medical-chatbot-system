@@ -1,35 +1,48 @@
 package com.medicalchatbot.backend.config;
 
 import com.medicalchatbot.backend.exception.ErrorCode;
-import com.medicalchatbot.backend.security.JwtAuthenticationFilter;
+import com.medicalchatbot.backend.repository.UserRepository;
+import com.medicalchatbot.backend.security.JwtAuthenticationEntryPoint;
+import com.medicalchatbot.backend.security.NotificationStreamBearerTokenResolver;
 import com.medicalchatbot.backend.security.SecurityErrorWriter;
+import com.medicalchatbot.backend.security.UserJwtAuthenticationConverter;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Stateless JWT security. Every endpoint must be listed explicitly: anything else is denied, so a
- * newly added controller cannot become reachable by omission.
+ * Stateless OAuth2 resource server: requests carry a JWT access token issued by this backend.
+ * Paths are relative to the servlet context path ({@code /api/v1}).
+ *
+ * <p>Two layers of authorization: the URL rules below, where every endpoint must be listed
+ * explicitly (anything else is denied, so a new controller cannot become reachable by omission),
+ * and {@code @PreAuthorize} on the services.</p>
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/error",
             "/actuator/health",
             "/actuator/health/**",
-            "/api/health",
-            "/api/chatbot/status",
+            "/chatbot/status",
             "/swagger-ui.html",
             "/swagger-ui/**",
             "/api-docs",
@@ -39,57 +52,64 @@ public class SecurityConfig {
     };
 
     private static final String[] PUBLIC_AUTH_ACTIONS = {
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/refresh",
-            "/api/auth/forgot-password",
-            "/api/auth/verify-reset-code",
-            "/api/auth/reset-password"
+            "/auth/login",
+            "/auth/register",
+            "/auth/refresh",
+            "/auth/password/reset/init",
+            "/auth/password/reset/verify-otp",
+            "/auth/password/reset/confirm"
     };
 
     private static final String[] STAFF_ENDPOINTS = {
-            "/api/patients",
-            "/api/patients/**"
+            "/patients",
+            "/patients/**"
     };
 
     private static final String[] USER_ENDPOINTS = {
-            "/api/auth/me",
-            "/api/auth/logout",
-            "/api/auth/change-password",
-            "/api/auth/link-patient",
-            "/api/me/**",
-            "/api/chat",
-            "/api/chat/**",
-            "/api/usage/**",
-            "/api/notifications",
-            "/api/notifications/**"
+            "/auth/logout",
+            "/auth/password/change",
+            "/users/my-info",
+            "/users/my-patient-link",
+            "/users/my-patient-profile",
+            "/chat",
+            "/chat/**",
+            "/usage/**",
+            "/notifications",
+            "/notifications/**"
     };
 
+    JwtDecoder jwtDecoder;
+    UserRepository userRepository;
+    JwtAuthenticationEntryPoint authenticationEntryPoint;
+    SecurityErrorWriter securityErrorWriter;
+
     @Bean
-    public SecurityFilterChain filterChain(
-            HttpSecurity http,
-            JwtAuthenticationFilter jwtAuthenticationFilter,
-            SecurityErrorWriter securityErrorWriter
-    ) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint((request, response, exception) ->
-                                securityErrorWriter.write(response, ErrorCode.AUTHENTICATION_REQUIRED, null))
+                        .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler((request, response, exception) ->
-                                securityErrorWriter.write(response, ErrorCode.ACCESS_DENIED, null))
+                                securityErrorWriter.write(response, ErrorCode.UNAUTHORIZED))
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_ACTIONS).permitAll()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers(STAFF_ENDPOINTS).hasAnyRole("DOCTOR", "ADMIN")
                         .requestMatchers(USER_ENDPOINTS).authenticated()
                         .anyRequest().denyAll()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(new NotificationStreamBearerTokenResolver())
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .jwt(jwt -> jwt
+                                .decoder(jwtDecoder)
+                                .jwtAuthenticationConverter(new UserJwtAuthenticationConverter(userRepository)))
+                );
         return http.build();
     }
 

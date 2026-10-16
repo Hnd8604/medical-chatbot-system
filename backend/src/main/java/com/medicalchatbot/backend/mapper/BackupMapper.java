@@ -1,41 +1,18 @@
 package com.medicalchatbot.backend.mapper;
 
-import com.medicalchatbot.backend.dto.response.BackupResponse;
-import com.medicalchatbot.backend.dto.response.RestoreResponse;
+import com.medicalchatbot.backend.dto.response.admin.BackupResponse;
+import com.medicalchatbot.backend.dto.response.admin.RestoreResponse;
 import com.medicalchatbot.backend.entity.BackupHistory;
 import com.medicalchatbot.backend.entity.RestoreHistory;
-import org.springframework.stereotype.Component;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-@Component
-public class BackupMapper {
+@Mapper
+public interface BackupMapper {
 
-    public BackupResponse toResponse(BackupHistory backup) {
-        return new BackupResponse(
-                backup.getId(),
-                backup.getTriggerType(),
-                backup.getStatus(),
-                backup.getTriggeredBy(),
-                backup.getStartedAt(),
-                backup.getFinishedAt(),
-                backup.getTotalSizeBytes(),
-                backup.getUploadTarget(),
-                backup.getItemsJson(),
-                backup.getErrorMessage(),
-                backup.getCreatedAt()
-        );
-    }
+    @Mapping(target = "items", source = "itemsJson")
+    BackupResponse toBackupResponse(BackupHistory backup);
 
-    public RestoreResponse toResponse(RestoreHistory restore) {
-        return new RestoreResponse(
-                restore.getId(),
-                restore.getBackupId(),
-                restore.getStatus(),
-                restore.getTriggeredBy(),
-                restore.getStartedAt(),
-                restore.getFinishedAt(),
-                restore.getItemsJson(),
-                restore.getErrorMessage(),
-                restore.getCreatedAt()
-        );
-    }
+    @Mapping(target = "items", source = "itemsJson")
+    RestoreResponse toRestoreResponse(RestoreHistory restore);
 }

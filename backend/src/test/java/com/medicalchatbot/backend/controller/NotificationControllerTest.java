@@ -1,8 +1,5 @@
 package com.medicalchatbot.backend.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -12,13 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.entity.Notification;
-import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.dto.response.NotificationListResponse;
+import com.medicalchatbot.backend.dto.response.NotificationResponse;
 import com.medicalchatbot.backend.enums.NotificationType;
-import com.medicalchatbot.backend.config.JwtAuthenticationFilter;
+import com.medicalchatbot.backend.security.JwtAuthenticationFilter;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import com.medicalchatbot.backend.service.NotificationService;
 import com.medicalchatbot.backend.service.NotificationStreamService;
@@ -58,7 +54,6 @@ class NotificationControllerTest {
     private StringRedisTemplate stringRedisTemplate;
 
     private UUID userId;
-    private String username;
 
     @BeforeEach
     void setUp() {
@@ -67,46 +62,34 @@ class NotificationControllerTest {
     }
 
     @Test
-    void getNotificationsReturnsList() throws Exception {
-        User user = new User(userId);
-        Notification notification = new Notification(user, NotificationType.QUOTA_WARNING, "Cảnh báo Quota", "Bạn đã dùng 85% hạn mức.");
-
-        java.lang.reflect.Field idField = Notification.class.getDeclaredField("id");
-        idField.setAccessible(true);
-        idField.set(notification, UUID.randomUUID());
-
-        java.lang.reflect.Field createdAtField = Notification.class.getDeclaredField("createdAt");
-        createdAtField.setAccessible(true);
-        createdAtField.set(notification, OffsetDateTime.now());
-
-        when(notificationService.getUnreadCount(userId)).thenReturn(1L);
-        when(notificationService.getNotificationsForUser(userId)).thenReturn(List.of(notification));
+    void listReturnsUnreadCountAndSnakeCaseFields() throws Exception {
+        NotificationResponse notification = new NotificationResponse(UUID.randomUUID(), NotificationType.QUOTA_WARNING,
+                "Cảnh báo hạn mức", "Bạn đã dùng 85% hạn mức.", false, OffsetDateTime.now());
+        when(notificationService.list(userId)).thenReturn(new NotificationListResponse(1, List.of(notification)));
 
         mockMvc.perform(get("/api/notifications"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(1000))
                 .andExpect(jsonPath("$.result.unread_count").value(1))
-                .andExpect(jsonPath("$.result.notifications[0].title").value("Cảnh báo Quota"))
-                .andExpect(jsonPath("$.result.notifications[0].type").value("QUOTA_WARNING"));
+                .andExpect(jsonPath("$.result.notifications[0].title").value("Cảnh báo hạn mức"))
+                .andExpect(jsonPath("$.result.notifications[0].type").value("QUOTA_WARNING"))
+                .andExpect(jsonPath("$.result.notifications[0].is_read").value(false));
     }
 
     @Test
-    void markAsReadSucceeds() throws Exception {
-        UUID notifId = UUID.randomUUID();
-        doNothing().when(notificationService).markAsRead(userId, notifId);
+    void markAsReadScopesTheUpdateToTheCurrentUser() throws Exception {
+        UUID notificationId = UUID.randomUUID();
 
-        mockMvc.perform(post("/api/notifications/" + notifId + "/read"))
-                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/notifications/{id}/read", notificationId))
+                .andExpect(status().isNoContent());
 
-        verify(notificationService).markAsRead(userId, notifId);
+        verify(notificationService).markAsRead(userId, notificationId);
     }
 
     @Test
-    void markAllAsReadSucceeds() throws Exception {
-        doNothing().when(notificationService).markAllAsRead(userId);
-
+    void markAllAsReadScopesTheUpdateToTheCurrentUser() throws Exception {
         mockMvc.perform(post("/api/notifications/read-all"))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
 
         verify(notificationService).markAllAsRead(userId);
     }

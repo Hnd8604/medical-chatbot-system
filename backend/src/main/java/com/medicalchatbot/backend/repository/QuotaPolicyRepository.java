@@ -4,15 +4,19 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.entity.QuotaPolicy;
-import com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection;
+import com.medicalchatbot.backend.repository.projection.QuotaLimitsProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface QuotaPolicyRepository extends JpaRepository<QuotaPolicy, UUID> {
 
+    Optional<QuotaPolicy> findByName(String name);
+
+    boolean existsByName(String name);
+
     @Query("""
-            select new com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection(
+            select new com.medicalchatbot.backend.repository.projection.QuotaLimitsProjection(
                 q.name,
                 q.dailyRequestLimit,
                 q.dailyTokenLimit,
@@ -22,18 +26,13 @@ public interface QuotaPolicyRepository extends JpaRepository<QuotaPolicy, UUID> 
             join u.quotaPolicy q
             where u.id = :userId
             """)
-    Optional<QuotaPolicyProjection> findByUserId(@Param("userId") UUID userId);
-
+    Optional<QuotaLimitsProjection> findLimitsByUserId(@Param("userId") UUID userId);
 
     @Query("""
-    SELECT q.rateLimitPerMinute
-    FROM User u
-    JOIN u.quotaPolicy q
-    WHERE u.username = :username
-""")
-    Integer findRateLimitByUsername(String username);
-
-    Optional<QuotaPolicy> findByName(String name);
-
-    boolean existsByName(String name);
+            select q.rateLimitPerMinute
+            from User u
+            join u.quotaPolicy q
+            where u.id = :userId
+            """)
+    Optional<Integer> findRateLimitPerMinuteByUserId(@Param("userId") UUID userId);
 }

@@ -12,42 +12,51 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * Lightweight architecture checks without adding another test dependency.
- * These rules protect the dependency direction of the layered application.
+ * Lightweight architecture checks without another test dependency. They protect the dependency
+ * direction of the layers: controller → service → repository/client, with DTOs at the edge.
  */
 class LayerDependencyTest {
 
+    private static final String BASE = "com.medicalchatbot.backend.";
     private static final Path SOURCE_ROOT = locateSourceRoot();
 
     @Test
     void persistenceLayerDoesNotDependOnApiDtos() throws IOException {
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("entity"), "com.medicalchatbot.backend.dto.");
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("repository"), "com.medicalchatbot.backend.dto.");
+        assertSourcesDoNotContain("entity", BASE + "dto.");
+        assertSourcesDoNotContain("repository", BASE + "dto.");
     }
 
     @Test
-    void controllersDoNotCallIntegrationAdaptersDirectly() throws IOException {
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("controller"), "com.medicalchatbot.backend.integration.");
+    void dtosDoNotExposeEntities() throws IOException {
+        assertSourcesDoNotContain("dto", BASE + "entity.");
     }
 
     @Test
-    void outboundAdaptersDoNotDependOnApplicationServices() throws IOException {
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("integration"), "com.medicalchatbot.backend.service.");
+    void controllersOnlyTalkToServices() throws IOException {
+        assertSourcesDoNotContain("controller", BASE + "client.");
+        assertSourcesDoNotContain("controller", BASE + "repository.");
+        assertSourcesDoNotContain("controller", BASE + "entity.");
+    }
+
+    @Test
+    void outboundClientsDoNotDependOnApplicationServices() throws IOException {
+        assertSourcesDoNotContain("client", BASE + "service.");
+        assertSourcesDoNotContain("client", BASE + "repository.");
     }
 
     @Test
     void applicationServicesDoNotOwnSqlQueries() throws IOException {
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("service"), "JdbcTemplate");
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("service"), "NamedParameterJdbcTemplate");
+        assertSourcesDoNotContain("service", "JdbcTemplate");
     }
 
     @Test
     void applicationServicesDoNotThrowWebTransportExceptions() throws IOException {
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("service"), "ResponseStatusException");
-        assertSourcesDoNotContain(SOURCE_ROOT.resolve("service"), "org.springframework.http.HttpStatus");
+        assertSourcesDoNotContain("service", "ResponseStatusException");
+        assertSourcesDoNotContain("service", "org.springframework.http.HttpStatus");
     }
 
-    private static void assertSourcesDoNotContain(Path directory, String forbiddenText) throws IOException {
+    private static void assertSourcesDoNotContain(String layer, String forbiddenText) throws IOException {
+        Path directory = SOURCE_ROOT.resolve(layer);
         List<String> violations = new ArrayList<>();
         try (Stream<Path> sources = Files.walk(directory)) {
             for (Path source : sources.filter(path -> path.toString().endsWith(".java")).toList()) {

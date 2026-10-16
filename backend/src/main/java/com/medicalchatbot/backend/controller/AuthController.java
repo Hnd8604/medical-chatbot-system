@@ -1,34 +1,31 @@
 package com.medicalchatbot.backend.controller;
 
-import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
-import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
-import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
-import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
 import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
 import com.medicalchatbot.backend.dto.request.ForgotPasswordRequest;
+import com.medicalchatbot.backend.dto.request.LinkPatientRequest;
+import com.medicalchatbot.backend.dto.request.LoginRequest;
+import com.medicalchatbot.backend.dto.request.RefreshTokenRequest;
+import com.medicalchatbot.backend.dto.request.RegisterRequest;
 import com.medicalchatbot.backend.dto.request.ResetPasswordRequest;
 import com.medicalchatbot.backend.dto.request.UpdateProfileRequest;
 import com.medicalchatbot.backend.dto.request.VerifyResetCodeRequest;
-import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
-import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
-import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
-import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
 import com.medicalchatbot.backend.dto.response.AuthUserResponse;
-import com.medicalchatbot.backend.dto.response.ChangePasswordResponse;
-import com.medicalchatbot.backend.dto.response.ForgotPasswordResponse;
-import com.medicalchatbot.backend.dto.response.ResetPasswordResponse;
-import com.medicalchatbot.backend.dto.response.VerifyResetCodeResponse;
+import com.medicalchatbot.backend.dto.response.LoginResponse;
+import com.medicalchatbot.backend.dto.response.MessageResponse;
+import com.medicalchatbot.backend.dto.response.ResetTicketResponse;
+import com.medicalchatbot.backend.dto.response.TokenResponse;
 import com.medicalchatbot.backend.service.AuthService;
 import com.medicalchatbot.backend.service.PasswordResetService;
+import com.medicalchatbot.backend.service.PatientLinkService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -38,20 +35,28 @@ public class AuthController {
 
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
+    private final PatientLinkService patientLinkService;
 
     @PostMapping("/login")
-    public AuthLoginResponse login(@Valid @RequestBody AuthLoginRequest request) {
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
     }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthRegisterResponse> register(@Valid @RequestBody AuthRegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    @ResponseStatus(HttpStatus.CREATED)
+    public AuthUserResponse register(@Valid @RequestBody RegisterRequest request) {
+        return authService.register(request);
     }
 
     @PostMapping("/refresh")
-    public AuthRefreshResponse refresh(@Valid @RequestBody AuthRefreshRequest request) {
+    public TokenResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return authService.refresh(request);
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout() {
+        authService.logout();
     }
 
     @GetMapping("/me")
@@ -64,34 +69,31 @@ public class AuthController {
         return authService.updateProfile(request);
     }
 
-    @PostMapping("/link-patient")
-    public AuthLinkPatientResponse linkPatient(@Valid @RequestBody AuthLinkPatientRequest request) {
-        return authService.linkPatient(request);
-    }
-
-    @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        authService.logout();
-        return ResponseEntity.noContent().build();
-    }
-
+    /** Signs the user out everywhere; the client must log in again. */
     @PostMapping("/change-password")
-    public ChangePasswordResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-        return authService.changePassword(request);
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(request);
+    }
+
+    @PostMapping("/link-patient")
+    public AuthUserResponse linkPatient(@Valid @RequestBody LinkPatientRequest request) {
+        return patientLinkService.linkCurrentUser(request);
     }
 
     @PostMapping("/forgot-password")
-    public ForgotPasswordResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        return passwordResetService.forgotPassword(request);
+    public MessageResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return passwordResetService.sendResetCode(request);
     }
 
     @PostMapping("/verify-reset-code")
-    public VerifyResetCodeResponse verifyResetCode(@Valid @RequestBody VerifyResetCodeRequest request) {
+    public ResetTicketResponse verifyResetCode(@Valid @RequestBody VerifyResetCodeRequest request) {
         return passwordResetService.verifyResetCode(request);
     }
 
     @PostMapping("/reset-password")
-    public ResetPasswordResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        return passwordResetService.resetPassword(request);
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request);
     }
 }

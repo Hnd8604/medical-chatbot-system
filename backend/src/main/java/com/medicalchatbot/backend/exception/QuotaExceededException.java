@@ -1,17 +1,16 @@
 package com.medicalchatbot.backend.exception;
 
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
+import lombok.Getter;
 
-public class QuotaExceededException extends RuntimeException {
+/** The user has used up a daily limit of their quota policy. */
+@Getter
+public class QuotaExceededException extends AppException {
 
     private final QuotaStatusResponse quotaStatus;
 
-    public QuotaExceededException(String message, QuotaStatusResponse quotaStatus) {
-        super(message);
+    public QuotaExceededException(QuotaStatusResponse quotaStatus) {
+        super(ErrorCode.QUOTA_EXCEEDED, quotaStatus.blockedReason());
         this.quotaStatus = quotaStatus;
-    }
-
-    public QuotaStatusResponse quotaStatus() {
-        return quotaStatus;
     }
 }

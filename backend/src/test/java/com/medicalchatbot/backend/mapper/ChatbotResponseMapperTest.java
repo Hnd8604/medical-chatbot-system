@@ -5,14 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.medicalchatbot.backend.dto.request.ChatRequest;
+import com.medicalchatbot.backend.dto.chatbot.ChatbotChatResponse;
 import com.medicalchatbot.backend.dto.response.ChatResponse;
-import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
+import com.medicalchatbot.backend.entity.ChatMemory;
 import org.junit.jupiter.api.Test;
 
 class ChatbotResponseMapperTest {
@@ -20,11 +20,29 @@ class ChatbotResponseMapperTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ChatbotResponseMapper mapper = new ChatbotResponseMapper(objectMapper);
 
+    private ChatbotChatResponse reply(String json) throws Exception {
+        return objectMapper.readValue(json, ChatbotChatResponse.class);
+    }
+
+    @Test
+    void readsTheUpstreamContractIncludingUnknownFields() throws Exception {
+        ChatbotChatResponse reply = reply("""
+                {"answer": "ok", "tool_name": "get_observations", "some_future_field": 1,
+                 "llm_calls": [{"stage": "", "provider": "openai", "model": "m", "input_tokens": -5,
+                                "output_tokens": 3, "cost_usd": 0.000078}]}
+                """);
+
+        assertEquals("get_observations", reply.toolName());
+        assertEquals("unknown", reply.llmCalls().getFirst().stage());
+        assertEquals(0, reply.llmCalls().getFirst().inputTokens());
+        assertEquals(new BigDecimal("0.000078"), reply.llmCalls().getFirst().costUsd());
+    }
+
     @Test
     void mapsUpstreamResponseAndAssistantMetadata() throws Exception {
         UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000101");
         UUID messageId = UUID.fromString("00000000-0000-0000-0000-000000000102");
-        JsonNode upstream = objectMapper.readTree("""
+        ChatbotChatResponse upstream = reply("""
                 {
                   "answer": "Theo dữ liệu FHIR...",
                   "intent": "medications",
@@ -34,24 +52,11 @@ class ChatbotResponseMapperTest {
                   "all_patients": false,
                   "needs_patient_selection": false,
                   "patient_candidates": [],
-                  "evidence": [
-                    {
-                      "resource_type": "MedicationRequest",
-                      "id": "med-1",
-                      "summary": "Amlodipine"
-                    }
-                  ],
+                  "evidence": [{"resource_type": "MedicationRequest", "id": "med-1", "summary": "Amlodipine"}],
                   "memory_update": {},
-                  "external_knowledge": [
-                    {
-                      "source": "MedlinePlus",
-                      "type": "medication",
-                      "system": "rxnorm",
-                      "code": "10582",
-                      "display": "Levothyroxine",
-                      "url": "https://example.test/medicine"
-                    }
-                  ],
+                  "external_knowledge": [{"source": "MedlinePlus", "type": "medication", "system": "rxnorm",
+                                          "code": "10582", "display": "Levothyroxine",
+                                          "url": "https://example.test/medicine"}],
                   "usage": {"input_tokens": 12, "output_tokens": 8}
                 }
                 """);
@@ -71,7 +76,7 @@ class ChatbotResponseMapperTest {
 
     @Test
     void assistantMetadataKeepsTurnOutcomeForHistory() throws Exception {
-        ObjectNode metadata = mapper.assistantMessageMetadata(objectMapper.readTree("""
+        ObjectNode metadata = mapper.assistantMessageMetadata(reply("""
                 {
                   "answer": "Glucose 7,2 mmol/L.",
                   "answer_source": "template_grounding_fallback",
@@ -91,15 +96,9 @@ class ChatbotResponseMapperTest {
 
     @Test
     void keepsPatientAndResourceContextForAllPatientResponse() throws Exception {
-        ChatSessionMemory current = new ChatSessionMemory(
-                "BN2026-00001",
-                "Đã xem huyết áp.",
-                "observations",
-                "get_observations",
-                "Observation",
-                "obs-1"
-        );
-        JsonNode upstream = objectMapper.readTree("""
+        ChatMemory current = new ChatMemory("BN2026-00001", "Đã xem huyết áp.", "observations",
+                "get_observations", "Observation", "obs-1");
+        ChatbotChatResponse upstream = reply("""
                 {
                   "intent": "list_patients",
                   "tool_name": "search_patients",
@@ -116,79 +115,50 @@ class ChatbotResponseMapperTest {
                 }
                 """);
 
-        ChatSessionMemory next = mapper.nextSessionMemory(current, "BN2026-99999", upstream);
+        ChatMemory next = mapper.nextMemory(current, "BN2026-99999", upstream);
 
         assertEquals("BN2026-00001", next.activePatientId());
         assertEquals("Observation", next.lastResourceType());
         assertEquals("obs-1", next.lastResourceId());
         assertEquals("list_patients", next.lastIntent());
-        assertEquals("Đã xem danh sách bệnh nhân.", next.memorySummary());
+        assertEquals("Đã xem danh sách bệnh nhân.", next.summary());
     }
 
     @Test
-    void auditsTurnsWithoutDataByResponseStatusInsteadOfToolName() throws Exception {
-        UUID sessionId = UUID.fromString("00000000-0000-0000-0000-000000000103");
-        ChatRequest request = new ChatRequest(sessionId, null, "?");
+    void movesFocusToTheAnsweredPatientAndItsFirstEvidence() throws Exception {
+        ChatbotChatResponse upstream = reply("""
+                {"intent": "observations", "tool_name": "get_observations", "patient_id": "BN2026-00002",
+                 "evidence": [{"resource_type": "Observation", "id": "obs-9"}]}
+                """);
 
-        // Agent dùng chung tool_name "unsupported_question" cho câu bị từ chối và câu hỏi lại.
-        ChatbotResponseMapper.ChatAudit unsupported = mapper.audit(sessionId, request, "BN2026-00001",
-                objectMapper.readTree("""
-                        {"tool_name": "unsupported_question", "response_status": "answered",
-                         "agent_route": "unsupported"}
-                        """), 5L);
-        ChatbotResponseMapper.ChatAudit clarification = mapper.audit(sessionId, request, "BN2026-00001",
-                objectMapper.readTree("""
-                        {"tool_name": "unsupported_question", "response_status": "clarification_needed",
-                         "agent_route": "fhir"}
-                        """), 5L);
-        ChatbotResponseMapper.ChatAudit toolError = mapper.audit(sessionId, request, "BN2026-00001",
-                objectMapper.readTree("""
-                        {"tool_name": "get_observations", "response_status": "tool_error",
-                         "agent_route": "fhir", "patient_id": "BN2026-00001"}
-                        """), 5L);
-        ChatbotResponseMapper.ChatAudit noData = mapper.audit(sessionId, request, "BN2026-00001",
-                objectMapper.readTree("""
-                        {"tool_name": "get_observations", "response_status": "no_data",
-                         "agent_route": "fhir", "patient_id": "BN2026-00001"}
-                        """), 5L);
+        ChatMemory next = mapper.nextMemory(ChatMemory.EMPTY, "BN2026-00002", upstream);
 
-        assertEquals("ASK_UNSUPPORTED", unsupported.action());
-        assertEquals("CHAT_CLARIFICATION", clarification.action());
-        assertEquals("CHAT_TOOL_ERROR", toolError.action());
-        assertEquals("chat_session", toolError.resourceType());
-        assertEquals(sessionId.toString(), toolError.resourceId());
-        assertEquals("get_observations", toolError.metadata().path("tool_name").asText());
-        // Truy vấn đã chạy nhưng không có bản ghi vẫn là một lần truy cập hồ sơ.
-        assertEquals("VIEW_OBSERVATIONS", noData.action());
-        assertEquals("BN2026-00001", noData.resourceId());
+        assertEquals("BN2026-00002", next.activePatientId());
+        assertEquals("Observation", next.lastResourceType());
+        assertEquals("obs-9", next.lastResourceId());
+        assertEquals("get_observations", next.lastToolName());
     }
 
     @Test
-    void buildsToolErrorAlertMetadataOnlyForToolErrorTurns() throws Exception {
-        ObjectNode metadata = mapper.toolErrorAlertMetadata(objectMapper.readTree("""
+    void buildsToolErrorAlertMetadata() throws Exception {
+        ObjectNode metadata = mapper.toolErrorAlertMetadata(reply("""
                 {"response_status": "tool_error", "trace_id": "trace-9", "tool_name": "multi_tool_plan",
                  "failed_steps": [{"id": "m", "tool": "get_medication_requests", "error_code": "fhir_error"}]}
                 """));
 
         assertEquals("trace-9", metadata.path("trace_id").asText());
         assertEquals("get_medication_requests", metadata.path("failed_steps").get(0).path("tool").asText());
-        assertNull(mapper.toolErrorAlertMetadata(objectMapper.readTree("{\"response_status\": \"partial\"}")));
-        assertNull(mapper.toolErrorAlertMetadata(objectMapper.readTree("{}")));
     }
 
     @Test
-    void preservesOptionalFieldSemanticsWhenFieldsAreAbsent() throws Exception {
-        ChatResponse response = mapper.toResponse(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                objectMapper.readTree("{}")
-        );
+    void absentFieldsStayAbsentInTheResponse() throws Exception {
+        ChatResponse response = mapper.toResponse(UUID.randomUUID(), UUID.randomUUID(), reply("{}"));
 
         assertEquals("", response.answer());
         assertNull(response.allPatients());
         assertNull(response.needsPatientSelection());
-        assertTrue(response.patientSearch().isMissingNode());
-        assertTrue(response.patientCandidates().isMissingNode());
-        assertFalse(response.usage().isObject());
+        assertNull(response.patientSearch());
+        assertNull(response.patientCandidates());
+        assertNull(response.usage());
     }
 }

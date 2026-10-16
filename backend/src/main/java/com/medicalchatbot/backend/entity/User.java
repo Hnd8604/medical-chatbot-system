@@ -5,10 +5,6 @@ import java.util.UUID;
 
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -20,14 +16,22 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "app_users")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class User {
 
     @Id
@@ -46,14 +50,17 @@ public class User {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private UserRole role = UserRole.USER;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private UserStatus status = UserStatus.ACTIVE;
 
+    /** Bumped on logout/password change so every JWT issued before becomes invalid. */
     @Column(name = "token_version", nullable = false)
     private int tokenVersion;
 
@@ -69,16 +76,8 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
-    public User(UUID id) {
-        this.id = id;
-    }
-
-    public void updateRole(UserRole role) {
-        this.role = role;
-    }
-
-    public void updateStatus(UserStatus status) {
-        this.status = status;
+    public boolean isActive() {
+        return status == UserStatus.ACTIVE;
     }
 
     public void incrementTokenVersion() {

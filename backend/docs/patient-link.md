@@ -49,13 +49,13 @@ entity JPA tại [UserPatientLink.java](../src/main/java/com/medicalchatbot/back
 
 ## 2. Vai trò access-control (điểm cốt lõi)
 
-Logic nằm ở [UserPatientScopeService.java](../src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java),
+Logic nằm ở [PatientScopeService.java](../src/main/java/com/medicalchatbot/backend/service/PatientScopeService.java),
 được gọi mỗi khi xử lý `POST /api/chat`.
 
 ```text
 User hỏi chatbot
    ↓
-UserPatientScopeService.resolve(user, requestedPatientId, sessionMemory)
+PatientScopeService.resolve(user, requestedPatientId, sessionMemory)
    ↓
 role == USER ?
    ├── CÓ  → chỉ cho phép các fhir_patient_id đã liên kết.
@@ -66,13 +66,13 @@ role == USER ?
 
 > ⚠️ **Bảng này chỉ thực sự siết quyền với role `USER`.** Với DOCTOR/ADMIN, nhánh
 > đầu hàm `resolve()` trả về scope `"STAFF"` và không tra link
-> ([UserPatientScopeService.resolve](../src/main/java/com/medicalchatbot/backend/service/UserPatientScopeService.java)).
+> ([PatientScopeService.resolve](../src/main/java/com/medicalchatbot/backend/service/PatientScopeService.java)).
 > Do đó link `CAREGIVER` của bác sĩ mang tính **dữ liệu demo / hiển thị** (vd trang
 > admin cho biết bác sĩ phụ trách ai), **không** giới hạn họ.
 
 **`is_primary`** quyết định "hồ sơ mặc định": nếu USER hỏi chung chung mà không chỉ
 rõ bệnh nhân, hệ thống lấy hồ sơ primary (sắp xếp `primaryLink desc` trong
-[`findPatientIdsForUser`](../src/main/java/com/medicalchatbot/backend/repository/UserPatientLinkRepository.java)).
+[`findPatientIdsByUserId`](../src/main/java/com/medicalchatbot/backend/repository/UserPatientLinkRepository.java)).
 
 ---
 
@@ -110,7 +110,8 @@ thấy mỗi tài khoản đang gắn với hồ sơ FHIR nào.
 
 | Method | Dùng để |
 |---|---|
-| `findPatientIdsForUser` | Lấy danh sách hồ sơ user được phép (access-control khi chat) |
-| `findSelfLinksForUser` | Kiểm tra user đã có link SELF chưa (lúc đăng ký) |
+| `findPatientIdsByUserId` | Lấy danh sách hồ sơ user được phép (access-control khi chat) |
+| `existsByUserId` | Kiểm tra user đã liên kết hồ sơ chưa (cờ `onboarding_required`) |
+| `findSelfLinksByUserId` | Kiểm tra user đã có link SELF chưa (lúc liên kết) |
 | `existsSelfLinkForOtherUser` | Chặn liên kết một hồ sơ đã thuộc user khác |
-| `findLinksForUser` / `findLinksForUsers` | Hiển thị ở trang admin |
+| `findByUserIds` | Hiển thị link của nhiều user ở trang admin |

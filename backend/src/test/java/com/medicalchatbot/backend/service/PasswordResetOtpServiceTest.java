@@ -14,9 +14,10 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import com.medicalchatbot.backend.config.PasswordResetProperties;
+import com.medicalchatbot.backend.config.properties.PasswordResetProperties;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -28,117 +29,104 @@ import org.springframework.data.redis.core.ValueOperations;
 @ExtendWith(MockitoExtension.class)
 class PasswordResetOtpServiceTest {
 
+    private static final String EMAIL = "user@demo.local";
+    private static final String OTP_KEY = "password_reset:otp:" + EMAIL;
+
     @Mock
     private StringRedisTemplate redisTemplate;
 
     @Mock
     private ValueOperations<String, String> valueOps;
 
-    private final PasswordResetProperties properties =
-            new PasswordResetProperties(10, 10, 5, 60, "no-reply@demo.local", "Medical Chatbot");
+    private PasswordResetOtpService service;
 
-    private PasswordResetOtpService service() {
-        return new PasswordResetOtpService(redisTemplate, properties);
+    @BeforeEach
+    void setUp() {
+        service = new PasswordResetOtpService(redisTemplate,
+                new PasswordResetProperties(10, 10, 5, 60, "no-reply@demo.local", "Medical Chatbot"));
     }
 
     @Test
     void issueCodeStoresSixDigitHashAndSetsCooldown() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(redisTemplate.hasKey("password_reset:cooldown:user@demo.local")).thenReturn(false);
+        when(redisTemplate.hasKey("password_reset:cooldown:" + EMAIL)).thenReturn(false);
 
-        Optional<String> code = service().issueCode("User@Demo.local");
+        Optional<String> code = service.issueCode("User@Demo.local");
 
-        assertTrue(code.isPresent());
-        assertEquals(6, code.get().length());
-        assertTrue(code.get().matches("\\d{6}"));
-        // OTP lưu dạng "attempts|hash", chưa có lần nhập sai nào.
-        verify(valueOps).set(eq("password_reset:otp:user@demo.local"), startsWith("0|"), eq(Duration.ofMinutes(10)));
-        verify(valueOps).set(eq("password_reset:cooldown:user@demo.local"), eq("1"), eq(Duration.ofSeconds(60)));
+        assertTrue(code.orElseThrow().matches("\\d{6}"));
+        // Stored as "attempts|hash", with no wrong attempt yet.
+        verify(valueOps).set(eq(OTP_KEY), startsWith("0|"), eq(Duration.ofMinutes(10)));
+        verify(valueOps).set(eq("password_reset:cooldown:" + EMAIL), eq("1"), eq(Duration.ofSeconds(60)));
     }
 
     @Test
     void issueCodeReturnsEmptyDuringCooldown() {
-        when(redisTemplate.hasKey("password_reset:cooldown:user@demo.local")).thenReturn(true);
+        when(redisTemplate.hasKey("password_reset:cooldown:" + EMAIL)).thenReturn(true);
 
-        assertTrue(service().issueCode("user@demo.local").isEmpty());
+        assertTrue(service.issueCode(EMAIL).isEmpty());
     }
 
     @Test
     void verifyCodeThenConsumeTicketRoundTrip() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(redisTemplate.hasKey(anyString())).thenReturn(false);
-        PasswordResetOtpService service = service();
-        String email = "user@demo.local";
-        String otpKey = "password_reset:otp:" + email;
 
-        // 1) Phát mã và bắt lại giá trị OTP đã lưu (attempts|hash).
-        String rawCode = service.issueCode(email).orElseThrow();
+        String rawCode = service.issueCode(EMAIL).orElseThrow();
         ArgumentCaptor<String> otpValue = ArgumentCaptor.forClass(String.class);
-        verify(valueOps).set(eq(otpKey), otpValue.capture(), any(Duration.class));
+        verify(valueOps).set(eq(OTP_KEY), otpValue.capture(), any(Duration.class));
 
-        // 2) Xác thực mã đúng => xóa OTP và cấp ticket.
-        when(valueOps.get(otpKey)).thenReturn(otpValue.getValue());
-        String ticket = service.verifyCode(email, rawCode);
-        assertTrue(ticket.contains("."));
-        verify(redisTemplate).delete(otpKey);
+        when(valueOps.get(OTP_KEY)).thenReturn(otpValue.getValue());
+        String ticket = service.verifyCode(EMAIL, rawCode);
+        verify(redisTemplate).delete(OTP_KEY);
 
-        String jti = ticket.substring(0, ticket.indexOf('.'));
-        String ticketKey = "password_reset:ticket:" + jti;
+        String ticketKey = "password_reset:ticket:" + ticket.substring(0, ticket.indexOf('.'));
         ArgumentCaptor<String> ticketValue = ArgumentCaptor.forClass(String.class);
         verify(valueOps).set(eq(ticketKey), ticketValue.capture(), any(Duration.class));
 
-        // 3) Tiêu thụ ticket đúng => trả email và xóa ticket (dùng một lần).
         when(valueOps.get(ticketKey)).thenReturn(ticketValue.getValue());
-        assertEquals(email, service.consumeTicket(ticket));
+        assertEquals(EMAIL, service.consumeTicket(ticket));
         verify(redisTemplate).delete(ticketKey);
     }
 
     @Test
     void verifyCodeRejectsWhenNoOtpStored() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.get("password_reset:otp:user@demo.local")).thenReturn(null);
+        when(valueOps.get(OTP_KEY)).thenReturn(null);
 
-        AppException ex = assertThrows(
-                AppException.class,
-                () -> service().verifyCode("user@demo.local", "123456")
-        );
-        assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
+        AppException exception = assertThrows(AppException.class, () -> service.verifyCode(EMAIL, "123456"));
+
+        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
     }
 
     @Test
-    void verifyCodeWrongCodeIncrementsAttemptsAndKeepsTtl() {
+    void wrongCodeCountsTheAttemptAndKeepsTheOriginalExpiry() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        String otpKey = "password_reset:otp:user@demo.local";
-        when(valueOps.get(otpKey)).thenReturn("0|deadbeef");
-        when(redisTemplate.getExpire(otpKey, TimeUnit.SECONDS)).thenReturn(120L);
+        when(valueOps.get(OTP_KEY)).thenReturn("0|deadbeef");
+        when(redisTemplate.getExpire(OTP_KEY, TimeUnit.SECONDS)).thenReturn(120L);
 
-        assertThrows(AppException.class, () -> service().verifyCode("user@demo.local", "000000"));
+        assertThrows(AppException.class, () -> service.verifyCode(EMAIL, "000000"));
 
-        verify(valueOps).set(eq(otpKey), startsWith("1|"), eq(Duration.ofSeconds(120)));
+        verify(valueOps).set(eq(OTP_KEY), startsWith("1|"), eq(Duration.ofSeconds(120)));
     }
 
     @Test
-    void verifyCodeInvalidatesAfterMaxAttempts() {
+    void codeIsInvalidatedAfterMaxAttempts() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        String otpKey = "password_reset:otp:user@demo.local";
-        // Đã sai 4 lần (max = 5); lần sai này chạm ngưỡng => xóa mã.
-        when(valueOps.get(otpKey)).thenReturn("4|deadbeef");
+        // Four wrong attempts so far (max = 5): this one reaches the limit.
+        when(valueOps.get(OTP_KEY)).thenReturn("4|deadbeef");
 
-        assertThrows(AppException.class, () -> service().verifyCode("user@demo.local", "000000"));
+        assertThrows(AppException.class, () -> service.verifyCode(EMAIL, "000000"));
 
-        verify(redisTemplate).delete(otpKey);
+        verify(redisTemplate).delete(OTP_KEY);
     }
 
     @Test
     void consumeTicketRejectsMalformedOrMissing() {
-        assertThrows(AppException.class, () -> service().consumeTicket("khong-co-dau-cham"));
+        assertThrows(AppException.class, () -> service.consumeTicket("khong-co-dau-cham"));
 
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("password_reset:ticket:abc")).thenReturn(null);
-        AppException ex = assertThrows(
-                AppException.class,
-                () -> service().consumeTicket("abc.secret")
-        );
-        assertEquals(ErrorCode.INVALID_ARGUMENT, ex.getErrorCode());
+        AppException exception = assertThrows(AppException.class, () -> service.consumeTicket("abc.secret"));
+        assertEquals(ErrorCode.INVALID_ARGUMENT, exception.getErrorCode());
     }
 }

@@ -5,7 +5,6 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-/** Stable API projection for an audit entry; JPA relations never cross the HTTP boundary. */
 public record AuditLogResponse(
         UUID id,
         UUID userId,
@@ -13,7 +12,7 @@ public record AuditLogResponse(
         String action,
         String resourceType,
         String resourceId,
-        JsonNode metadataJson,
+        JsonNode metadata,
         OffsetDateTime createdAt
 ) {
 }

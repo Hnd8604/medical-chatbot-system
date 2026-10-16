@@ -2,11 +2,11 @@ package com.medicalchatbot.backend.mapper;
 
 import java.util.List;
 
-import com.medicalchatbot.backend.domain.model.ChatSessionMemoryState;
-import com.medicalchatbot.backend.dto.request.ChatContextMessage;
-import com.medicalchatbot.backend.dto.response.ChatMessageItem;
-import com.medicalchatbot.backend.dto.response.ChatSessionMemory;
-import com.medicalchatbot.backend.dto.response.ChatSessionSummary;
+import com.medicalchatbot.backend.dto.chatbot.ContextMessage;
+import com.medicalchatbot.backend.dto.chatbot.ConversationContext;
+import com.medicalchatbot.backend.dto.response.ChatMessageResponse;
+import com.medicalchatbot.backend.dto.response.ChatSessionResponse;
+import com.medicalchatbot.backend.entity.ChatMemory;
 import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatSessionSummaryProjection;
@@ -15,43 +15,28 @@ import org.springframework.stereotype.Component;
 @Component
 public class ChatMapper {
 
-    public ChatSessionMemory toResponse(ChatSessionMemoryState memory) {
-        if (memory == null) {
-            return ChatSessionMemory.empty();
-        }
-        return new ChatSessionMemory(
+    public ConversationContext toConversationContext(
+            ChatMemory memory,
+            List<ChatContextMessageProjection> recentMessages,
+            int totalMessageCount
+    ) {
+        return new ConversationContext(
+                memory.summary(),
                 memory.activePatientId(),
-                memory.memorySummary(),
                 memory.lastIntent(),
                 memory.lastToolName(),
                 memory.lastResourceType(),
-                memory.lastResourceId()
+                memory.lastResourceId(),
+                recentMessages.stream()
+                        .map(message -> new ContextMessage(message.role(), message.content()))
+                        .toList(),
+                totalMessageCount
         );
     }
 
-    public ChatSessionMemoryState toDomain(ChatSessionMemory memory) {
-        if (memory == null) {
-            return ChatSessionMemoryState.empty();
-        }
-        return new ChatSessionMemoryState(
-                memory.activePatientId(),
-                memory.memorySummary(),
-                memory.lastIntent(),
-                memory.lastToolName(),
-                memory.lastResourceType(),
-                memory.lastResourceId()
-        );
-    }
-
-    public List<ChatContextMessage> toContextMessages(List<ChatContextMessageProjection> messages) {
-        return messages.stream()
-                .map(message -> new ChatContextMessage(message.role(), message.content()))
-                .toList();
-    }
-
-    public List<ChatSessionSummary> toSessionSummaries(List<ChatSessionSummaryProjection> sessions) {
+    public List<ChatSessionResponse> toSessionResponses(List<ChatSessionSummaryProjection> sessions) {
         return sessions.stream()
-                .map(session -> new ChatSessionSummary(
+                .map(session -> new ChatSessionResponse(
                         session.id(),
                         session.title(),
                         session.createdAt(),
@@ -63,30 +48,28 @@ public class ChatMapper {
                 .toList();
     }
 
-    public List<ChatMessageItem> toMessageItems(List<ChatMessageProjection> messages) {
-        return messages.stream()
-                .map(message -> new ChatMessageItem(
-                        message.id(),
-                        message.role(),
-                        message.content(),
-                        message.createdAt(),
-                        message.feedbackRating() == null
-                                ? null
-                                : new ChatMessageItem.Feedback(
-                                        message.feedbackRating(),
-                                        message.feedbackComment()
-                                ),
-                        message.responseStatus(),
-                        message.traceId(),
-                        message.answerSource(),
-                        message.groundingChecked() == null
-                                ? null
-                                : new ChatMessageItem.Grounding(
-                                        message.groundingChecked(),
-                                        message.groundingPassed()
-                                ),
-                        message.llmUnavailableReason()
-                ))
-                .toList();
+    public List<ChatMessageResponse> toMessageResponses(List<ChatMessageProjection> messages) {
+        return messages.stream().map(ChatMapper::toMessageResponse).toList();
+    }
+
+    private static ChatMessageResponse toMessageResponse(ChatMessageProjection message) {
+        ChatMessageResponse.Feedback feedback = message.feedbackRating() == null
+                ? null
+                : new ChatMessageResponse.Feedback(message.feedbackRating(), message.feedbackComment());
+        ChatMessageResponse.Grounding grounding = message.groundingChecked() == null
+                ? null
+                : new ChatMessageResponse.Grounding(message.groundingChecked(), message.groundingPassed());
+        return new ChatMessageResponse(
+                message.id(),
+                message.role(),
+                message.content(),
+                message.createdAt(),
+                feedback,
+                message.responseStatus(),
+                message.traceId(),
+                message.answerSource(),
+                grounding,
+                message.llmUnavailableReason()
+        );
     }
 }

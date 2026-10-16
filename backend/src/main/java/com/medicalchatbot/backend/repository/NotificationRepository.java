@@ -2,6 +2,7 @@ package com.medicalchatbot.backend.repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.entity.Notification;
@@ -13,13 +14,15 @@ import org.springframework.data.repository.query.Param;
 
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
 
-    List<Notification> findByUser_IdOrderByCreatedAtDesc(UUID userId);
+    List<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
-    long countByUser_IdAndIsReadFalse(UUID userId);
+    Optional<Notification> findByIdAndUserId(UUID id, UUID userId);
 
-    boolean existsByUser_IdAndTypeAndCreatedAtGreaterThanEqual(UUID userId, NotificationType type, OffsetDateTime since);
+    long countByUserIdAndReadFalse(UUID userId);
+
+    boolean existsByUserIdAndTypeAndCreatedAtGreaterThanEqual(UUID userId, NotificationType type, OffsetDateTime since);
 
     @Modifying
-    @Query("update Notification n set n.isRead = true where n.user.id = :userId and n.isRead = false")
-    void markAllAsReadForUser(@Param("userId") UUID userId);
+    @Query("update Notification n set n.read = true where n.user.id = :userId and n.read = false")
+    void markAllAsRead(@Param("userId") UUID userId);
 }

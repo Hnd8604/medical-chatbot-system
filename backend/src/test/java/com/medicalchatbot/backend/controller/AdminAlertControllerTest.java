@@ -30,20 +30,17 @@ class AdminAlertControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(
-                new AdminAlertController(alertService, currentUserService)
-        ).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new AdminAlertController(alertService, currentUserService)).build();
     }
 
     @Test
     void resolveUsesAuthenticatedUsernameAndIgnoresSpoofedQueryParameter() throws Exception {
         UUID alertId = UUID.randomUUID();
-        when(currentUserService.getCurrentUsername()).thenReturn("real-admin");
+        when(currentUserService.requireCurrentUsername()).thenReturn("real-admin");
 
-        mockMvc.perform(patch("/api/admin/alerts/{id}/resolve", alertId)
-                        .queryParam("resolvedBy", "spoofed-admin"))
-                .andExpect(status().isOk());
+        mockMvc.perform(patch("/api/admin/alerts/{id}/resolve", alertId).queryParam("resolvedBy", "spoofed-admin"))
+                .andExpect(status().isNoContent());
 
-        verify(alertService).resolveAlert(alertId, "real-admin");
+        verify(alertService).resolve(alertId, "real-admin");
     }
 }

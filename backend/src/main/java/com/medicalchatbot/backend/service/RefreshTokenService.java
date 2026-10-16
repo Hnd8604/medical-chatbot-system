@@ -1,164 +1,101 @@
 package com.medicalchatbot.backend.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.config.JwtProperties;
+import com.medicalchatbot.backend.config.properties.JwtProperties;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.exception.AppException;
-import com.medicalchatbot.backend.exception.ErrorCode;
+import com.medicalchatbot.backend.util.SecureTokens.OpaqueToken;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Quản lý refresh token dạng opaque, lưu trong Redis, có rotation.
+ * Opaque, rotating refresh tokens stored in Redis.
  *
- * <p>Token gửi cho client có dạng {@code {jti}.{secret}}. Redis chỉ lưu hash SHA-256
- * của phần secret nên kể cả lộ Redis cũng không tái tạo được token. Mỗi key tự hết hạn
- * theo TTL = thời hạn refresh nên không cần job dọn dẹp.</p>
- *
- * <p>Mỗi lần {@link #rotate(String)} sẽ xóa jti cũ và cấp jti mới (rotation). Một refresh
- * token cũ bị dùng lại sau khi đã xoay sẽ không còn trong Redis và bị từ chối.</p>
+ * <p>Clients receive {@code {jti}.{secret}}; Redis keeps only the SHA-256 of the secret and every
+ * key expires with the token, so no cleanup job is needed. {@link #rotate} deletes the presented
+ * token, so a replayed token is rejected.</p>
  */
 @Service
 public class RefreshTokenService {
 
     private static final String TOKEN_KEY_PREFIX = "refresh_token:";
     private static final String USER_SET_PREFIX = "refresh_token:user:";
-    private static final int SECRET_BYTES = 32;
+    private static final String SEPARATOR = "|";
 
     private final StringRedisTemplate redisTemplate;
-    private final Duration refreshTtl;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final Duration ttl;
 
     public RefreshTokenService(StringRedisTemplate redisTemplate, JwtProperties jwtProperties) {
         this.redisTemplate = redisTemplate;
-        this.refreshTtl = Duration.ofMinutes(jwtProperties.refreshExpirationMinutes());
+        this.ttl = jwtProperties.refreshTokenTtl();
     }
 
-    /**
-     * Cấp một refresh token mới cho user và lưu vào Redis.
-     *
-     * @return chuỗi token thô {@code {jti}.{secret}} để trả cho client (chỉ thấy 1 lần).
-     */
+    /** Stores a new refresh token for the user and returns its raw value (shown to the client once). */
     public String issue(User user) {
-        String jti = UUID.randomUUID().toString();
-        String secret = randomSecret();
-        String secretHash = sha256Hex(secret);
-
-        String value = user.getId() + "|" + user.getTokenVersion() + "|" + secretHash;
-        redisTemplate.opsForValue().set(tokenKey(jti), value, refreshTtl);
+        OpaqueToken token = OpaqueToken.generate();
+        String value = String.join(SEPARATOR, user.getId().toString(), Integer.toString(user.getTokenVersion()), token.secretHash());
+        redisTemplate.opsForValue().set(tokenKey(token.id()), value, ttl);
 
         String userSetKey = userSetKey(user.getId());
-        redisTemplate.opsForSet().add(userSetKey, jti);
-        redisTemplate.expire(userSetKey, refreshTtl);
-
-        return jti + "." + secret;
+        redisTemplate.opsForSet().add(userSetKey, token.id());
+        redisTemplate.expire(userSetKey, ttl);
+        return token.value();
     }
 
     /**
-     * Xác thực + xoay refresh token: xóa token cũ và trả về chủ sở hữu để cấp token mới.
+     * Validates and consumes a refresh token.
      *
-     * @throws AppException nếu token sai định dạng, không tồn tại (đã xoay/hết hạn)
-     *                      hoặc secret không khớp.
+     * @return the owner of the token, for issuing the next pair
+     * @throws AppException when the token is malformed, unknown, expired or already used
      */
-    public RotationResult rotate(String rawToken) {
-        ParsedToken parsed = parse(rawToken);
-
-        String key = tokenKey(parsed.jti());
-        String value = redisTemplate.opsForValue().get(key);
-        if (value == null) {
-            throw unauthorized("Phien dang nhap da het han hoac khong hop le.");
+    public TokenOwner rotate(String rawToken) {
+        OpaqueToken token = OpaqueToken.parse(rawToken).orElseThrow(RefreshTokenService::invalidToken);
+        String key = tokenKey(token.id());
+        String stored = redisTemplate.opsForValue().get(key);
+        if (stored == null) {
+            throw AppException.unauthorized("Phiên đăng nhập đã hết hạn hoặc không hợp lệ.");
         }
 
-        String[] parts = value.split("\\|", 3);
+        String[] parts = stored.split("\\|", 3);
         if (parts.length != 3) {
             redisTemplate.delete(key);
-            throw unauthorized("Refresh token khong hop le.");
+            throw invalidToken();
+        }
+        if (!token.matches(parts[2])) {
+            throw invalidToken();
         }
 
         UUID userId = UUID.fromString(parts[0]);
-        int tokenVersion = Integer.parseInt(parts[1]);
-        String storedHash = parts[2];
-
-        if (!constantTimeEquals(sha256Hex(parsed.secret()), storedHash)) {
-            throw unauthorized("Refresh token khong hop le.");
-        }
-
-        // Rotation: token này đã được dùng, vô hiệu hóa ngay.
         redisTemplate.delete(key);
-        redisTemplate.opsForSet().remove(userSetKey(userId), parsed.jti());
-
-        return new RotationResult(userId, tokenVersion);
+        redisTemplate.opsForSet().remove(userSetKey(userId), token.id());
+        return new TokenOwner(userId, Integer.parseInt(parts[1]));
     }
 
-    /** Thu hồi mọi refresh token đang sống của user (dùng khi logout hoặc phát hiện bất thường). */
-    public void revokeAllForUser(UUID userId) {
+    /** Revokes every live refresh token of the user (logout, password change, suspicious use). */
+    public void revokeAll(UUID userId) {
         String userSetKey = userSetKey(userId);
-        Set<String> jtis = redisTemplate.opsForSet().members(userSetKey);
-        if (jtis != null) {
-            for (String jti : jtis) {
-                redisTemplate.delete(tokenKey(jti));
-            }
+        Set<String> tokenIds = redisTemplate.opsForSet().members(userSetKey);
+        if (tokenIds != null) {
+            tokenIds.forEach(tokenId -> redisTemplate.delete(tokenKey(tokenId)));
         }
         redisTemplate.delete(userSetKey);
     }
 
-    private ParsedToken parse(String rawToken) {
-        if (rawToken == null) {
-            throw unauthorized("Refresh token khong hop le.");
-        }
-        int dot = rawToken.indexOf('.');
-        if (dot <= 0 || dot == rawToken.length() - 1) {
-            throw unauthorized("Refresh token khong hop le.");
-        }
-        return new ParsedToken(rawToken.substring(0, dot), rawToken.substring(dot + 1));
-    }
-
-    private String randomSecret() {
-        byte[] bytes = new byte[SECRET_BYTES];
-        secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    private static String sha256Hex(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (Exception ex) {
-            throw new IllegalStateException("Khong the bam SHA-256", ex);
-        }
-    }
-
-    private static boolean constantTimeEquals(String a, String b) {
-        return MessageDigest.isEqual(
-                a.getBytes(StandardCharsets.UTF_8),
-                b.getBytes(StandardCharsets.UTF_8)
-        );
-    }
-
-    private static String tokenKey(String jti) {
-        return TOKEN_KEY_PREFIX + jti;
+    private static String tokenKey(String tokenId) {
+        return TOKEN_KEY_PREFIX + tokenId;
     }
 
     private static String userSetKey(UUID userId) {
         return USER_SET_PREFIX + userId;
     }
 
-    private static AppException unauthorized(String message) {
-        return new AppException(ErrorCode.AUTHENTICATION_REQUIRED, message);
+    private static AppException invalidToken() {
+        return AppException.unauthorized("Refresh token không hợp lệ.");
     }
 
-    public record RotationResult(UUID userId, int tokenVersion) {
-    }
-
-    private record ParsedToken(String jti, String secret) {
+    public record TokenOwner(UUID userId, int tokenVersion) {
     }
 }

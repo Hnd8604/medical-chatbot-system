@@ -1,17 +1,18 @@
 package com.medicalchatbot.backend.exception;
 
-import java.util.Arrays;
-
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
 /**
  * Stable application errors exposed by the REST API.
  *
- * <p>The HTTP status describes transport semantics. {@link #code} and
- * {@link #errorCode} are stable client contracts and must not be reused for a
- * different meaning.</p>
+ * <p>{@link #code} and {@link #key} are client contracts and must never be reused for a different
+ * meaning; {@link #status} only describes HTTP semantics.</p>
  */
+@Getter
+@RequiredArgsConstructor
 public enum ErrorCode {
 
     // Identity and access (11xx)
@@ -71,46 +72,14 @@ public enum ErrorCode {
     INTERNAL_SERVER_ERROR(9999, "INTERNAL_SERVER_ERROR", HttpStatus.INTERNAL_SERVER_ERROR,
             "Hệ thống phát sinh lỗi nội bộ.");
 
+    /** Numeric identifier, unique per error. */
     private final int code;
-    private final String errorCode;
+    /** Symbolic identifier sent as {@code error_code}. */
+    private final String key;
     private final HttpStatus status;
     private final String defaultMessage;
 
-    ErrorCode(int code, String errorCode, HttpStatus status, String defaultMessage) {
-        this.code = code;
-        this.errorCode = errorCode;
-        this.status = status;
-        this.defaultMessage = defaultMessage;
-    }
-
-    public int getCode() {
-        return code;
-    }
-
-    public String getErrorCode() {
-        return errorCode;
-    }
-
-    public HttpStatus getStatus() {
-        return status;
-    }
-
-    public String getDefaultMessage() {
-        return defaultMessage;
-    }
-
-    /** Maps legacy string/status based errors without changing their HTTP status. */
-    public static ErrorCode resolve(String stableErrorCode, HttpStatusCode status) {
-        if (stableErrorCode != null) {
-            return Arrays.stream(values())
-                    .filter(value -> value.errorCode.equalsIgnoreCase(stableErrorCode))
-                    .findFirst()
-                    .orElseGet(() -> fromStatus(status));
-        }
-        return fromStatus(status);
-    }
-
-    /** Maps an HTTP-only error to the closest stable application error. */
+    /** Closest application error for a bare HTTP status (framework exceptions, upstream errors). */
     public static ErrorCode fromStatus(HttpStatusCode status) {
         if (status == null) {
             return INTERNAL_SERVER_ERROR;
@@ -120,10 +89,10 @@ public enum ErrorCode {
             case 401 -> AUTHENTICATION_REQUIRED;
             case 403 -> ACCESS_DENIED;
             case 404 -> RESOURCE_NOT_FOUND;
+            case 406 -> NOT_ACCEPTABLE;
             case 409 -> CONFLICT;
             case 413 -> PAYLOAD_TOO_LARGE;
             case 415 -> UNSUPPORTED_MEDIA_TYPE;
-            case 406 -> NOT_ACCEPTABLE;
             case 422 -> UNPROCESSABLE_ENTITY;
             case 429 -> TOO_MANY_REQUESTS;
             case 502 -> UPSTREAM_SERVICE_ERROR;

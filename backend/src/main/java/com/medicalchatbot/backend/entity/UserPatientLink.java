@@ -3,12 +3,11 @@ package com.medicalchatbot.backend.entity;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
+import com.medicalchatbot.backend.enums.PatientRelationship;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -16,14 +15,23 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
+/** Grants an app account access to a FHIR patient record (see {@code docs/patient-link.md}). */
 @Entity
 @Table(name = "app_user_patient_links")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class UserPatientLink {
 
     @Id
@@ -37,8 +45,10 @@ public class UserPatientLink {
     @Column(name = "fhir_patient_id", nullable = false, length = 100)
     private String fhirPatientId;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private String relationship = "SELF";
+    private PatientRelationship relationship = PatientRelationship.SELF;
 
     @Column(name = "is_primary", nullable = false)
     private boolean primaryLink;
@@ -50,5 +60,4 @@ public class UserPatientLink {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
-
 }

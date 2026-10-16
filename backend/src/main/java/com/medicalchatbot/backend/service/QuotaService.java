@@ -3,299 +3,177 @@ package com.medicalchatbot.backend.service;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.medicalchatbot.backend.config.properties.AppProperties;
 import com.medicalchatbot.backend.dto.response.QuotaStatusResponse;
-import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
-import com.medicalchatbot.backend.enums.AlertSeverity;
+import com.medicalchatbot.backend.enums.AlertType;
+import com.medicalchatbot.backend.enums.AuditAction;
+import com.medicalchatbot.backend.enums.AuditResource;
 import com.medicalchatbot.backend.enums.NotificationType;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
 import com.medicalchatbot.backend.exception.QuotaExceededException;
-import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
-import com.medicalchatbot.backend.repository.UserRepository;
 import com.medicalchatbot.backend.repository.UsageLogRepository;
-import com.medicalchatbot.backend.repository.projection.QuotaPolicyProjection;
-import com.medicalchatbot.backend.repository.projection.QuotaUsageProjection;
+import com.medicalchatbot.backend.repository.UserRepository;
+import com.medicalchatbot.backend.repository.projection.QuotaLimitsProjection;
+import com.medicalchatbot.backend.repository.projection.UsageTotalsProjection;
+import com.medicalchatbot.backend.security.AuthenticatedUser;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+/**
+ * Daily AI quotas (requests, tokens, cost) per user, computed from {@code usage_logs} over the
+ * current calendar day of the application time zone. Spring is the only place limits are enforced:
+ * the LLM gateway does not track spend per user.
+ */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class QuotaService {
+
+    /** Users are warned (once a day) when any daily usage reaches this share of its limit. */
+    private static final double WARNING_RATIO = 0.8;
+    /** Chat requests per minute for a policy without its own rate limit. */
+    private static final int DEFAULT_RATE_LIMIT_PER_MINUTE = 5;
 
     private final UserRepository userRepository;
     private final QuotaPolicyRepository quotaPolicyRepository;
     private final UsageLogRepository usageLogRepository;
-    private final AuditLogRepository auditLogRepository;
-    private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
+    private final AuditService auditService;
     private final AlertService alertService;
     private final NotificationService notificationService;
-    private final CurrentUserService currentUserService;
-    private final ZoneId quotaZone;
-
-    @Autowired
-    public QuotaService(
-            UserRepository userRepository,
-            QuotaPolicyRepository quotaPolicyRepository,
-            UsageLogRepository usageLogRepository,
-            AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper,
-            AlertService alertService,
-            NotificationService notificationService,
-            CurrentUserService currentUserService,
-            @Value("${app.quota.timezone:Asia/Ho_Chi_Minh}") String quotaTimezone) {
-        this(
-                userRepository,
-                quotaPolicyRepository,
-                usageLogRepository,
-                auditLogRepository,
-                objectMapper,
-                alertService,
-                notificationService,
-                ZoneId.of(quotaTimezone),
-                currentUserService);
-    }
-
-    QuotaService(
-            UserRepository userRepository,
-            QuotaPolicyRepository quotaPolicyRepository,
-            UsageLogRepository usageLogRepository,
-            AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper,
-            AlertService alertService,
-            NotificationService notificationService,
-            ZoneId quotaZone,
-            CurrentUserService currentUserService) {
-        this.userRepository = userRepository;
-        this.quotaPolicyRepository = quotaPolicyRepository;
-        this.usageLogRepository = usageLogRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.objectMapper = objectMapper;
-        this.alertService = alertService;
-        this.notificationService = notificationService;
-        this.currentUserService = currentUserService;
-        this.quotaZone = quotaZone;
-    }
-
-    QuotaService(
-            UserRepository userRepository,
-            QuotaPolicyRepository quotaPolicyRepository,
-            UsageLogRepository usageLogRepository,
-            AuditLogRepository auditLogRepository,
-            ObjectMapper objectMapper,
-            AlertService alertService,
-            NotificationService notificationService,
-            CurrentUserService currentUserService,
-            ZoneId quotaZone) {
-        this(
-                userRepository,
-                quotaPolicyRepository,
-                usageLogRepository,
-                auditLogRepository,
-                objectMapper,
-                alertService,
-                notificationService,
-                quotaZone,
-                currentUserService);
-    }
+    private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
 
     public QuotaStatusResponse currentUserStatus() {
-        User user = currentUserService.requireCurrentUser();
-        return statusForUser(user.getId(), user.getUsername());
+        AuthenticatedUser principal = currentUserService.requirePrincipal();
+        return status(principal.id(), principal.username());
     }
 
-    public QuotaStatusResponse getCurrentUserStatus() {
-        return currentUserStatus();
-    }
-
-    public QuotaStatusResponse getUserStatusByUsername(String targetUsername) {
-        UUID userId = getUserIdByUsername(targetUsername);
-        return statusForUser(userId, targetUsername);
-    }
-
-    public List<QuotaPolicy> getAllQuotaPolicies() {
-        return quotaPolicyRepository.findAll();
+    public QuotaStatusResponse userStatus(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> AppException.notFound("Không tìm thấy người dùng."));
+        return status(user.getId(), user.getUsername());
     }
 
     /**
-     * Chặn 429 khi vượt quota; trả về status vừa tính để caller dùng lại
-     * (vd tính used ratio) thay vì tính quota lần thứ hai trong cùng request.
+     * Rejects the request with HTTP 429 when a daily limit is used up.
+     *
+     * @return the status just computed, so the caller does not compute it a second time
      */
-    public QuotaStatusResponse assertQuotaAvailable(UUID userId) {
-        QuotaStatusResponse status = statusForUser(userId, null);
+    public QuotaStatusResponse assertQuotaAvailable(User user) {
+        QuotaStatusResponse status = status(user.getId(), user.getUsername());
         if (status.allowed()) {
             return status;
         }
 
-        alertService.triggerAlert(
-                "QUOTA_SYSTEM",
-                "QUOTA_EXCEEDED",
-                AlertSeverity.WARNING,
-                "User " + userId + " bị chặn do: " + status.blockedReason(),
-                objectMapper.valueToTree(status));
-        logQuotaBlocked(userId, status);
-        throw new QuotaExceededException(status.blockedReason(), status);
+        JsonNode statusJson = objectMapper.valueToTree(status);
+        alertService.raise(AlertType.QUOTA_EXCEEDED,
+                "Người dùng " + user.getUsername() + " bị chặn do: " + status.blockedReason(), statusJson);
+        auditService.recordIndependently(user, AuditAction.QUOTA_BLOCKED, AuditResource.APP_USER, user.getId().toString(),
+                auditService.metadata()
+                        .put("operation", "quota_check")
+                        .put("blocked_reason", status.blockedReason())
+                        .set("quota_status", statusJson));
+        throw new QuotaExceededException(status);
     }
 
-    /**
-     * Tỷ lệ quota đã dùng trong ngày, tính từ status có sẵn.
-     */
+    /** Highest share (0..1+) of any daily limit already used; chatbot-service picks cheaper models near 1. */
     public double usedRatio(QuotaStatusResponse status) {
-        if (status == null) {
-            return 0;
-        }
-        double requestRatio = ratio(status.usedRequests(), status.dailyRequestLimit());
-        double tokenRatio = ratio(status.usedTokens(), status.dailyTokenLimit());
-        double costRatio = ratio(status.usedCostUsd(), status.dailyCostLimitUsd());
-        return Math.max(requestRatio, Math.max(tokenRatio, costRatio));
+        return Math.max(
+                ratio(status.usedRequests(), status.dailyRequestLimit()),
+                Math.max(
+                        ratio(status.usedTokens(), status.dailyTokenLimit()),
+                        ratio(status.usedCostUsd(), status.dailyCostLimitUsd())
+                )
+        );
     }
 
-    @Cacheable(value = "rateLimitConfig", key = "#username")
-    public int getRateLimitForUser(String username) {
-        if (username == null || username.isBlank() || "anonymousUser".equals(username)) {
-            return 5;
-        }
-        Integer configuredLimit = quotaPolicyRepository.findRateLimitByUsername(username);
-        return configuredLimit != null ? configuredLimit : 5;
+    public int rateLimitPerMinute(UUID userId) {
+        return quotaPolicyRepository.findRateLimitPerMinuteByUserId(userId).orElse(DEFAULT_RATE_LIMIT_PER_MINUTE);
     }
 
-    private QuotaStatusResponse statusForUser(UUID userId, String username) {
-        QuotaPolicyProjection policy = quotaPolicyRepository.findByUserId(userId)
-                .orElseThrow(() -> new AppException(
-                        ErrorCode.INTERNAL_SERVER_ERROR,
+    private QuotaStatusResponse status(UUID userId, String username) {
+        QuotaLimitsProjection limits = quotaPolicyRepository.findLimitsByUserId(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR,
                         "Không tìm thấy quota policy cho người dùng."));
-        ZonedDateTime now = ZonedDateTime.now(quotaZone);
-        OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay(quotaZone).toOffsetDateTime();
-        OffsetDateTime startOfNextDay = startOfDay.plusDays(1);
-        QuotaUsageProjection usage = usageLogRepository.summarizeUsage(
-                userId,
-                startOfDay,
-                startOfNextDay);
+        ZoneId zone = appProperties.timezone();
+        OffsetDateTime startOfDay = OffsetDateTime.now(zone).toLocalDate().atStartOfDay(zone).toOffsetDateTime();
+        UsageTotalsProjection usage = usageLogRepository.summarizeUsage(userId, startOfDay, startOfDay.plusDays(1));
 
-        int usedTokens = usage.usedTokens();
-        // Cost cong tu usage_logs (cost gateway bao cho tung call). Spring la so chi phi
-        // duy nhat va la noi chan han muc theo user; gateway khong giu spend theo user.
-        BigDecimal usedCostUsd = usage.usedCostUsd();
-        checkAndTriggerQuotaWarning(userId, policy, usage, usedTokens, usedCostUsd);
-
-        int remainingRequests = remaining(policy.dailyRequestLimit(), usage.usedRequests());
-        int remainingTokens = remaining(policy.dailyTokenLimit(), usedTokens);
-        BigDecimal remainingCost = remaining(policy.dailyCostLimitUsd(), usedCostUsd);
-        String blockedReason = blockedReason(policy, usage, usedTokens, usedCostUsd);
-
+        warnIfNearLimit(userId, limits, usage);
+        String blockedReason = blockedReason(limits, usage);
         return new QuotaStatusResponse(
-                username != null ? username : userId.toString(),
-                policy.policyName(),
-                policy.dailyRequestLimit(),
-                policy.dailyTokenLimit(),
-                policy.dailyCostLimitUsd(),
-                usage.usedRequests(),
-                usage.usedInputTokens(),
-                usage.usedOutputTokens(),
-                usedTokens,
-                usedCostUsd,
-                remainingRequests,
-                remainingTokens,
-                remainingCost,
+                username,
+                limits.policyName(),
+                limits.dailyRequestLimit(),
+                limits.dailyTokenLimit(),
+                limits.dailyCostLimitUsd(),
+                usage.requestCount(),
+                usage.inputTokens(),
+                usage.outputTokens(),
+                usage.totalTokens(),
+                usage.costUsd(),
+                Math.max(0, limits.dailyRequestLimit() - usage.requestCount()),
+                Math.max(0, limits.dailyTokenLimit() - usage.totalTokens()),
+                limits.dailyCostLimitUsd().subtract(usage.costUsd()).max(BigDecimal.ZERO),
                 blockedReason == null,
-                blockedReason);
+                blockedReason
+        );
     }
 
-    private UUID getUserIdByUsername(String username) {
-        return userRepository.findIdByUsername(username)
-                .orElseThrow(() -> new AppException(
-                        ErrorCode.RESOURCE_NOT_FOUND,
-                        "Không tìm thấy người dùng: " + username));
-    }
-
-    private String blockedReason(
-            QuotaPolicyProjection policy,
-            QuotaUsageProjection usage,
-            int usedTokens,
-            BigDecimal usedCostUsd
-    ) {
-        if (usage.usedRequests() >= policy.dailyRequestLimit()) {
-            return "Đã vượt quá hạn mức " + policy.dailyRequestLimit() + " lượt gọi AI/ngày.";
+    private static String blockedReason(QuotaLimitsProjection limits, UsageTotalsProjection usage) {
+        if (usage.requestCount() >= limits.dailyRequestLimit()) {
+            return "Đã vượt quá hạn mức " + limits.dailyRequestLimit() + " lượt gọi AI/ngày.";
         }
-        if (usedTokens >= policy.dailyTokenLimit()) {
-            return "Đã vượt quá hạn mức " + policy.dailyTokenLimit() + " token/ngày.";
+        if (usage.totalTokens() >= limits.dailyTokenLimit()) {
+            return "Đã vượt quá hạn mức " + limits.dailyTokenLimit() + " token/ngày.";
         }
-        if (usedCostUsd.compareTo(policy.dailyCostLimitUsd()) >= 0) {
+        if (usage.costUsd().compareTo(limits.dailyCostLimitUsd()) >= 0) {
             return "Đã vượt quá hạn mức chi phí AI/ngày.";
         }
         return null;
     }
 
-    private int remaining(int limit, int used) {
-        return Math.max(0, limit - used);
-    }
-
-    private BigDecimal remaining(BigDecimal limit, BigDecimal used) {
-        BigDecimal result = limit.subtract(used);
-        return result.signum() < 0 ? BigDecimal.ZERO : result;
-    }
-
-    private void logQuotaBlocked(UUID userId, QuotaStatusResponse status) {
-        ObjectNode metadata = objectMapper.createObjectNode();
-        metadata.put("operation", "quota_check");
-        metadata.put("blocked_reason", status.blockedReason());
-        metadata.set("quota_status", objectMapper.valueToTree(status));
-
-        User user = userRepository.findById(userId).orElse(null);
-
-        auditLogRepository.save(
-                user,
-                null,
-                "QUOTA_BLOCKED",
-                "app_user",
-                userId.toString(),
-                metadata);
-    }
-
-    private void checkAndTriggerQuotaWarning(UUID userId, QuotaPolicyProjection policy, QuotaUsageProjection usage,
-            int usedTokens, BigDecimal usedCostUsd) {
-        double requestUsagePct = ratio(usage.usedRequests(), policy.dailyRequestLimit());
-        double tokenUsagePct = ratio(usedTokens, policy.dailyTokenLimit());
-        double costUsagePct = ratio(usedCostUsd, policy.dailyCostLimitUsd());
-
-        if (requestUsagePct < 0.8 && tokenUsagePct < 0.8 && costUsagePct < 0.8) {
+    /** Best effort: a failing notification must not block the quota check. */
+    private void warnIfNearLimit(UUID userId, QuotaLimitsProjection limits, UsageTotalsProjection usage) {
+        double usedRatio = Math.max(
+                ratio(usage.requestCount(), limits.dailyRequestLimit()),
+                Math.max(
+                        ratio(usage.totalTokens(), limits.dailyTokenLimit()),
+                        ratio(usage.costUsd(), limits.dailyCostLimitUsd())
+                )
+        );
+        if (usedRatio < WARNING_RATIO) {
             return;
         }
         try {
-            if (!notificationService.hasQuotaWarningBeenSentToday(userId)) {
-                double maxPct = Math.max(requestUsagePct, Math.max(tokenUsagePct, costUsagePct));
-                String content = String.format(
-                        "Hạn mức sử dụng hằng ngày của bạn đã đạt %.1f%%. Vui lòng sử dụng tiết kiệm.",
-                        maxPct * 100);
-                notificationService.createNotification(
+            if (!notificationService.quotaWarningSentToday(userId)) {
+                notificationService.notify(
                         userId,
                         NotificationType.QUOTA_WARNING,
-                        "Cảnh báo hạn mức sử dụng (Quota Warning)",
-                        content);
+                        "Cảnh báo hạn mức sử dụng",
+                        String.format("Hạn mức sử dụng hằng ngày của bạn đã đạt %.1f%%. Vui lòng sử dụng tiết kiệm.",
+                                usedRatio * 100)
+                );
             }
-        } catch (Exception ex) {
-            log.error("Failed to create quota warning notification for user {}", userId, ex);
+        } catch (RuntimeException exception) {
+            log.error("Failed to create quota warning notification for user {}", userId, exception);
         }
     }
 
-    private double ratio(int used, int limit) {
-        if (limit <= 0) {
-            return 0;
-        }
-        return (double) used / limit;
+    private static double ratio(int used, int limit) {
+        return limit <= 0 ? 0 : (double) used / limit;
     }
 
-    private double ratio(BigDecimal used, BigDecimal limit) {
+    private static double ratio(BigDecimal used, BigDecimal limit) {
         if (used == null || limit == null || limit.signum() <= 0) {
             return 0;
         }

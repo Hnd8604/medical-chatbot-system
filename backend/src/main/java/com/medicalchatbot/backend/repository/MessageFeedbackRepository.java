@@ -10,8 +10,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface MessageFeedbackRepository extends JpaRepository<MessageFeedback, UUID> {
 
-    Optional<MessageFeedback> findByMessage_IdAndUser_Id(UUID messageId, UUID userId);
+    boolean existsByMessageIdAndUserId(UUID messageId, UUID userId);
 
+    /** The user's feedback on an assistant message of one of their own sessions. */
     @Query("""
             select f
             from MessageFeedback f
@@ -20,9 +21,9 @@ public interface MessageFeedbackRepository extends JpaRepository<MessageFeedback
             where m.id = :messageId
               and f.user.id = :userId
               and s.user.id = :userId
-              and m.role = 'assistant'
+              and m.role = com.medicalchatbot.backend.enums.ChatMessageRole.ASSISTANT
             """)
-    Optional<MessageFeedback> findAuthorizedFeedback(
+    Optional<MessageFeedback> findOwnedFeedback(
             @Param("messageId") UUID messageId,
             @Param("userId") UUID userId
     );

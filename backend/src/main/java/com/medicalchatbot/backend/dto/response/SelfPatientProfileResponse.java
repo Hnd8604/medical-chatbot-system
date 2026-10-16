@@ -3,8 +3,8 @@ package com.medicalchatbot.backend.dto.response;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
- * Hồ sơ FHIR của chính người dùng (SELF), gộp trong một lần gọi.
- * Chỉ trả về hồ sơ đã liên kết với tài khoản hiện tại — không cho truy cập bệnh nhân khác.
+ * FHIR record linked to the signed-in account, in one call. The FHIR payloads are passed through
+ * from chatbot-service unchanged.
  */
 public record SelfPatientProfileResponse(
         String patientId,

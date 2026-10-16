@@ -1,265 +1,227 @@
 package com.medicalchatbot.backend.service;
 
-import com.medicalchatbot.backend.dto.request.AuthLoginRequest;
-import com.medicalchatbot.backend.dto.request.AuthLinkPatientRequest;
-import com.medicalchatbot.backend.dto.request.AuthRefreshRequest;
-import com.medicalchatbot.backend.dto.request.AuthRegisterRequest;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
 import com.medicalchatbot.backend.dto.request.ChangePasswordRequest;
+import com.medicalchatbot.backend.dto.request.LoginRequest;
+import com.medicalchatbot.backend.dto.request.RefreshTokenRequest;
+import com.medicalchatbot.backend.dto.request.RegisterRequest;
 import com.medicalchatbot.backend.dto.request.UpdateProfileRequest;
-import com.medicalchatbot.backend.dto.response.AuthLinkPatientResponse;
-import com.medicalchatbot.backend.dto.response.AuthLoginResponse;
-import com.medicalchatbot.backend.dto.response.AuthRefreshResponse;
-import com.medicalchatbot.backend.dto.response.AuthRegisterResponse;
 import com.medicalchatbot.backend.dto.response.AuthUserResponse;
-import com.medicalchatbot.backend.dto.response.ChangePasswordResponse;
+import com.medicalchatbot.backend.dto.response.LoginResponse;
+import com.medicalchatbot.backend.dto.response.TokenResponse;
 import com.medicalchatbot.backend.entity.QuotaPolicy;
 import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.enums.UserRole;
 import com.medicalchatbot.backend.enums.UserStatus;
 import com.medicalchatbot.backend.exception.AppException;
 import com.medicalchatbot.backend.exception.ErrorCode;
-import com.medicalchatbot.backend.mapper.AuthUserMapper;
+import com.medicalchatbot.backend.mapper.UserMapper;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
+import com.medicalchatbot.backend.security.JwtTokenProvider;
+import com.medicalchatbot.backend.util.PasswordPolicy;
+import com.medicalchatbot.backend.util.TextUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** Login, token refresh, registration and management of the signed-in account. */
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-z0-9._-]{3,30}$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    private static final int DISPLAY_NAME_MIN = 2;
+    private static final int DISPLAY_NAME_MAX = 100;
+
     private final UserRepository userRepository;
     private final QuotaPolicyRepository quotaPolicyRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenService jwtTokenService;
+    private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
     private final CurrentUserService currentUserService;
     private final PatientLinkService patientLinkService;
-    private final AuthUserMapper authUserMapper;
-    private final AuthAuditService authAuditService;
+    private final UserMapper userMapper;
+    private final AuthAuditService authAudit;
 
-    @Transactional(readOnly = true)
-    public AuthLoginResponse login(AuthLoginRequest request) {
+    @Transactional
+    public LoginResponse login(LoginRequest request) {
         String credential = request.usernameOrEmail().strip();
         User user = userRepository.findByUsernameOrEmailIgnoreCase(credential)
-                .orElseThrow(() -> invalidCredentials(credential));
-
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw invalidCredentials(credential);
-        }
-        if (user.getStatus() == UserStatus.LOCKED) {
-            authAuditService.loginFailed(user, credential, "LOCKED");
-            throw new AppException(ErrorCode.ACCESS_DENIED, "Tai khoan da bi khoa.");
-        }
-        if (user.getStatus() == UserStatus.DISABLED) {
-            authAuditService.loginFailed(user, credential, "DISABLED");
-            throw new AppException(ErrorCode.ACCESS_DENIED, "Tai khoan da bi vo hieu hoa.");
-        }
-
-        authAuditService.loginSucceeded(user);
-        return new AuthLoginResponse(
-                jwtTokenService.generateToken(user),
-                refreshTokenService.issue(user),
-                "Bearer",
-                jwtTokenService.expiresInSeconds(),
-                authUserMapper.toResponse(user)
-        );
-    }
-
-    /**
-     * Xoay refresh token: nhận refresh token cũ, cấp cặp access + refresh token mới.
-     * Refresh token cũ bị vô hiệu hóa ngay (rotation).
-     */
-    @Transactional
-    public AuthRefreshResponse refresh(AuthRefreshRequest request) {
-        RefreshTokenService.RotationResult rotation = refreshTokenService.rotate(request.refreshToken());
-
-        User user = userRepository.findById(rotation.userId())
+                .filter(candidate -> passwordEncoder.matches(request.password(), candidate.getPasswordHash()))
                 .orElseThrow(() -> {
-                    refreshTokenService.revokeAllForUser(rotation.userId());
-                    return new AppException(ErrorCode.AUTHENTICATION_REQUIRED, "Nguoi dung khong ton tai.");
+                    authAudit.loginFailed(null, credential, "INVALID_CREDENTIALS");
+                    return AppException.unauthorized("Tên đăng nhập/email hoặc mật khẩu không đúng.");
                 });
-
-        if (user.getStatus() == UserStatus.LOCKED) {
-            throw new AppException(ErrorCode.ACCESS_DENIED, "Tai khoan da bi khoa.");
-        }
-        if (user.getStatus() == UserStatus.DISABLED) {
-            throw new AppException(ErrorCode.ACCESS_DENIED, "Tai khoan da bi vo hieu hoa.");
-        }
-        // token_version đã đổi (vd user đã logout / đổi mật khẩu) => mọi phiên cũ hết hiệu lực.
-        if (user.getTokenVersion() != rotation.tokenVersion()) {
-            refreshTokenService.revokeAllForUser(user.getId());
-            throw new AppException(ErrorCode.AUTHENTICATION_REQUIRED, "Phien dang nhap da het hieu luc.");
+        if (!user.isActive()) {
+            authAudit.loginFailed(user, credential, user.getStatus().name());
+            throw inactiveAccount(user);
         }
 
-        authAuditService.tokenRefreshed(user);
-        return new AuthRefreshResponse(
-                jwtTokenService.generateToken(user),
+        authAudit.loginSucceeded(user);
+        return new LoginResponse(
+                jwtTokenProvider.generateToken(user),
                 refreshTokenService.issue(user),
-                "Bearer",
-                jwtTokenService.expiresInSeconds()
+                JwtTokenProvider.TOKEN_TYPE,
+                jwtTokenProvider.expiresInSeconds(),
+                toAuthUserResponse(user)
         );
     }
 
+    /** Rotates the refresh token: the presented token is revoked and a new pair is issued. */
     @Transactional
-    public AuthRegisterResponse register(AuthRegisterRequest request) {
-        RegistrationInput input = normalizeRegistration(request);
-        validateRegistration(input);
-
-        if (userRepository.existsByUsernameIgnoreCase(input.username())) {
-            throw new AppException(ErrorCode.CONFLICT, "Tên đăng nhập đã được sử dụng.");
+    public TokenResponse refresh(RefreshTokenRequest request) {
+        RefreshTokenService.TokenOwner owner = refreshTokenService.rotate(request.refreshToken());
+        User user = userRepository.findById(owner.userId())
+                .orElseThrow(() -> {
+                    refreshTokenService.revokeAll(owner.userId());
+                    return AppException.unauthorized("Người dùng không tồn tại.");
+                });
+        if (!user.isActive()) {
+            throw inactiveAccount(user);
         }
-        if (userRepository.existsByEmailIgnoreCase(input.email())) {
-            throw new AppException(ErrorCode.CONFLICT, "Email đã được sử dụng.");
+        // A changed token version (logout, password change) invalidates every older session.
+        if (user.getTokenVersion() != owner.tokenVersion()) {
+            refreshTokenService.revokeAll(user.getId());
+            throw AppException.unauthorized("Phiên đăng nhập đã hết hiệu lực.");
         }
 
-        QuotaPolicy quotaPolicy = quotaPolicyRepository.findByName("user_standard")
-                .orElseThrow(() -> new AppException(
-                        ErrorCode.INTERNAL_SERVER_ERROR,
-                        "Chưa cấu hình quota policy mặc định 'user_standard'."
-                ));
+        authAudit.tokenRefreshed(user);
+        return new TokenResponse(
+                jwtTokenProvider.generateToken(user),
+                refreshTokenService.issue(user),
+                JwtTokenProvider.TOKEN_TYPE,
+                jwtTokenProvider.expiresInSeconds()
+        );
+    }
 
+    /** Self-registration always creates an active USER on the default quota policy. */
+    @Transactional
+    public AuthUserResponse register(RegisterRequest request) {
+        String displayName = validDisplayName(request.displayName());
+        String username = TextUtils.strip(request.username()).toLowerCase(Locale.ROOT);
+        String email = validEmail(request.email());
+        if (!USERNAME_PATTERN.matcher(username).matches()) {
+            throw AppException.invalid(
+                    "Tên đăng nhập phải có 3-30 ký tự và chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.");
+        }
+        PasswordPolicy.validate(request.password(), request.passwordConfirmation());
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
+            throw AppException.conflict("Tên đăng nhập đã được sử dụng.");
+        }
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw AppException.conflict("Email đã được sử dụng.");
+        }
+
+        QuotaPolicy quotaPolicy = quotaPolicyRepository.findByName(QuotaPolicy.DEFAULT_USER_POLICY)
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR,
+                        "Chưa cấu hình quota policy mặc định '" + QuotaPolicy.DEFAULT_USER_POLICY + "'."));
         User user = User.builder()
-                .username(input.username())
-                .email(input.email())
-                .displayName(input.displayName())
-                .passwordHash(passwordEncoder.encode(input.password()))
+                .username(username)
+                .email(email)
+                .displayName(displayName)
+                .passwordHash(passwordEncoder.encode(request.password()))
                 .role(UserRole.USER)
                 .status(UserStatus.ACTIVE)
-                .tokenVersion(0)
                 .quotaPolicy(quotaPolicy)
                 .build();
-
         try {
             user = userRepository.saveAndFlush(user);
-        } catch (DataIntegrityViolationException ex) {
-            throw new AppException(ErrorCode.CONFLICT, "Tên đăng nhập hoặc email đã được sử dụng.", ex);
+        } catch (DataIntegrityViolationException exception) {
+            throw new AppException(ErrorCode.CONFLICT, "Tên đăng nhập hoặc email đã được sử dụng.", exception);
         }
 
-        authAuditService.registrationSucceeded(user);
-        return new AuthRegisterResponse("Đăng ký tài khoản thành công.", authUserMapper.toResponse(user));
+        authAudit.registered(user);
+        return toAuthUserResponse(user);
     }
 
     @Transactional(readOnly = true)
     public AuthUserResponse currentUser() {
-        return authUserMapper.toResponse(currentUserService.requireCurrentUser());
-    }
-
-    public AuthLinkPatientResponse linkPatient(AuthLinkPatientRequest request) {
-        return patientLinkService.linkCurrentUser(request);
+        return toAuthUserResponse(currentUserService.requireCurrentUser());
     }
 
     @Transactional
     public AuthUserResponse updateProfile(UpdateProfileRequest request) {
         User user = currentUserService.requireCurrentUser();
+        String displayName = validDisplayName(request.displayName());
+        String email = validEmail(request.email());
 
-        String displayName = strip(request.displayName());
-        String email = strip(request.email()).toLowerCase();
-
-        if (displayName.length() < 2 || displayName.length() > 100) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Tên hiển thị phải có từ 2 đến 100 ký tự.");
-        }
-        if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Email không hợp lệ.");
-        }
-
-        boolean emailChanged = !email.equalsIgnoreCase(strip(user.getEmail()));
+        boolean emailChanged = !email.equalsIgnoreCase(TextUtils.strip(user.getEmail()));
         if (emailChanged && userRepository.existsByEmailIgnoreCase(email)) {
-            throw new AppException(ErrorCode.CONFLICT, "Email đã được sử dụng.");
+            throw AppException.conflict("Email đã được sử dụng.");
         }
-
         user.setDisplayName(displayName);
         user.setEmail(email);
         try {
             userRepository.saveAndFlush(user);
-        } catch (DataIntegrityViolationException ex) {
-            throw new AppException(ErrorCode.CONFLICT, "Email đã được sử dụng.", ex);
+        } catch (DataIntegrityViolationException exception) {
+            throw new AppException(ErrorCode.CONFLICT, "Email đã được sử dụng.", exception);
         }
 
-        authAuditService.profileUpdated(user, emailChanged);
-        return authUserMapper.toResponse(user);
+        authAudit.profileUpdated(user, emailChanged);
+        return toAuthUserResponse(user);
     }
 
+    /** Changing the password signs the user out everywhere, including the current session. */
     @Transactional
-    public ChangePasswordResponse changePassword(ChangePasswordRequest request) {
+    public void changePassword(ChangePasswordRequest request) {
         User user = currentUserService.requireCurrentUser();
-
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
-            authAuditService.passwordChangeFailed(user, "INVALID_CURRENT_PASSWORD");
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Mật khẩu hiện tại không đúng.");
+            authAudit.passwordChangeFailed(user, "INVALID_CURRENT_PASSWORD");
+            throw AppException.invalid("Mật khẩu hiện tại không đúng.");
         }
-
         PasswordPolicy.validate(request.newPassword(), request.passwordConfirmation());
-
         if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Mật khẩu mới phải khác mật khẩu hiện tại.");
+            throw AppException.invalid("Mật khẩu mới phải khác mật khẩu hiện tại.");
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
-        // Tăng token_version + thu hồi refresh token => mọi phiên đăng nhập cũ hết hiệu lực.
-        user.incrementTokenVersion();
-        userRepository.save(user);
-        refreshTokenService.revokeAllForUser(user.getId());
-
-        authAuditService.passwordChangeSucceeded(user);
-        return new ChangePasswordResponse("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+        endAllSessions(user);
+        authAudit.passwordChanged(user);
     }
 
     @Transactional
     public void logout() {
         User user = currentUserService.requireCurrentUser();
+        endAllSessions(user);
+        authAudit.loggedOut(user);
+    }
+
+    /** Invalidates every access token (token version) and refresh token of the user. */
+    private void endAllSessions(User user) {
         user.incrementTokenVersion();
         userRepository.save(user);
-        refreshTokenService.revokeAllForUser(user.getId());
-
-        authAuditService.loggedOut(user);
+        refreshTokenService.revokeAll(user.getId());
     }
 
-    private RegistrationInput normalizeRegistration(AuthRegisterRequest request) {
-        return new RegistrationInput(
-                strip(request.displayName()),
-                strip(request.username()).toLowerCase(),
-                strip(request.email()).toLowerCase(),
-                request.password(),
-                request.passwordConfirmation()
-        );
+    private AuthUserResponse toAuthUserResponse(User user) {
+        return userMapper.toAuthUserResponse(user, patientLinkService.isOnboardingRequired(user));
     }
 
-    private void validateRegistration(RegistrationInput input) {
-        if (input.displayName().length() < 2 || input.displayName().length() > 100) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Tên hiển thị phải có từ 2 đến 100 ký tự.");
+    private static String validDisplayName(String value) {
+        String displayName = TextUtils.strip(value);
+        if (displayName.length() < DISPLAY_NAME_MIN || displayName.length() > DISPLAY_NAME_MAX) {
+            throw AppException.invalid("Tên hiển thị phải có từ 2 đến 100 ký tự.");
         }
-        if (!input.username().matches("^[a-z0-9._-]{3,30}$")) {
-            throw new AppException(
-                    ErrorCode.INVALID_ARGUMENT,
-                    "Tên đăng nhập phải có 3-30 ký tự và chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang."
-            );
+        return displayName;
+    }
+
+    private static String validEmail(String value) {
+        String email = TextUtils.normalizeEmail(value);
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
+            throw AppException.invalid("Email không hợp lệ.");
         }
-        if (!input.email().matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Email không hợp lệ.");
-        }
-        PasswordPolicy.validate(input.password(), input.passwordConfirmation());
+        return email;
     }
 
-    private static String strip(String value) {
-        return value == null ? "" : value.strip();
+    private static AppException inactiveAccount(User user) {
+        return AppException.forbidden(user.getStatus() == UserStatus.LOCKED
+                ? "Tài khoản đã bị khóa."
+                : "Tài khoản đã bị vô hiệu hóa.");
     }
-
-    private AppException invalidCredentials(String credential) {
-        authAuditService.loginFailed(null, credential, "INVALID_CREDENTIALS");
-        return new AppException(ErrorCode.AUTHENTICATION_REQUIRED, "Ten dang nhap/email hoac mat khau khong dung.");
-    }
-
-    private record RegistrationInput(
-            String displayName,
-            String username,
-            String email,
-            String password,
-            String passwordConfirmation
-    ) {
-    }
-
 }

@@ -1,79 +1,79 @@
 package com.medicalchatbot.backend;
 
-import com.medicalchatbot.backend.repository.AuditLogRepository;
+import com.medicalchatbot.backend.client.ChatbotServiceClient;
 import com.medicalchatbot.backend.repository.AlertRepository;
+import com.medicalchatbot.backend.repository.AuditLogRepository;
 import com.medicalchatbot.backend.repository.BackupHistoryRepository;
 import com.medicalchatbot.backend.repository.ChatMessageRepository;
 import com.medicalchatbot.backend.repository.ChatSessionRepository;
 import com.medicalchatbot.backend.repository.LlmCallUsageRepository;
 import com.medicalchatbot.backend.repository.MessageFeedbackRepository;
+import com.medicalchatbot.backend.repository.NotificationRepository;
 import com.medicalchatbot.backend.repository.QuotaPolicyRepository;
 import com.medicalchatbot.backend.repository.RestoreHistoryRepository;
+import com.medicalchatbot.backend.repository.UsageLogRepository;
 import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
 import com.medicalchatbot.backend.repository.UserRepository;
-import com.medicalchatbot.backend.repository.UsageLogRepository;
-import com.medicalchatbot.backend.integration.client.ChatbotServiceClient;
-import com.medicalchatbot.backend.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+/** The whole application context wires up (configuration properties, beans, security) without a database. */
 @SpringBootTest(properties = {
-		"spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-				+ "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
-				+ "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration,"
-				+ "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"
 })
 class SpringBackendApplicationTests {
 
-	@MockitoBean
-	private UserRepository userRepository;
+    @MockitoBean
+    private UserRepository userRepository;
 
-	@MockitoBean
-	private UserPatientLinkRepository userPatientLinkRepository;
+    @MockitoBean
+    private UserPatientLinkRepository userPatientLinkRepository;
 
-	@MockitoBean
-	private NotificationRepository notificationRepository;
+    @MockitoBean
+    private NotificationRepository notificationRepository;
 
-	@MockitoBean
-	private ChatSessionRepository chatSessionRepository;
+    @MockitoBean
+    private ChatSessionRepository chatSessionRepository;
 
-	@MockitoBean
-	private ChatMessageRepository chatMessageRepository;
+    @MockitoBean
+    private ChatMessageRepository chatMessageRepository;
 
-	@MockitoBean
-	private UsageLogRepository usageLogRepository;
+    @MockitoBean
+    private UsageLogRepository usageLogRepository;
 
-	@MockitoBean
-	private LlmCallUsageRepository llmCallUsageRepository;
+    @MockitoBean
+    private LlmCallUsageRepository llmCallUsageRepository;
 
-	@MockitoBean
-	private AuditLogRepository auditLogRepository;
+    @MockitoBean
+    private AuditLogRepository auditLogRepository;
 
-	@MockitoBean
-	private AlertRepository alertRepository;
+    @MockitoBean
+    private AlertRepository alertRepository;
 
-	@MockitoBean
-	private BackupHistoryRepository backupHistoryRepository;
+    @MockitoBean
+    private BackupHistoryRepository backupHistoryRepository;
 
-	@MockitoBean
-	private RestoreHistoryRepository restoreHistoryRepository;
+    @MockitoBean
+    private RestoreHistoryRepository restoreHistoryRepository;
 
-	@MockitoBean
-	private MessageFeedbackRepository messageFeedbackRepository;
+    @MockitoBean
+    private MessageFeedbackRepository messageFeedbackRepository;
 
-	@MockitoBean
-	private QuotaPolicyRepository quotaPolicyRepository;
+    @MockitoBean
+    private QuotaPolicyRepository quotaPolicyRepository;
 
-	@MockitoBean
-	private ChatbotServiceClient chatbotServiceClient;
+    @MockitoBean
+    private ChatbotServiceClient chatbotServiceClient;
 
-	@MockitoBean
-	private JdbcTemplate jdbcTemplate;
+    @MockitoBean
+    private JdbcTemplate jdbcTemplate;
 
-	@Test
-	void contextLoads() {
-	}
-
+    @Test
+    void contextLoads() {
+    }
 }

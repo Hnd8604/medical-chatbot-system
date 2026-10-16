@@ -10,69 +10,85 @@ import com.medicalchatbot.backend.entity.UsageLog;
 import com.medicalchatbot.backend.repository.projection.CacheMetricsProjection;
 import com.medicalchatbot.backend.repository.projection.CostByDayProjection;
 import com.medicalchatbot.backend.repository.projection.CostByModelProjection;
-import com.medicalchatbot.backend.repository.projection.CostSummaryProjection;
 import com.medicalchatbot.backend.repository.projection.CostUnavailableModelProjection;
-import com.medicalchatbot.backend.repository.projection.QuotaUsageProjection;
+import com.medicalchatbot.backend.repository.projection.UsageTotalsProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Quota and cost queries over {@code usage_logs}.
+ *
+ * <p>Convention for every query below: a turn that failed mid-pipeline (status {@code failed}) has
+ * already spent tokens and money, so it counts towards tokens and cost but not as a request.</p>
+ */
 public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
 
     @Query("""
-        SELECT new com.medicalchatbot.backend.repository.projection.CacheMetricsProjection(
-            COUNT(u.id),
-            SUM(CASE WHEN u.answerSource LIKE '%cache%' THEN 1 ELSE 0 END),
-            SUM(u.savedTokens),
-            SUM(u.savedCostUsd)
-        )
-        FROM UsageLog u
-        WHERE u.createdAt >= :startDate AND u.createdAt <= :endDate
-    """)
-    CacheMetricsProjection getCacheObservabilityMetrics(
+            select new com.medicalchatbot.backend.repository.projection.CacheMetricsProjection(
+                count(u.id),
+                sum(case when u.answerSource like '%cache%' then 1 else 0 end),
+                sum(u.savedTokens),
+                sum(u.savedCostUsd)
+            )
+            from UsageLog u
+            where u.createdAt >= :startDate and u.createdAt <= :endDate
+            """)
+    CacheMetricsProjection getCacheMetrics(
             @Param("startDate") OffsetDateTime startDate,
             @Param("endDate") OffsetDateTime endDate
     );
 
-    /*
-     * Quy ước cho mọi truy vấn quota/chi phí bên dưới: lượt hỏng giữa pipeline (status
-     * 'failed') vẫn đã tốn token/tiền nên được cộng vào token và cost, nhưng không tính là
-     * một lượt gọi AI (request) của người dùng.
-     */
+    /** Totals of one user in {@code [startInclusive, endExclusive)}. */
+    default UsageTotalsProjection summarizeUsage(UUID userId, OffsetDateTime startInclusive, OffsetDateTime endExclusive) {
+        TotalsRow row = summarizeUsageRow(userId, startInclusive, endExclusive);
+        return new UsageTotalsProjection(row.getRequestCount(), row.getInputTokens(), row.getOutputTokens(), row.getCostUsd());
+    }
 
-    @Query(
-            value = """
-                    select
-                        coalesce(sum(request_count) filter (where status = 'success'), 0)::int as "usedRequests",
-                        coalesce(sum(input_tokens), 0)::int as "usedInputTokens",
-                        coalesce(sum(output_tokens), 0)::int as "usedOutputTokens",
-                        coalesce(sum(estimated_cost_usd), 0)::numeric(12, 6) as "usedCostUsd"
-                    from usage_logs
-                    where user_id = :userId
-                      and status in ('success', 'failed')
-                      and created_at >= :startInclusive
-                      and created_at < :endExclusive
-                    """,
-            nativeQuery = true
-    )
-    QuotaUsageSummaryView summarizeUsageView(
-            @Param("userId") UUID userId,
-            @Param("startInclusive") OffsetDateTime startInclusive,
-            @Param("endExclusive") OffsetDateTime endExclusive
-    );
-
-    default QuotaUsageProjection summarizeUsage(
+    default List<CostByModelProjection> summarizeCostByModel(
             UUID userId,
             OffsetDateTime startInclusive,
             OffsetDateTime endExclusive
     ) {
-        QuotaUsageSummaryView summary = summarizeUsageView(userId, startInclusive, endExclusive);
-        return new QuotaUsageProjection(
-                summary.getUsedRequests(),
-                summary.getUsedInputTokens(),
-                summary.getUsedOutputTokens(),
-                summary.getUsedCostUsd()
-        );
+        return summarizeCostByModelRows(userId, startInclusive, endExclusive).stream()
+                .map(row -> new CostByModelProjection(
+                        row.getLlmProvider(),
+                        row.getLlmModel(),
+                        row.getCallCount(),
+                        row.getInputTokens(),
+                        row.getOutputTokens(),
+                        row.getCostUsd()
+                ))
+                .toList();
+    }
+
+    /** Daily totals, where a "day" is a calendar day in {@code zoneId}. */
+    default List<CostByDayProjection> summarizeCostByDay(
+            UUID userId,
+            OffsetDateTime startInclusive,
+            OffsetDateTime endExclusive,
+            String zoneId
+    ) {
+        return summarizeCostByDayRows(userId, startInclusive, endExclusive, zoneId).stream()
+                .map(row -> new CostByDayProjection(
+                        row.getUsageDate(),
+                        row.getRequestCount(),
+                        row.getInputTokens(),
+                        row.getOutputTokens(),
+                        row.getCostUsd()
+                ))
+                .toList();
+    }
+
+    /** Models with calls the gateway did not price (recorded as 0) — the period total is incomplete. */
+    default List<CostUnavailableModelProjection> findCostUnavailableModels(
+            UUID userId,
+            OffsetDateTime startInclusive,
+            OffsetDateTime endExclusive
+    ) {
+        return findCostUnavailableModelRows(userId, startInclusive, endExclusive).stream()
+                .map(row -> new CostUnavailableModelProjection(row.getLlmProvider(), row.getLlmModel(), row.getCallCount()))
+                .toList();
     }
 
     @Query(
@@ -90,25 +106,11 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                     """,
             nativeQuery = true
     )
-    CostSummaryView summarizeCostView(
+    TotalsRow summarizeUsageRow(
             @Param("userId") UUID userId,
             @Param("startInclusive") OffsetDateTime startInclusive,
             @Param("endExclusive") OffsetDateTime endExclusive
     );
-
-    default CostSummaryProjection summarizeCost(
-            UUID userId,
-            OffsetDateTime startInclusive,
-            OffsetDateTime endExclusive
-    ) {
-        CostSummaryView summary = summarizeCostView(userId, startInclusive, endExclusive);
-        return new CostSummaryProjection(
-                summary.getRequestCount(),
-                summary.getInputTokens(),
-                summary.getOutputTokens(),
-                summary.getCostUsd()
-        );
-    }
 
     @Query(
             value = """
@@ -158,29 +160,11 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                     """,
             nativeQuery = true
     )
-    List<CostByModelView> summarizeCostByModelViews(
+    List<CostByModelRow> summarizeCostByModelRows(
             @Param("userId") UUID userId,
             @Param("startInclusive") OffsetDateTime startInclusive,
             @Param("endExclusive") OffsetDateTime endExclusive
     );
-
-    default List<CostByModelProjection> summarizeCostByModel(
-            UUID userId,
-            OffsetDateTime startInclusive,
-            OffsetDateTime endExclusive
-    ) {
-        return summarizeCostByModelViews(userId, startInclusive, endExclusive)
-                .stream()
-                .map(model -> new CostByModelProjection(
-                        model.getLlmProvider(),
-                        model.getLlmModel(),
-                        model.getCallCount(),
-                        model.getInputTokens(),
-                        model.getOutputTokens(),
-                        model.getCostUsd()
-                ))
-                .toList();
-    }
 
     @Query(
             value = """
@@ -209,30 +193,12 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                     """,
             nativeQuery = true
     )
-    List<CostByDayView> summarizeCostByDayViews(
+    List<CostByDayRow> summarizeCostByDayRows(
             @Param("userId") UUID userId,
             @Param("startInclusive") OffsetDateTime startInclusive,
             @Param("endExclusive") OffsetDateTime endExclusive,
             @Param("zoneId") String zoneId
     );
-
-    default List<CostByDayProjection> summarizeCostByDay(
-            UUID userId,
-            OffsetDateTime startInclusive,
-            OffsetDateTime endExclusive,
-            String zoneId
-    ) {
-        return summarizeCostByDayViews(userId, startInclusive, endExclusive, zoneId)
-                .stream()
-                .map(day -> new CostByDayProjection(
-                        day.getUsageDate(),
-                        day.getRequestCount(),
-                        day.getInputTokens(),
-                        day.getOutputTokens(),
-                        day.getCostUsd()
-                ))
-                .toList();
-    }
 
     @Query(
             value = """
@@ -252,39 +218,13 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
                     """,
             nativeQuery = true
     )
-    List<CostUnavailableModelView> findCostUnavailableModelViews(
+    List<CostUnavailableModelRow> findCostUnavailableModelRows(
             @Param("userId") UUID userId,
             @Param("startInclusive") OffsetDateTime startInclusive,
             @Param("endExclusive") OffsetDateTime endExclusive
     );
 
-    /** Model có call mà gateway không báo cost (ghi 0) — tổng chi phí kỳ đó bị thiếu. */
-    default List<CostUnavailableModelProjection> findCostUnavailableModels(
-            UUID userId,
-            OffsetDateTime startInclusive,
-            OffsetDateTime endExclusive
-    ) {
-        return findCostUnavailableModelViews(userId, startInclusive, endExclusive)
-                .stream()
-                .map(model -> new CostUnavailableModelProjection(
-                        model.getLlmProvider(),
-                        model.getLlmModel(),
-                        model.getCallCount()
-                ))
-                .toList();
-    }
-
-    interface QuotaUsageSummaryView {
-        int getUsedRequests();
-
-        int getUsedInputTokens();
-
-        int getUsedOutputTokens();
-
-        BigDecimal getUsedCostUsd();
-    }
-
-    interface CostSummaryView {
+    interface TotalsRow {
         int getRequestCount();
 
         int getInputTokens();
@@ -294,7 +234,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
         BigDecimal getCostUsd();
     }
 
-    interface CostByModelView {
+    interface CostByModelRow {
         String getLlmProvider();
 
         String getLlmModel();
@@ -308,7 +248,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
         BigDecimal getCostUsd();
     }
 
-    interface CostByDayView {
+    interface CostByDayRow {
         LocalDate getUsageDate();
 
         int getRequestCount();
@@ -320,7 +260,7 @@ public interface UsageLogRepository extends JpaRepository<UsageLog, UUID> {
         BigDecimal getCostUsd();
     }
 
-    interface CostUnavailableModelView {
+    interface CostUnavailableModelRow {
         String getLlmProvider();
 
         String getLlmModel();

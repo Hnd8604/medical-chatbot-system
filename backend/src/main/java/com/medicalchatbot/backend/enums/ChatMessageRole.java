@@ -1,17 +1,18 @@
 package com.medicalchatbot.backend.enums;
 
-public enum ChatMessageRole {
+public enum ChatMessageRole implements PersistedEnum {
     USER("user"),
     ASSISTANT("assistant"),
     SYSTEM("system");
 
-    private final String databaseValue;
+    private final String value;
 
-    ChatMessageRole(String databaseValue) {
-        this.databaseValue = databaseValue;
+    ChatMessageRole(String value) {
+        this.value = value;
     }
 
-    public String databaseValue() {
-        return databaseValue;
+    @Override
+    public String value() {
+        return value;
     }
 }

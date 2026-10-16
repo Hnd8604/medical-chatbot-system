@@ -6,7 +6,7 @@ import java.util.Collection;
  * Nguồn của số tiền AI đã ghi. Gateway (LiteLLM) là nguồn chi phí duy nhất — Spring
  * không giữ bảng giá và không tự ước tính.
  */
-public enum CostSource {
+public enum CostSource implements PersistedEnum {
     /** Cost thật do gateway báo (header x-litellm-response-cost). */
     GATEWAY("gateway"),
     /** Có call gateway không báo cost: call đó ghi 0, tổng bị thiếu. */
@@ -22,6 +22,7 @@ public enum CostSource {
         this.value = value;
     }
 
+    @Override
     public String value() {
         return value;
     }

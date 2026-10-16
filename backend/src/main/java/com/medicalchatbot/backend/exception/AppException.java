@@ -1,25 +1,22 @@
 package com.medicalchatbot.backend.exception;
 
+import lombok.Getter;
+
 /**
- * Transport-agnostic application failure.
- *
- * <p>The web layer translates its {@link ErrorCode}; services no longer need to
- * throw a Spring MVC exception just to communicate an expected failure.</p>
+ * Expected application failure. Services throw it with an {@link ErrorCode}; the web layer turns
+ * it into the matching HTTP status and error body, so services never depend on Spring MVC.
  */
+@Getter
 public class AppException extends RuntimeException {
 
     private final ErrorCode errorCode;
 
     public AppException(ErrorCode errorCode) {
-        this(errorCode, errorCode.getDefaultMessage(), null);
+        this(errorCode, null, null);
     }
 
     public AppException(ErrorCode errorCode, String message) {
         this(errorCode, message, null);
-    }
-
-    public AppException(ErrorCode errorCode, Throwable cause) {
-        this(errorCode, errorCode.getDefaultMessage(), cause);
     }
 
     public AppException(ErrorCode errorCode, String message, Throwable cause) {
@@ -27,7 +24,23 @@ public class AppException extends RuntimeException {
         this.errorCode = errorCode;
     }
 
-    public ErrorCode getErrorCode() {
-        return errorCode;
+    public static AppException notFound(String message) {
+        return new AppException(ErrorCode.RESOURCE_NOT_FOUND, message);
+    }
+
+    public static AppException invalid(String message) {
+        return new AppException(ErrorCode.INVALID_ARGUMENT, message);
+    }
+
+    public static AppException conflict(String message) {
+        return new AppException(ErrorCode.CONFLICT, message);
+    }
+
+    public static AppException forbidden(String message) {
+        return new AppException(ErrorCode.ACCESS_DENIED, message);
+    }
+
+    public static AppException unauthorized(String message) {
+        return new AppException(ErrorCode.AUTHENTICATION_REQUIRED, message);
     }
 }

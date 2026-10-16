@@ -4,11 +4,10 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-import com.medicalchatbot.backend.domain.model.ChatSessionMemoryState;
 import com.medicalchatbot.backend.entity.ChatSession;
-import com.medicalchatbot.backend.entity.User;
 import com.medicalchatbot.backend.repository.projection.ChatContextMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatMessageProjection;
 import com.medicalchatbot.backend.repository.projection.ChatSessionSummaryProjection;
@@ -16,159 +15,82 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Chat sessions plus the read models of the chat screen. Every query is scoped to the owning user,
+ * so a session id from another account behaves exactly like a missing one.
+ */
 public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> {
 
-    java.util.Optional<ChatSession> findByIdAndUser_Id(UUID id, UUID userId);
+    Optional<ChatSession> findByIdAndUserId(UUID id, UUID userId);
 
-    boolean existsByIdAndUser_Id(UUID id, UUID userId);
+    boolean existsByIdAndUserId(UUID id, UUID userId);
 
-    long deleteByIdAndUser_Id(UUID id, UUID userId);
+    long deleteByIdAndUserId(UUID id, UUID userId);
 
-    default ChatSession create(User user, String title) {
-        return save(new ChatSession(user, title));
+    /** The last {@code limit} messages of a session in chronological order — the context of the next turn. */
+    default List<ChatContextMessageProjection> findRecentMessages(UUID sessionId, UUID userId, int limit) {
+        return findRecentMessageRows(sessionId, userId, limit).stream()
+                .map(row -> new ChatContextMessageProjection(row.getRole(), row.getContent()))
+                .toList();
     }
 
-    default boolean existsForUser(UUID sessionId, UUID userId) {
-        return existsByIdAndUser_Id(sessionId, userId);
+    /** Most recently active sessions; a non-null {@code query} matches title, patient id or message text. */
+    default List<ChatSessionSummaryProjection> searchSessions(UUID userId, String query, int limit) {
+        return searchSessionRows(userId, query, limit).stream()
+                .map(ChatSessionRepository::toSummary)
+                .toList();
     }
 
-    default ChatSessionMemoryState findMemoryForSession(UUID sessionId, UUID userId) {
-        return findByIdAndUser_Id(sessionId, userId)
-                .map(ChatSession::memory)
-                .orElseGet(ChatSessionMemoryState::empty);
+    /** Sessions created in {@code [from, to)}, oldest first — used to export a date range. */
+    default List<ChatSessionSummaryProjection> findSessionsCreatedBetween(
+            UUID userId,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        return findSessionRowsCreatedBetween(userId, from, to).stream()
+                .map(ChatSessionRepository::toSummary)
+                .toList();
     }
 
-    default void updateMemory(ChatSession session, ChatSessionMemoryState memory) {
-        session.applyMemory(memory);
-        save(session);
+    default List<ChatMessageProjection> findMessages(UUID sessionId, UUID userId) {
+        return findMessageRows(sessionId, userId).stream()
+                .map(row -> new ChatMessageProjection(
+                        row.getId(),
+                        row.getRole(),
+                        row.getContent(),
+                        toOffsetDateTime(row.getCreatedAt()),
+                        row.getFeedbackRating(),
+                        row.getFeedbackComment(),
+                        row.getResponseStatus(),
+                        row.getTraceId(),
+                        row.getAnswerSource(),
+                        toBoolean(row.getGroundingChecked()),
+                        toBoolean(row.getGroundingPassed()),
+                        row.getLlmUnavailableReason()
+                ))
+                .toList();
     }
 
     @Query(
             value = """
                     select recent.role as "role", recent.content as "content"
                     from (
-                        select
-                            m.role,
-                            m.content,
-                            m.created_at as "createdAt"
+                        select m.role, m.content, m.created_at
                         from chat_messages m
                         join chat_sessions s on s.id = m.session_id
                         where s.id = :sessionId and s.user_id = :userId
                         order by m.created_at desc
                         limit :limit
                     ) recent
-                    order by recent."createdAt" asc
+                    order by recent.created_at asc
                     """,
             nativeQuery = true
     )
-    List<ChatContextMessageView> findRecentMessageViewsForContext(
+    List<ContextMessageRow> findRecentMessageRows(
             @Param("sessionId") UUID sessionId,
             @Param("userId") UUID userId,
             @Param("limit") int limit
     );
-
-    default List<ChatContextMessageProjection> findRecentMessagesForContext(UUID sessionId, UUID userId, int limit) {
-        return findRecentMessageViewsForContext(sessionId, userId, limit)
-                .stream()
-                .map(message -> new ChatContextMessageProjection(message.getRole(), message.getContent()))
-                .toList();
-    }
-
-    @Query(
-            value = """
-                    select
-                        s.id as "id",
-                        s.title as "title",
-                        s.created_at as "createdAt",
-                        s.updated_at as "updatedAt",
-                        s.active_patient_id as "activePatientId",
-                        coalesce(message_counts.message_count, 0) as "messageCount",
-                        left(coalesce(last_message.content, ''), 160) as "lastMessagePreview"
-                    from chat_sessions s
-                    left join lateral (
-                        select count(*)::int as message_count
-                        from chat_messages m
-                        where m.session_id = s.id
-                    ) message_counts on true
-                    left join lateral (
-                        select m.content
-                        from chat_messages m
-                        where m.session_id = s.id
-                        order by m.created_at desc
-                        limit 1
-                    ) last_message on true
-                    where s.user_id = :userId
-                    order by s.updated_at desc
-                    limit :limit
-                    """,
-            nativeQuery = true
-    )
-    List<ChatSessionSummaryView> findRecentSessionViewsForUser(
-            @Param("userId") UUID userId,
-            @Param("limit") int limit
-    );
-
-    default List<ChatSessionSummaryProjection> findRecentSessionsForUser(UUID userId, int limit) {
-        return findRecentSessionViewsForUser(userId, limit)
-                .stream()
-                .map(session -> new ChatSessionSummaryProjection(
-                        session.getId(),
-                        session.getTitle(),
-                        toOffsetDateTime(session.getCreatedAt()),
-                        toOffsetDateTime(session.getUpdatedAt()),
-                        session.getActivePatientId(),
-                        session.getMessageCount(),
-                        session.getLastMessagePreview()
-                ))
-                .toList();
-    }
-
-    @Query(
-            value = """
-                    select
-                        s.id as "id",
-                        s.title as "title",
-                        s.created_at as "createdAt",
-                        s.updated_at as "updatedAt",
-                        s.active_patient_id as "activePatientId",
-                        coalesce(message_counts.message_count, 0) as "messageCount",
-                        '' as "lastMessagePreview"
-                    from chat_sessions s
-                    left join lateral (
-                        select count(*)::int as message_count
-                        from chat_messages m
-                        where m.session_id = s.id
-                    ) message_counts on true
-                    where s.user_id = :userId
-                      and s.created_at >= :fromDate and s.created_at < :toDate
-                    order by s.created_at asc
-                    """,
-            nativeQuery = true
-    )
-    List<ChatSessionSummaryView> findSessionViewsByDateRangeForUser(
-            @Param("userId") UUID userId,
-            @Param("fromDate") OffsetDateTime fromDate,
-            @Param("toDate") OffsetDateTime toDate
-    );
-
-    default List<ChatSessionSummaryProjection> findSessionsByDateRangeForUser(
-            UUID userId,
-            OffsetDateTime fromDate,
-            OffsetDateTime toDate
-    ) {
-        return findSessionViewsByDateRangeForUser(userId, fromDate, toDate)
-                .stream()
-                .map(session -> new ChatSessionSummaryProjection(
-                        session.getId(),
-                        session.getTitle(),
-                        toOffsetDateTime(session.getCreatedAt()),
-                        toOffsetDateTime(session.getUpdatedAt()),
-                        session.getActivePatientId(),
-                        session.getMessageCount(),
-                        session.getLastMessagePreview()
-                ))
-                .toList();
-    }
 
     @Query(
             value = """
@@ -195,13 +117,14 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                     ) last_message on true
                     where s.user_id = :userId
                       and (
-                        lower(coalesce(s.title, '')) like concat('%', lower(:query), '%')
-                        or lower(coalesce(s.active_patient_id, '')) like concat('%', lower(:query), '%')
+                        cast(:query as text) is null
+                        or lower(coalesce(s.title, '')) like concat('%', lower(cast(:query as text)), '%')
+                        or lower(coalesce(s.active_patient_id, '')) like concat('%', lower(cast(:query as text)), '%')
                         or exists (
                             select 1
                             from chat_messages search_messages
                             where search_messages.session_id = s.id
-                              and lower(search_messages.content) like concat('%', lower(:query), '%')
+                              and lower(search_messages.content) like concat('%', lower(cast(:query as text)), '%')
                         )
                       )
                     order by s.updated_at desc
@@ -209,27 +132,41 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                     """,
             nativeQuery = true
     )
-    List<ChatSessionSummaryView> findSearchSessionViewsForUser(
+    List<SessionSummaryRow> searchSessionRows(
             @Param("userId") UUID userId,
             @Param("query") String query,
             @Param("limit") int limit
     );
 
-    default List<ChatSessionSummaryProjection> searchSessionsForUser(UUID userId, String query, int limit) {
-        return findSearchSessionViewsForUser(userId, query, limit)
-                .stream()
-                .map(session -> new ChatSessionSummaryProjection(
-                        session.getId(),
-                        session.getTitle(),
-                        toOffsetDateTime(session.getCreatedAt()),
-                        toOffsetDateTime(session.getUpdatedAt()),
-                        session.getActivePatientId(),
-                        session.getMessageCount(),
-                        session.getLastMessagePreview()
-                ))
-                .toList();
-    }
+    @Query(
+            value = """
+                    select
+                        s.id as "id",
+                        s.title as "title",
+                        s.created_at as "createdAt",
+                        s.updated_at as "updatedAt",
+                        s.active_patient_id as "activePatientId",
+                        coalesce(message_counts.message_count, 0) as "messageCount",
+                        '' as "lastMessagePreview"
+                    from chat_sessions s
+                    left join lateral (
+                        select count(*)::int as message_count
+                        from chat_messages m
+                        where m.session_id = s.id
+                    ) message_counts on true
+                    where s.user_id = :userId
+                      and s.created_at >= :fromDate and s.created_at < :toDate
+                    order by s.created_at asc
+                    """,
+            nativeQuery = true
+    )
+    List<SessionSummaryRow> findSessionRowsCreatedBetween(
+            @Param("userId") UUID userId,
+            @Param("fromDate") OffsetDateTime fromDate,
+            @Param("toDate") OffsetDateTime toDate
+    );
 
+    /** Messages with the latest feedback and the answer outcome stored in the assistant metadata. */
     @Query(
             value = """
                     select
@@ -237,18 +174,8 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                         m.role as "role",
                         m.content as "content",
                         m.created_at as "createdAt",
-                        (
-                            select f.rating from message_feedback f
-                            where f.message_id = m.id
-                            order by f.created_at desc
-                            limit 1
-                        ) as "feedbackRating",
-                        (
-                            select f.comment from message_feedback f
-                            where f.message_id = m.id
-                            order by f.created_at desc
-                            limit 1
-                        ) as "feedbackComment",
+                        latest_feedback.rating as "feedbackRating",
+                        latest_feedback.comment as "feedbackComment",
                         m.metadata_json ->> 'response_status' as "responseStatus",
                         m.metadata_json ->> 'trace_id' as "traceId",
                         m.metadata_json ->> 'answer_source' as "answerSource",
@@ -257,52 +184,51 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
                         m.metadata_json ->> 'llm_unavailable_reason' as "llmUnavailableReason"
                     from chat_messages m
                     join chat_sessions s on s.id = m.session_id
+                    left join lateral (
+                        select f.rating, f.comment
+                        from message_feedback f
+                        where f.message_id = m.id
+                        order by f.created_at desc
+                        limit 1
+                    ) latest_feedback on true
                     where s.id = :sessionId and s.user_id = :userId
                     order by m.created_at asc
                     """,
             nativeQuery = true
     )
-    List<ChatMessageItemView> findMessageItemViewsForSession(
+    List<MessageRow> findMessageRows(
             @Param("sessionId") UUID sessionId,
             @Param("userId") UUID userId
     );
 
-    default List<ChatMessageProjection> findMessagesForSession(UUID sessionId, UUID userId) {
-        return findMessageItemViewsForSession(sessionId, userId)
-                .stream()
-                .map(message -> new ChatMessageProjection(
-                        message.getId(),
-                        message.getRole(),
-                        message.getContent(),
-                        toOffsetDateTime(message.getCreatedAt()),
-                        message.getFeedbackRating(),
-                        message.getFeedbackComment(),
-                        message.getResponseStatus(),
-                        message.getTraceId(),
-                        message.getAnswerSource(),
-                        toBoolean(message.getGroundingChecked()),
-                        toBoolean(message.getGroundingPassed()),
-                        message.getLlmUnavailableReason()
-                ))
-                .toList();
+    private static ChatSessionSummaryProjection toSummary(SessionSummaryRow row) {
+        return new ChatSessionSummaryProjection(
+                row.getId(),
+                row.getTitle(),
+                toOffsetDateTime(row.getCreatedAt()),
+                toOffsetDateTime(row.getUpdatedAt()),
+                row.getActivePatientId(),
+                row.getMessageCount(),
+                row.getLastMessagePreview()
+        );
     }
 
     private static OffsetDateTime toOffsetDateTime(Instant value) {
         return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
-    /** Giá trị boolean đọc từ jsonb dưới dạng text; thiếu hoặc JSON null thì là null. */
+    /** jsonb booleans are read as text; a missing key or JSON null stays {@code null}. */
     private static Boolean toBoolean(String value) {
         return value == null ? null : Boolean.valueOf(value);
     }
 
-    interface ChatContextMessageView {
+    interface ContextMessageRow {
         String getRole();
 
         String getContent();
     }
 
-    interface ChatSessionSummaryView {
+    interface SessionSummaryRow {
         UUID getId();
 
         String getTitle();
@@ -318,7 +244,7 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
         String getLastMessagePreview();
     }
 
-    interface ChatMessageItemView {
+    interface MessageRow {
         UUID getId();
 
         String getRole();

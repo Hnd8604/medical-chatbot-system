@@ -14,9 +14,15 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  jackson:
+    # Mọi JSON của REST API (request lẫn response) dùng snake_case.
+    property-naming-strategy: SNAKE_CASE
   data:
     redis:
       timeout: 2s
+      # Redis chỉ dùng làm key-value store (refresh token, OTP, rate limit), không có Redis repository.
+      repositories:
+        enabled: false
   mail:
     host: ${SPRING_MAIL_HOST:}
     port: ${SPRING_MAIL_PORT:587}
@@ -55,9 +61,8 @@ management:
       show-details: never
 
 app:
-  quota:
-    # Ngay cua quota (request/token/cost) va bao cao chi phi tinh theo timezone nay.
-    timezone: ${APP_QUOTA_TIMEZONE:Asia/Ho_Chi_Minh}
+  # Ngày của quota (request/token/cost), báo cáo chi phí và xuất lịch sử tính theo timezone này.
+  timezone: ${APP_TIMEZONE:${APP_QUOTA_TIMEZONE:Asia/Ho_Chi_Minh}}
 
 chatbot:
   service:
@@ -77,10 +82,8 @@ jwt:
   refresh-expiration-minutes: ${JWT_REFRESH_EXPIRATION_MINUTES:10080}
 
 telegram:
-  bot:
-    token: ${TELEGRAM_BOT_TOKEN:}
-  chat:
-    id: ${TELEGRAM_CHAT_ID:}
+  bot-token: ${TELEGRAM_BOT_TOKEN:}
+  chat-id: ${TELEGRAM_CHAT_ID:}
 
 backup:
   cron: ${BACKUP_CRON:0 0 2 * * *}
@@ -88,7 +91,7 @@ backup:
   script-path: ${BACKUP_SCRIPT_PATH:../infra/scripts/backup.sh}
   restore-script-path: ${BACKUP_RESTORE_SCRIPT_PATH:../infra/scripts/restore-auto.sh}
   bash-path: ${BACKUP_BASH_PATH:bash}
-  timeout-minutes: ${BACKUP_TIMEOUT_MINUTES:10}
+  timeout: ${BACKUP_TIMEOUT:${BACKUP_TIMEOUT_MINUTES:10}m}
 
 springdoc:
   api-docs:

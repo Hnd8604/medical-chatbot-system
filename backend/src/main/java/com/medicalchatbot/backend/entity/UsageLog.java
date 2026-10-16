@@ -4,10 +4,12 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
+import com.medicalchatbot.backend.entity.converter.CostSourceConverter;
+import com.medicalchatbot.backend.entity.converter.UsageStatusConverter;
+import com.medicalchatbot.backend.enums.CostSource;
+import com.medicalchatbot.backend.enums.UsageStatus;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -16,15 +18,26 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
+/**
+ * Một lượt gọi AI (lượt chat) — nguồn dữ liệu duy nhất cho quota và báo cáo chi phí.
+ * Chi tiết từng LLM call của lượt nằm ở {@link LlmCallUsage}.
+ */
 @Entity
 @Table(name = "usage_logs")
 @Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class UsageLog {
+
+    public static final String OPERATION_CHAT = "chat";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -44,15 +57,19 @@ public class UsageLog {
     @Column(name = "llm_model", length = 100)
     private String llmModel;
 
+    @Builder.Default
     @Column(nullable = false, length = 50)
-    private String operation = "chat";
+    private String operation = OPERATION_CHAT;
 
+    @Builder.Default
+    @Convert(converter = UsageStatusConverter.class)
     @Column(nullable = false, length = 30)
-    private String status = "success";
+    private UsageStatus status = UsageStatus.SUCCESS;
 
     @Column(name = "latency_ms")
     private Integer latencyMs;
 
+    @Builder.Default
     @Column(name = "request_count", nullable = false)
     private int requestCount = 1;
 
@@ -66,12 +83,14 @@ public class UsageLog {
      * Tổng chi phí AI của lượt. Giữ tên cột cũ; từ V10 là cost thật của gateway (dòng
      * {@link #costSource} = legacy_estimate là ước tính cũ trước V10).
      */
+    @Builder.Default
     @Column(name = "estimated_cost_usd", nullable = false, precision = 12, scale = 6)
     private BigDecimal estimatedCostUsd = BigDecimal.ZERO;
 
-    /** gateway | unavailable | none | legacy_estimate — xem {@link com.medicalchatbot.backend.enums.CostSource}. */
+    @Builder.Default
+    @Convert(converter = CostSourceConverter.class)
     @Column(name = "cost_source", nullable = false, length = 20)
-    private String costSource = "none";
+    private CostSource costSource = CostSource.NONE;
 
     /** trace_id của lượt bên chatbot-service, để đối chiếu log. */
     @Column(name = "trace_id", length = 64)
@@ -83,46 +102,15 @@ public class UsageLog {
     @Column(name = "answer_source")
     private String answerSource;
 
+    @Builder.Default
     @Column(name = "saved_tokens")
-    private Integer savedTokens;
+    private Integer savedTokens = 0;
 
+    @Builder.Default
     @Column(name = "saved_cost_usd")
-    private BigDecimal savedCostUsd;
+    private BigDecimal savedCostUsd = BigDecimal.ZERO;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
-
-    public UsageLog(
-            User user,
-            ChatSession session,
-            String llmProvider,
-            String llmModel,
-            String operation,
-            String status,
-            long latencyMs,
-            int inputTokens,
-            int outputTokens,
-            BigDecimal estimatedCostUsd,
-            String errorMessage,
-            String answerSource,
-            Integer savedTokens,
-            BigDecimal savedCostUsd
-    ) {
-        this.user = user;
-        this.session = session;
-        this.llmProvider = llmProvider;
-        this.llmModel = llmModel;
-        this.operation = operation;
-        this.status = status;
-        this.latencyMs = Math.toIntExact(Math.max(0, latencyMs));
-        this.inputTokens = inputTokens;
-        this.outputTokens = outputTokens;
-        this.estimatedCostUsd = estimatedCostUsd == null ? BigDecimal.ZERO : estimatedCostUsd;
-        this.errorMessage = errorMessage;
-
-        this.answerSource = answerSource != null ? answerSource : "llm";
-        this.savedTokens = savedTokens != null ? savedTokens : 0;
-        this.savedCostUsd = savedCostUsd != null ? savedCostUsd : BigDecimal.ZERO;
-    }
 }

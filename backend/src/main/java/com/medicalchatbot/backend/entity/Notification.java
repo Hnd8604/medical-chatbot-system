@@ -4,9 +4,6 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.medicalchatbot.backend.enums.NotificationType;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,14 +15,21 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
 @Table(name = "notifications")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class Notification {
 
     @Id
@@ -47,21 +51,9 @@ public class Notification {
     private String content;
 
     @Column(name = "is_read", nullable = false)
-    private boolean isRead = false;
+    private boolean read;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
-
-    public Notification(User user, NotificationType type, String title, String content) {
-        this.user = user;
-        this.type = type;
-        this.title = title;
-        this.content = content;
-        this.isRead = false;
-    }
-
-    public void markAsRead() {
-        this.isRead = true;
-    }
 }

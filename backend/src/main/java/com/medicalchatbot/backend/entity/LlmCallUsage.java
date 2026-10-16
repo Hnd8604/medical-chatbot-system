@@ -4,10 +4,10 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
+import com.medicalchatbot.backend.entity.converter.CostSourceConverter;
+import com.medicalchatbot.backend.enums.CostSource;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -16,6 +16,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 /**
  * Một LLM call trong một lượt chat (router / planner / answer / summary...). Cho phép báo
@@ -24,10 +30,9 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "llm_call_usage")
 @Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class LlmCallUsage {
 
     @Id
@@ -56,9 +61,10 @@ public class LlmCallUsage {
     @Column(name = "cost_usd", nullable = false, precision = 12, scale = 6)
     private BigDecimal costUsd;
 
-    /** gateway | unavailable — xem {@link com.medicalchatbot.backend.enums.CostSource}. */
+    /** {@link CostSource#GATEWAY} hoặc {@link CostSource#UNAVAILABLE}. */
+    @Convert(converter = CostSourceConverter.class)
     @Column(name = "cost_source", nullable = false, length = 20)
-    private String costSource;
+    private CostSource costSource;
 
     @Column(name = "gateway_call_id", length = 100)
     private String gatewayCallId;

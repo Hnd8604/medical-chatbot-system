@@ -1,67 +1,62 @@
 package com.medicalchatbot.backend.controller;
 
-import com.medicalchatbot.backend.dto.response.BackupHistoryResponse;
-import com.medicalchatbot.backend.dto.response.RestoreHistoryResponse;
-import com.medicalchatbot.backend.entity.BackupHistory;
-import com.medicalchatbot.backend.entity.RestoreHistory;
-import com.medicalchatbot.backend.mapper.BackupHistoryMapper;
+import java.util.UUID;
+
+import com.medicalchatbot.backend.dto.response.BackupResponse;
+import com.medicalchatbot.backend.dto.response.PageResponse;
+import com.medicalchatbot.backend.dto.response.RestoreResponse;
 import com.medicalchatbot.backend.service.BackupService;
 import com.medicalchatbot.backend.service.CurrentUserService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Backup and restore jobs run in the background: the POSTs answer 202 with the RUNNING job to poll. */
 @Validated
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/admin/backup")
+@RequestMapping("/api/admin")
 public class AdminBackupController {
 
     private final BackupService backupService;
     private final CurrentUserService currentUserService;
-    private final BackupHistoryMapper backupHistoryMapper;
 
-    /** Kích hoạt sao lưu thủ công. Trả 202 kèm bản ghi đang chạy để frontend poll. */
-    @PostMapping
-    public ResponseEntity<BackupHistoryResponse> triggerBackup() {
-        String username = currentUserService.getCurrentUsername();
-        BackupHistory row = backupService.triggerManualBackup(username);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(backupHistoryMapper.toResponse(row));
+    @PostMapping("/backups")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public BackupResponse startBackup() {
+        return backupService.startManualBackup(currentUserService.requireCurrentUsername());
     }
 
-    @GetMapping("/history")
-    public Page<BackupHistoryResponse> history(
+    @GetMapping("/backups")
+    public PageResponse<BackupResponse> backups(
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        return backupService.getHistory(PageRequest.of(page, size)).map(backupHistoryMapper::toResponse);
+        return backupService.backups(PageRequest.of(page, size));
     }
 
-    /** Khôi phục CSDL từ một bản backup. Trả 202 kèm bản ghi restore đang chạy. */
-    @PostMapping("/{backupId}/restore")
-    public ResponseEntity<RestoreHistoryResponse> restore(@PathVariable UUID backupId) {
-        String username = currentUserService.getCurrentUsername();
-        RestoreHistory row = backupService.triggerRestore(backupId, username);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(backupHistoryMapper.toResponse(row));
+    /** Overwrites the current databases with the backup. */
+    @PostMapping("/backups/{backupId}/restore")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public RestoreResponse startRestore(@PathVariable UUID backupId) {
+        return backupService.startRestore(backupId, currentUserService.requireCurrentUsername());
     }
 
-    @GetMapping("/restore-history")
-    public Page<RestoreHistoryResponse> restoreHistory(
+    @GetMapping("/restores")
+    public PageResponse<RestoreResponse> restores(
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        return backupService.getRestoreHistory(PageRequest.of(page, size)).map(backupHistoryMapper::toResponse);
+        return backupService.restores(PageRequest.of(page, size));
     }
 }

@@ -4,24 +4,31 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
 @Table(name = "quota_policies")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class QuotaPolicy {
+
+    /** Policy gán cho tài khoản tự đăng ký. */
+    public static final String DEFAULT_USER_POLICY = "user_standard";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -39,38 +46,11 @@ public class QuotaPolicy {
     @Column(name = "daily_cost_limit_usd", nullable = false, precision = 10, scale = 4)
     private BigDecimal dailyCostLimitUsd;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
-
+    /** Số request chat tối đa mỗi phút; {@code null} dùng mặc định của hệ thống. */
     @Column(name = "rate_limit_per_minute")
     private Integer rateLimitPerMinute;
 
-    public QuotaPolicy(
-            String name,
-            int dailyRequestLimit,
-            int dailyTokenLimit,
-            BigDecimal dailyCostLimitUsd,
-            Integer rateLimitPerMinute
-    ) {
-        this.name = name;
-        this.dailyRequestLimit = dailyRequestLimit;
-        this.dailyTokenLimit = dailyTokenLimit;
-        this.dailyCostLimitUsd = dailyCostLimitUsd;
-        this.rateLimitPerMinute = rateLimitPerMinute;
-    }
-
-    public void applyUpdate(
-            String name,
-            int dailyRequestLimit,
-            int dailyTokenLimit,
-            BigDecimal dailyCostLimitUsd,
-            Integer rateLimitPerMinute
-    ) {
-        this.name = name;
-        this.dailyRequestLimit = dailyRequestLimit;
-        this.dailyTokenLimit = dailyTokenLimit;
-        this.dailyCostLimitUsd = dailyCostLimitUsd;
-        this.rateLimitPerMinute = rateLimitPerMinute;
-    }
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
 }

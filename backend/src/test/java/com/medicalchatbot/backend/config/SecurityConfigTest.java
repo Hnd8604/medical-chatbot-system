@@ -2,11 +2,16 @@ package com.medicalchatbot.backend.config;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.medicalchatbot.backend.repository.UserRepository;
-import com.medicalchatbot.backend.service.JwtTokenService;
 import java.util.Map;
+
+import com.medicalchatbot.backend.repository.UserRepository;
+import com.medicalchatbot.backend.security.JwtAuthenticationFilter;
+import com.medicalchatbot.backend.security.JwtTokenProvider;
+import com.medicalchatbot.backend.security.RateLimitInterceptor;
+import com.medicalchatbot.backend.security.SecurityErrorWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -34,7 +39,7 @@ class SecurityConfigTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private JwtTokenService jwtTokenService;
+    private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
     private UserRepository userRepository;
@@ -51,17 +56,14 @@ class SecurityConfigTest {
             "/api-docs/swagger-config"
     })
     void publicGetEndpointsAllowAnonymousAccess(String path) throws Exception {
-        mockMvc.perform(get(path))
-                .andExpect(status().isOk());
+        mockMvc.perform(get(path)).andExpect(status().isOk());
     }
 
     @Test
     void publicAuthEndpointIsLimitedToConfiguredHttpMethod() throws Exception {
-        mockMvc.perform(post("/api/auth/login"))
-                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/login")).andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/auth/login"))
-                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/auth/login")).andExpect(status().isUnauthorized());
     }
 
     @ParameterizedTest
@@ -70,14 +72,13 @@ class SecurityConfigTest {
             "/api/me/patient/profile",
             "/api/chat",
             "/api/chat/sessions",
-            "/api/quota/status",
-            "/api/usage/cost-summary",
+            "/api/usage/quota",
+            "/api/usage/costs",
             "/api/notifications"
     })
     @WithMockUser(roles = "USER")
     void authenticatedEndpointsAllowAuthenticatedUser(String path) throws Exception {
-        mockMvc.perform(get(path))
-                .andExpect(status().isOk());
+        mockMvc.perform(get(path)).andExpect(status().isOk());
     }
 
     @ParameterizedTest
@@ -89,40 +90,50 @@ class SecurityConfigTest {
     })
     void protectedEndpointsRejectAnonymousAccess(String path) throws Exception {
         mockMvc.perform(get(path))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error_code").value("UNAUTHORIZED"));
     }
 
     @Test
     @WithMockUser(roles = "USER")
     void patientEndpointsRejectOrdinaryUser() throws Exception {
         mockMvc.perform(get("/api/patients/patient-1"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1102));
     }
 
     @Test
     @WithMockUser(roles = "DOCTOR")
     void patientEndpointsAllowDoctor() throws Exception {
-        mockMvc.perform(get("/api/patients/patient-1"))
-                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/patients/patient-1")).andExpect(status().isOk());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {
             "/api/admin/users",
-            "/api/audit-logs",
-            "/api/metrics/cache"
+            "/api/admin/audit-logs",
+            "/api/admin/analytics/cache"
     })
     @WithMockUser(roles = "ADMIN")
     void adminEndpointsAllowAdmin(String path) throws Exception {
-        mockMvc.perform(get(path))
-                .andExpect(status().isOk());
+        mockMvc.perform(get(path)).andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/api/admin/users",
+            "/api/admin/audit-logs",
+            "/api/admin/analytics/cache"
+    })
+    @WithMockUser(roles = "DOCTOR")
+    void adminEndpointsRejectNonAdmin(String path) throws Exception {
+        mockMvc.perform(get(path)).andExpect(status().isForbidden());
     }
 
     @Test
     @WithMockUser(roles = "USER")
     void unlistedEndpointIsDeniedEvenWhenAuthenticated() throws Exception {
-        mockMvc.perform(get("/api/unlisted"))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/unlisted")).andExpect(status().isForbidden());
     }
 
     @RestController
@@ -138,14 +149,14 @@ class SecurityConfigTest {
                 "/api/me/patient/profile",
                 "/api/chat",
                 "/api/chat/sessions",
-                "/api/quota/status",
-                "/api/usage/cost-summary",
+                "/api/usage/quota",
+                "/api/usage/costs",
                 "/api/notifications",
                 "/api/patients",
                 "/api/patients/patient-1",
                 "/api/admin/users",
-                "/api/audit-logs",
-                "/api/metrics/cache",
+                "/api/admin/audit-logs",
+                "/api/admin/analytics/cache",
                 "/api/unlisted"
         })
         Map<String, String> route() {

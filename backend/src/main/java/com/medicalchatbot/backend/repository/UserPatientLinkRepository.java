@@ -1,5 +1,6 @@
 package com.medicalchatbot.backend.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -10,28 +11,31 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserPatientLinkRepository extends JpaRepository<UserPatientLink, UUID> {
 
+    /** Linked patient ids, primary link first. */
     @Query("""
             select l.fhirPatientId
             from UserPatientLink l
             where l.user.id = :userId
             order by l.primaryLink desc, l.createdAt asc
             """)
-    List<String> findPatientIdsForUser(@Param("userId") UUID userId);
+    List<String> findPatientIdsByUserId(@Param("userId") UUID userId);
+
+    boolean existsByUserId(UUID userId);
 
     @Query("""
             select l
             from UserPatientLink l
             where l.user.id = :userId
-              and l.relationship = 'SELF'
+              and l.relationship = com.medicalchatbot.backend.enums.PatientRelationship.SELF
             order by l.primaryLink desc, l.createdAt asc
             """)
-    List<UserPatientLink> findSelfLinksForUser(@Param("userId") UUID userId);
+    List<UserPatientLink> findSelfLinksByUserId(@Param("userId") UUID userId);
 
     @Query("""
             select count(l) > 0
             from UserPatientLink l
             where lower(l.fhirPatientId) = lower(:patientId)
-              and l.relationship = 'SELF'
+              and l.relationship = com.medicalchatbot.backend.enums.PatientRelationship.SELF
               and l.user.id <> :userId
             """)
     boolean existsSelfLinkForOtherUser(
@@ -42,16 +46,8 @@ public interface UserPatientLinkRepository extends JpaRepository<UserPatientLink
     @Query("""
             select l
             from UserPatientLink l
-            where l.user.id = :userId
-            order by l.primaryLink desc, l.createdAt asc
-            """)
-    List<UserPatientLink> findLinksForUser(@Param("userId") UUID userId);
-
-    @Query("""
-            select l
-            from UserPatientLink l
             where l.user.id in :userIds
             order by l.user.id asc, l.primaryLink desc, l.createdAt asc
             """)
-    List<UserPatientLink> findLinksForUsers(@Param("userIds") List<UUID> userIds);
+    List<UserPatientLink> findByUserIds(@Param("userIds") Collection<UUID> userIds);
 }

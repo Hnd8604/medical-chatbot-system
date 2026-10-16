@@ -2,85 +2,42 @@ package com.medicalchatbot.backend.dto.response;
 
 import java.util.UUID;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 
+/** Answer of one chat turn. FHIR payloads (evidence, candidates, usage...) pass through from chatbot-service. */
 public record ChatResponse(
-        @JsonProperty("session_id")
         UUID sessionId,
-
-        @JsonProperty("message_id")
+        /** Id of the stored assistant message; used to rate the answer. */
         UUID messageId,
-
         String answer,
-
         String intent,
-
-        @JsonProperty("tool_name")
         String toolName,
-
-        @JsonProperty("intent_source")
         String intentSource,
-
-        @JsonProperty("answer_source")
         String answerSource,
-
-        @JsonProperty("answer_reason")
         String answerReason,
-
-        @JsonProperty("patient_id")
         String patientId,
-
-        @JsonProperty("observation_type")
         String observationType,
-
-        @JsonProperty("all_patients")
         Boolean allPatients,
-
-        @JsonProperty("patient_search")
         JsonNode patientSearch,
-
-        @JsonProperty("needs_patient_selection")
         Boolean needsPatientSelection,
-
-        @JsonProperty("patient_candidates")
         JsonNode patientCandidates,
-
-        @JsonProperty("pending_question")
+        /** Question to re-send once the user picks one of the patient candidates. */
         String pendingQuestion,
-
         JsonNode evidence,
-
-        @JsonProperty("answer_usage")
         JsonNode answerUsage,
-
         JsonNode usage,
-
-        @JsonProperty("saved_usage")
         JsonNode savedUsage,
-
-        // --- Contract agent (chatbot-service) ---
-        /** Mã tra log bên chatbot-service; FE hiển thị khi người dùng báo lỗi. */
-        @JsonProperty("trace_id")
+        /** Log correlation id on chatbot-service; shown to users when something goes wrong. */
         String traceId,
-
-        /** answered | partial | no_data | clarification_needed | patient_selection_needed | tool_error */
-        @JsonProperty("response_status")
+        /** answered, partial, no_data, clarification_needed, patient_selection_needed or tool_error. */
         String responseStatus,
-
-        /** fhir | general_chat | conversation_meta | unsupported | cache */
-        @JsonProperty("agent_route")
+        /** fhir, general_chat, conversation_meta, unsupported or cache. */
         String agentRoute,
-
-        /** [{id, tool, error_code}] — các bước truy xuất bị lỗi khi response_status = partial. */
-        @JsonProperty("failed_steps")
+        /** Failed retrieval steps ({id, tool, error_code}) when the answer is partial. */
         JsonNode failedSteps,
-
-        /** {checked, passed} — kết quả kiểm câu trả lời LLM so với evidence. */
+        /** {checked, passed}: whether the LLM answer was verified against the evidence. */
         JsonNode grounding,
-
-        /** Có khi lượt này không được gọi LLM (gateway chưa cấu hình) — trả lời bằng luật/template. */
-        @JsonProperty("llm_unavailable_reason")
+        /** Set when the turn was answered by rules/templates because no LLM was available. */
         String llmUnavailableReason
 ) {
 }

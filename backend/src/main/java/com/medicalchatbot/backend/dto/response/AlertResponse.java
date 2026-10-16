@@ -1,12 +1,12 @@
 package com.medicalchatbot.backend.dto.response;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.medicalchatbot.backend.enums.AlertSeverity;
-import com.medicalchatbot.backend.enums.AlertStatus;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-/** API projection for an alert; persistence entities stay inside the service layer. */
+import com.fasterxml.jackson.databind.JsonNode;
+import com.medicalchatbot.backend.enums.AlertSeverity;
+import com.medicalchatbot.backend.enums.AlertStatus;
+
 public record AlertResponse(
         UUID id,
         String source,
@@ -14,7 +14,7 @@ public record AlertResponse(
         AlertSeverity severity,
         AlertStatus status,
         String message,
-        JsonNode metadataJson,
+        JsonNode metadata,
         OffsetDateTime createdAt,
         OffsetDateTime resolvedAt,
         String resolvedBy

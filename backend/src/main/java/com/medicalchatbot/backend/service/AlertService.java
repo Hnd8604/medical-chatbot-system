@@ -1,67 +1,66 @@
 package com.medicalchatbot.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.medicalchatbot.backend.entity.Alert;
-import com.medicalchatbot.backend.dto.response.AlertResponse;
-import com.medicalchatbot.backend.enums.AlertSeverity;
-import com.medicalchatbot.backend.enums.AlertStatus;
-import com.medicalchatbot.backend.exception.AppException;
-import com.medicalchatbot.backend.exception.ErrorCode;
-import com.medicalchatbot.backend.integration.notification.TelegramAlertClient;
-import com.medicalchatbot.backend.repository.AlertRepository;
-import com.medicalchatbot.backend.mapper.AlertMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.medicalchatbot.backend.client.TelegramClient;
+import com.medicalchatbot.backend.dto.response.AlertResponse;
+import com.medicalchatbot.backend.dto.response.PageResponse;
+import com.medicalchatbot.backend.entity.Alert;
+import com.medicalchatbot.backend.enums.AlertSeverity;
+import com.medicalchatbot.backend.enums.AlertStatus;
+import com.medicalchatbot.backend.enums.AlertType;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.mapper.AlertMapper;
+import com.medicalchatbot.backend.repository.AlertRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/** Operational alerts for administrators, mirrored to Telegram when configured. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AlertService {
 
+    /** While an alert of a type is still open, new ones of that type are dropped for this long. */
+    private static final Duration SUPPRESSION_WINDOW = Duration.ofMinutes(15);
+
     private final AlertRepository alertRepository;
     private final AlertMapper alertMapper;
-    private final TelegramAlertClient telegramAlertClient;
+    private final TelegramClient telegramClient;
 
-    @Transactional
-    public void triggerAlert(String source, String alertType, AlertSeverity severity, String message, JsonNode metadata) {
-        OffsetDateTime thresholdTime = OffsetDateTime.now().minusMinutes(15);
-
-        boolean isSpam = alertRepository.existsByAlertTypeAndStatusAndCreatedAtAfter(
-                alertType, AlertStatus.OPEN, thresholdTime
-        );
-
-        if (isSpam) {
-            log.debug("[ALERT SUPPRESSED] Alert {} từ {} đang spam, đã bỏ qua.", alertType, source);
+    /**
+     * Records an incident. It commits independently: the operation that hit the incident usually
+     * fails right after, and its rollback must not erase the alert.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void raise(AlertType type, String message, JsonNode metadata) {
+        OffsetDateTime since = OffsetDateTime.now().minus(SUPPRESSION_WINDOW);
+        if (alertRepository.existsByAlertTypeAndStatusAndCreatedAtAfter(type.name(), AlertStatus.OPEN, since)) {
+            log.debug("Alert {} suppressed: an open one was raised less than {} ago", type, SUPPRESSION_WINDOW);
             return;
         }
 
-        JsonNode safeMetadata = metadata != null ? metadata : JsonNodeFactory.instance.objectNode();
-        Alert alert = Alert.builder()
-                .source(source)
-                .alertType(alertType)
-                .severity(severity)
-                .status(AlertStatus.OPEN)
+        alertRepository.save(Alert.builder()
+                .source(type.source())
+                .alertType(type.name())
+                .severity(type.severity())
                 .message(message)
-                .metadataJson(safeMetadata)
-                .build();
-
-        alertRepository.save(alert);
-        log.warn("[SYSTEM ALERT - {}] {}: {}", severity, alertType, message);
-
-        telegramAlertClient.send(alertType, severity, message);
-
+                .metadataJson(metadata != null ? metadata : JsonNodeFactory.instance.objectNode())
+                .build());
+        log.warn("[SYSTEM ALERT - {}] {}: {}", type.severity(), type, message);
+        telegramClient.sendAlert(type.name(), type.severity(), message);
     }
 
-
     @Transactional(readOnly = true)
-    public Page<AlertResponse> searchAlerts(
+    public PageResponse<AlertResponse> search(
             AlertStatus status,
             AlertSeverity severity,
             String source,
@@ -70,25 +69,17 @@ public class AlertService {
             OffsetDateTime toDate,
             Pageable pageable
     ) {
-        return alertRepository.searchAlerts(status, severity, source, alertType, fromDate, toDate, pageable)
-                .map(alertMapper::toResponse);
+        return PageResponse.of(
+                alertRepository.search(status, severity, source, alertType, fromDate, toDate, pageable),
+                alertMapper::toResponse
+        );
     }
 
-
     @Transactional
-    public void resolveAlert(UUID alertId, String resolvedBy) {
+    public void resolve(UUID alertId, String resolvedBy) {
         Alert alert = alertRepository.findById(alertId)
-                .orElseThrow(() -> new AppException(
-                        ErrorCode.RESOURCE_NOT_FOUND,
-                        "Không tìm thấy Alert với ID: " + alertId
-                ));
-
-        if (alert.getStatus() == AlertStatus.OPEN) {
-            alert.setStatus(AlertStatus.RESOLVED);
-            alert.setResolvedAt(OffsetDateTime.now());
-            alert.setResolvedBy(resolvedBy);
-            alertRepository.save(alert);
-            log.info("Alert {} đã được đánh dấu RESOLVED bởi {}", alertId, resolvedBy);
-        }
+                .orElseThrow(() -> AppException.notFound("Không tìm thấy cảnh báo."));
+        alert.resolve(resolvedBy);
+        log.info("Alert {} resolved by {}", alertId, resolvedBy);
     }
 }

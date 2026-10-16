@@ -3,14 +3,11 @@ package com.medicalchatbot.backend.mapper;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.medicalchatbot.backend.dto.response.CostByDay;
-import com.medicalchatbot.backend.dto.response.CostByModel;
 import com.medicalchatbot.backend.dto.response.CostSummaryResponse;
-import com.medicalchatbot.backend.dto.response.CostUnavailableModel;
 import com.medicalchatbot.backend.repository.projection.CostByDayProjection;
 import com.medicalchatbot.backend.repository.projection.CostByModelProjection;
-import com.medicalchatbot.backend.repository.projection.CostSummaryProjection;
 import com.medicalchatbot.backend.repository.projection.CostUnavailableModelProjection;
+import com.medicalchatbot.backend.repository.projection.UsageTotalsProjection;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -19,10 +16,10 @@ public class CostMapper {
     public CostSummaryResponse toCostSummary(
             LocalDate from,
             LocalDate to,
-            CostSummaryProjection totals,
+            UsageTotalsProjection totals,
             List<CostByModelProjection> models,
             List<CostByDayProjection> days,
-            List<CostUnavailableModelProjection> costUnavailableModels
+            List<CostUnavailableModelProjection> unpricedModels
     ) {
         return new CostSummaryResponse(
                 from,
@@ -32,14 +29,14 @@ public class CostMapper {
                 totals.outputTokens(),
                 totals.totalTokens(),
                 totals.costUsd(),
-                models.stream().map(this::toCostByModel).toList(),
-                days.stream().map(this::toCostByDay).toList(),
-                costUnavailableModels.stream().map(this::toCostUnavailableModel).toList()
+                models.stream().map(CostMapper::toModelCost).toList(),
+                days.stream().map(CostMapper::toDailyCost).toList(),
+                unpricedModels.stream().map(CostMapper::toUnpricedModel).toList()
         );
     }
 
-    private CostByModel toCostByModel(CostByModelProjection model) {
-        return new CostByModel(
+    private static CostSummaryResponse.ModelCost toModelCost(CostByModelProjection model) {
+        return new CostSummaryResponse.ModelCost(
                 model.llmProvider(),
                 model.llmModel(),
                 model.callCount(),
@@ -50,8 +47,8 @@ public class CostMapper {
         );
     }
 
-    private CostByDay toCostByDay(CostByDayProjection day) {
-        return new CostByDay(
+    private static CostSummaryResponse.DailyCost toDailyCost(CostByDayProjection day) {
+        return new CostSummaryResponse.DailyCost(
                 day.date(),
                 day.requestCount(),
                 day.inputTokens(),
@@ -61,7 +58,7 @@ public class CostMapper {
         );
     }
 
-    private CostUnavailableModel toCostUnavailableModel(CostUnavailableModelProjection model) {
-        return new CostUnavailableModel(model.llmProvider(), model.llmModel(), model.callCount());
+    private static CostSummaryResponse.UnpricedModel toUnpricedModel(CostUnavailableModelProjection model) {
+        return new CostSummaryResponse.UnpricedModel(model.llmProvider(), model.llmModel(), model.callCount());
     }
 }

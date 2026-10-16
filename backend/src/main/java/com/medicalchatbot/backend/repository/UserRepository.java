@@ -12,20 +12,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
 
-    Optional<User> findByUsername(String username);
-
-    @Query("""
-            select count(u) > 0
-            from User u
-            where lower(u.username) = lower(:username)
-            """)
+    @Query("select count(u) > 0 from User u where lower(u.username) = lower(:username)")
     boolean existsByUsernameIgnoreCase(@Param("username") String username);
 
-    @Query("""
-            select count(u) > 0
-            from User u
-            where lower(coalesce(u.email, '')) = lower(:email)
-            """)
+    @Query("select count(u) > 0 from User u where lower(coalesce(u.email, '')) = lower(:email)")
     boolean existsByEmailIgnoreCase(@Param("email") String email);
 
     @Query("""
@@ -36,11 +26,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             """)
     Optional<User> findByUsernameOrEmailIgnoreCase(@Param("credential") String credential);
 
-    @Query("""
-            select u
-            from User u
-            where lower(coalesce(u.email, '')) = lower(:email)
-            """)
+    @Query("select u from User u where lower(coalesce(u.email, '')) = lower(:email)")
     Optional<User> findByEmailIgnoreCase(@Param("email") String email);
 
     Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);
@@ -53,11 +39,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                or lower(coalesce(u.displayName, '')) like lower(concat('%', :query, '%'))
             order by u.username asc
             """)
-    Page<User> searchByUsernameOrEmail(@Param("query") String query, Pageable pageable);
+    Page<User> search(@Param("query") String query, Pageable pageable);
 
     long countByQuotaPolicyId(UUID quotaPolicyId);
-
-    default Optional<UUID> findIdByUsername(String username) {
-        return findByUsername(username).map(User::getId);
-    }
 }

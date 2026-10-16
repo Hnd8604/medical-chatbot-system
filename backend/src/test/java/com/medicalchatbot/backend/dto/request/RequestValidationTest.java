@@ -18,13 +18,7 @@ class RequestValidationTest {
 
     @Test
     void registrationRejectsInvalidStructuralInput() {
-        var request = new AuthRegisterRequest(
-                "A",
-                "invalid username",
-                "not-an-email",
-                "short",
-                "short"
-        );
+        var request = new RegisterRequest("A", "invalid username", "not-an-email", "short", "short");
 
         assertThat(validator.validate(request))
                 .extracting(violation -> violation.getPropertyPath().toString())
@@ -42,11 +36,18 @@ class RequestValidationTest {
 
     @Test
     void patientLinkRequiresIsoDateShapeAndBoundedIdentifiers() {
-        var request = new AuthLinkPatientRequest("P".repeat(101), "24/09/2026", "0".repeat(31));
+        var request = new LinkPatientRequest("P".repeat(101), "24/09/2026", "0".repeat(31));
 
         assertThat(validator.validate(request))
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .contains("patientId", "birthDate", "phone");
+    }
+
+    @Test
+    void patientLinkAcceptsIsoDate() {
+        var request = new LinkPatientRequest("BN2026-00001", "1990-05-12", "0901234567");
+
+        assertThat(validator.validate(request)).isEmpty();
     }
 
     @Test

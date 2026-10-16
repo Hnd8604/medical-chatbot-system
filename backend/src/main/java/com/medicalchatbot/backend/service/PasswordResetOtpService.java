@@ -1,30 +1,23 @@
 package com.medicalchatbot.backend.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import com.medicalchatbot.backend.config.PasswordResetProperties;
+import com.medicalchatbot.backend.config.properties.PasswordResetProperties;
 import com.medicalchatbot.backend.exception.AppException;
-import com.medicalchatbot.backend.exception.ErrorCode;
+import com.medicalchatbot.backend.util.SecureTokens;
+import com.medicalchatbot.backend.util.SecureTokens.OpaqueToken;
+import com.medicalchatbot.backend.util.TextUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Quản lý mã OTP quên mật khẩu và ticket đặt lại, lưu trong Redis.
+ * Codes and tickets of the forgot-password flow, stored in Redis with the same guarantees as
+ * {@link RefreshTokenService}: only hashes are kept, comparisons are constant-time, keys expire.
  *
- * <p>Theo cùng nguyên tắc bảo mật của {@link RefreshTokenService}: Redis chỉ lưu hash SHA-256,
- * so sánh constant-time, mỗi key tự hết hạn theo TTL nên không cần job dọn dẹp.</p>
- *
- * <p>Luồng: {@link #issueCode(String)} gửi mã 6 số → {@link #verifyCode(String, String)} đổi mã
- * đúng lấy ticket opaque {@code {jti}.{secret}} → {@link #consumeTicket(String)} dùng một lần khi
- * đặt lại mật khẩu.</p>
+ * <p>Flow: {@link #issueCode} emails a 6-digit code → {@link #verifyCode} trades a correct code
+ * for a one-time ticket → {@link #consumeTicket} spends the ticket when the new password is set.</p>
  */
 @Service
 public class PasswordResetOtpService {
@@ -32,168 +25,124 @@ public class PasswordResetOtpService {
     private static final String OTP_KEY_PREFIX = "password_reset:otp:";
     private static final String COOLDOWN_KEY_PREFIX = "password_reset:cooldown:";
     private static final String TICKET_KEY_PREFIX = "password_reset:ticket:";
-    private static final int SECRET_BYTES = 32;
-    private static final int OTP_BOUND = 1_000_000;
+    private static final int CODE_LENGTH = 6;
+    private static final String SEPARATOR = "|";
 
     private final StringRedisTemplate redisTemplate;
-    private final Duration otpTtl;
-    private final Duration ticketTtl;
-    private final Duration resendCooldown;
-    private final int maxAttempts;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final PasswordResetProperties properties;
 
     public PasswordResetOtpService(StringRedisTemplate redisTemplate, PasswordResetProperties properties) {
         this.redisTemplate = redisTemplate;
-        this.otpTtl = Duration.ofMinutes(properties.otpTtlMinutes());
-        this.ticketTtl = Duration.ofMinutes(properties.ticketTtlMinutes());
-        this.resendCooldown = Duration.ofSeconds(properties.resendCooldownSeconds());
-        this.maxAttempts = properties.maxAttempts();
+        this.properties = properties;
     }
 
     /**
-     * Sinh và lưu mã OTP 6 số cho email (ghi đè mã cũ, reset bộ đếm sai).
+     * Creates a new code for the email, replacing any previous one and resetting the attempt count.
      *
-     * @return mã thô để gửi/log; {@link Optional#empty()} nếu đang trong thời gian chờ gửi lại
-     *         (chống spam) — caller vẫn trả thông điệp chung để không lộ email tồn tại.
+     * @return the raw code to email, or empty while the resend cooldown is running
      */
     public Optional<String> issueCode(String email) {
-        String normalized = normalize(email);
-        String cooldownKey = COOLDOWN_KEY_PREFIX + normalized;
-        if (!resendCooldown.isZero() && Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+        String normalizedEmail = TextUtils.normalizeEmail(email);
+        Duration cooldown = properties.resendCooldown();
+        String cooldownKey = COOLDOWN_KEY_PREFIX + normalizedEmail;
+        if (!cooldown.isZero() && Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
             return Optional.empty();
         }
 
-        String code = randomNumericCode();
-        redisTemplate.opsForValue().set(otpKey(normalized), "0|" + sha256Hex(code), otpTtl);
-        if (!resendCooldown.isZero()) {
-            redisTemplate.opsForValue().set(cooldownKey, "1", resendCooldown);
+        String code = SecureTokens.randomDigits(CODE_LENGTH);
+        storeCode(otpKey(normalizedEmail), 0, SecureTokens.sha256Hex(code), properties.otpTtl());
+        if (!cooldown.isZero()) {
+            redisTemplate.opsForValue().set(cooldownKey, "1", cooldown);
         }
         return Optional.of(code);
     }
 
     /**
-     * Xác thực mã OTP. Sai quá {@code maxAttempts} lần thì vô hiệu mã. Đúng thì xóa mã và cấp ticket.
+     * Checks a code. Too many wrong attempts invalidate it; a correct code is consumed.
      *
-     * @return ticket thô {@code {jti}.{secret}} dùng cho bước đặt lại mật khẩu.
-     * @throws AppException nếu mã sai hoặc đã hết hạn.
+     * @return the raw reset ticket for the final step
+     * @throws AppException when the code is wrong or has expired
      */
     public String verifyCode(String email, String code) {
-        String normalized = normalize(email);
-        String key = otpKey(normalized);
+        String normalizedEmail = TextUtils.normalizeEmail(email);
+        String key = otpKey(normalizedEmail);
         String stored = redisTemplate.opsForValue().get(key);
         if (stored == null) {
             throw invalidCode();
         }
-
         String[] parts = stored.split("\\|", 2);
         if (parts.length != 2) {
             redisTemplate.delete(key);
             throw invalidCode();
         }
-        int attempts = Integer.parseInt(parts[0]);
-        String storedHash = parts[1];
 
-        if (!constantTimeEquals(sha256Hex(safe(code)), storedHash)) {
-            attempts++;
-            if (attempts >= maxAttempts) {
-                redisTemplate.delete(key);
-            } else {
-                Long remaining = redisTemplate.getExpire(key, TimeUnit.SECONDS);
-                Duration ttl = remaining != null && remaining > 0 ? Duration.ofSeconds(remaining) : otpTtl;
-                redisTemplate.opsForValue().set(key, attempts + "|" + storedHash, ttl);
-            }
+        String codeHash = parts[1];
+        if (!SecureTokens.constantTimeEquals(SecureTokens.sha256Hex(TextUtils.strip(code)), codeHash)) {
+            recordFailedAttempt(key, Integer.parseInt(parts[0]) + 1, codeHash);
             throw invalidCode();
         }
 
         redisTemplate.delete(key);
-        return issueTicket(normalized);
+        return issueTicket(normalizedEmail);
     }
 
     /**
-     * Xác thực + tiêu thụ ticket (dùng một lần).
+     * Validates and spends a reset ticket.
      *
-     * @return email chủ ticket.
-     * @throws AppException nếu ticket sai hoặc đã hết hạn/đã dùng.
+     * @return the email the ticket was issued for
+     * @throws AppException when the ticket is invalid, expired or already used
      */
-    public String consumeTicket(String ticket) {
-        if (ticket == null) {
-            throw invalidTicket();
-        }
-        int dot = ticket.indexOf('.');
-        if (dot <= 0 || dot == ticket.length() - 1) {
-            throw invalidTicket();
-        }
-        String jti = ticket.substring(0, dot);
-        String secret = ticket.substring(dot + 1);
-
-        String key = TICKET_KEY_PREFIX + jti;
+    public String consumeTicket(String rawTicket) {
+        OpaqueToken ticket = OpaqueToken.parse(rawTicket).orElseThrow(PasswordResetOtpService::invalidTicket);
+        String key = TICKET_KEY_PREFIX + ticket.id();
         String stored = redisTemplate.opsForValue().get(key);
         if (stored == null) {
             throw invalidTicket();
         }
         String[] parts = stored.split("\\|", 2);
-        if (parts.length != 2 || !constantTimeEquals(sha256Hex(secret), parts[0])) {
+        if (parts.length != 2 || !ticket.matches(parts[0])) {
             throw invalidTicket();
         }
         redisTemplate.delete(key);
         return parts[1];
     }
 
+    private void recordFailedAttempt(String key, int attempts, String codeHash) {
+        if (attempts >= properties.maxAttempts()) {
+            redisTemplate.delete(key);
+            return;
+        }
+        // Keep the original expiry: a wrong attempt must not extend the life of the code.
+        Long remainingSeconds = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+        Duration ttl = remainingSeconds != null && remainingSeconds > 0
+                ? Duration.ofSeconds(remainingSeconds)
+                : properties.otpTtl();
+        storeCode(key, attempts, codeHash, ttl);
+    }
+
+    private void storeCode(String key, int attempts, String codeHash, Duration ttl) {
+        redisTemplate.opsForValue().set(key, attempts + SEPARATOR + codeHash, ttl);
+    }
+
     private String issueTicket(String normalizedEmail) {
-        String jti = UUID.randomUUID().toString();
-        String secret = randomSecret();
+        OpaqueToken ticket = OpaqueToken.generate();
         redisTemplate.opsForValue().set(
-                TICKET_KEY_PREFIX + jti,
-                sha256Hex(secret) + "|" + normalizedEmail,
-                ticketTtl
+                TICKET_KEY_PREFIX + ticket.id(),
+                ticket.secretHash() + SEPARATOR + normalizedEmail,
+                properties.ticketTtl()
         );
-        return jti + "." + secret;
-    }
-
-    private String randomNumericCode() {
-        return String.format("%06d", secureRandom.nextInt(OTP_BOUND));
-    }
-
-    private String randomSecret() {
-        byte[] bytes = new byte[SECRET_BYTES];
-        secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        return ticket.value();
     }
 
     private static String otpKey(String normalizedEmail) {
         return OTP_KEY_PREFIX + normalizedEmail;
     }
 
-    private static String normalize(String email) {
-        return email == null ? "" : email.strip().toLowerCase();
-    }
-
-    private static String safe(String value) {
-        return value == null ? "" : value.strip();
-    }
-
-    private static String sha256Hex(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (Exception ex) {
-            throw new IllegalStateException("Khong the bam SHA-256", ex);
-        }
-    }
-
-    private static boolean constantTimeEquals(String a, String b) {
-        return MessageDigest.isEqual(
-                a.getBytes(StandardCharsets.UTF_8),
-                b.getBytes(StandardCharsets.UTF_8)
-        );
-    }
-
     private static AppException invalidCode() {
-        return new AppException(ErrorCode.INVALID_ARGUMENT, "Ma xac thuc khong dung hoac da het han.");
+        return AppException.invalid("Mã xác thực không đúng hoặc đã hết hạn.");
     }
 
     private static AppException invalidTicket() {
-        return new AppException(ErrorCode.INVALID_ARGUMENT, "Yeu cau dat lai mat khau khong hop le hoac da het han.");
+        return AppException.invalid("Yêu cầu đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.");
     }
 }

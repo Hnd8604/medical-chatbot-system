@@ -1,0 +1,47 @@
+import { cn } from "@/shared/lib/cn";
+
+export type ProgressTone = "blue" | "green" | "amber" | "red";
+
+interface ProgressBarProps {
+  value: number;
+  tone?: ProgressTone;
+  label?: string;
+  hint?: string;
+  className?: string;
+}
+
+const toneClass: Record<ProgressTone, string> = {
+  blue: "from-[var(--accent)] to-[var(--accent-secondary)]",
+  green: "from-success to-emerald-400",
+  amber: "from-warning to-amber-300",
+  red: "from-danger to-red-400",
+};
+
+/** Red from 90%, amber from `warnAt`, otherwise the given base tone. */
+export function usageTone(percent: number, base: ProgressTone = "blue", warnAt = 80): ProgressTone {
+  if (percent >= 90) {
+    return "red";
+  }
+  return percent >= warnAt ? "amber" : base;
+}
+
+export function ProgressBar({ value, tone = "blue", label, hint, className }: ProgressBarProps) {
+  const safeValue = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+
+  return (
+    <div className={cn("grid gap-2", className)}>
+      {label || hint ? (
+        <div className="flex items-center justify-between gap-2">
+          {label ? <div className="text-xs font-semibold text-muted-foreground">{label}</div> : <span />}
+          {hint ? <div className="text-xs font-semibold tabular-nums text-foreground">{hint}</div> : null}
+        </div>
+      ) : null}
+      <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn("h-full rounded-full bg-gradient-to-r transition-all duration-500", toneClass[tone])}
+          style={{ width: `${safeValue}%` }}
+        />
+      </div>
+    </div>
+  );
+}

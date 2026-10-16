@@ -1,29 +1,30 @@
 package com.medicalchatbot.backend.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.medicalchatbot.backend.dto.response.AdminUserItemResponse;
-import com.medicalchatbot.backend.dto.response.AdminUserListResponse;
-import com.medicalchatbot.backend.entity.User;
-import com.medicalchatbot.backend.entity.UserPatientLink;
-import com.medicalchatbot.backend.enums.UserRole;
-import com.medicalchatbot.backend.enums.UserStatus;
-import com.medicalchatbot.backend.exception.AppException;
-import com.medicalchatbot.backend.exception.ErrorCode;
-import com.medicalchatbot.backend.repository.AuditLogRepository;
-import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
-import com.medicalchatbot.backend.repository.UserRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import com.medicalchatbot.backend.dto.response.AdminUserResponse;
+import com.medicalchatbot.backend.dto.response.PageResponse;
+import com.medicalchatbot.backend.entity.User;
+import com.medicalchatbot.backend.entity.UserPatientLink;
+import com.medicalchatbot.backend.enums.AuditAction;
+import com.medicalchatbot.backend.enums.AuditResource;
+import com.medicalchatbot.backend.enums.UserRole;
+import com.medicalchatbot.backend.enums.UserStatus;
+import com.medicalchatbot.backend.exception.AppException;
+import com.medicalchatbot.backend.mapper.UserMapper;
+import com.medicalchatbot.backend.repository.UserPatientLinkRepository;
+import com.medicalchatbot.backend.repository.UserRepository;
+import com.medicalchatbot.backend.util.TextUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** User administration: listing accounts and changing their role or status. */
 @Service
 @RequiredArgsConstructor
 public class AdminUserService {
@@ -31,93 +32,61 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final UserPatientLinkRepository userPatientLinkRepository;
     private final CurrentUserService currentUserService;
-    private final AuditLogRepository auditLogRepository;
-    private final ObjectMapper objectMapper;
+    private final AuditService auditService;
+    private final UserMapper userMapper;
 
+    /** Newest accounts first; a {@code search} term matches username, email or display name. */
     @Transactional(readOnly = true)
-    public AdminUserListResponse listUsers(int page, int size) {
-        return listUsers(page, size, null);
-    }
-
-    @Transactional(readOnly = true)
-    public AdminUserListResponse listUsers(int page, int size, String search) {
-        String query = search == null ? "" : search.trim();
-        Page<User> users = query.isEmpty()
-                ? userRepository.findAllByOrderByCreatedAtDesc(
-                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
-                : userRepository.searchByUsernameOrEmail(
-                        query, PageRequest.of(page, size));
-        List<User> content = users.getContent();
-        Map<UUID, List<UserPatientLink>> linksByUserId = linksByUserId(content);
-        return new AdminUserListResponse(
-                users.getNumber(),
-                users.getSize(),
-                users.getTotalElements(),
-                users.getTotalPages(),
-                content.stream()
-                        .map(user -> AdminUserItemResponse.from(
-                                user,
-                                linksByUserId.getOrDefault(user.getId(), List.of())
-                        ))
-                        .toList()
-        );
+    public PageResponse<AdminUserResponse> list(int page, int size, String search) {
+        String query = TextUtils.trimToNull(search);
+        Page<User> users = query == null
+                ? userRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size))
+                : userRepository.search(query, PageRequest.of(page, size));
+        Map<UUID, List<UserPatientLink>> linksByUser = userPatientLinkRepository
+                .findByUserIds(users.getContent().stream().map(User::getId).toList()).stream()
+                .collect(Collectors.groupingBy(link -> link.getUser().getId()));
+        return PageResponse.of(users,
+                user -> userMapper.toAdminUserResponse(user, linksByUser.getOrDefault(user.getId(), List.of())));
     }
 
     @Transactional
-    public AdminUserItemResponse updateStatus(UUID userId, UserStatus status) {
+    public AdminUserResponse updateStatus(UUID userId, UserStatus status) {
         User actor = currentUserService.requireCurrentUser();
         User target = requireUser(userId);
         if (actor.getId().equals(target.getId()) && status != UserStatus.ACTIVE) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Admin khong the tu khoa hoac vo hieu hoa chinh minh.");
+            throw AppException.invalid("Admin không thể tự khóa hoặc vô hiệu hóa chính mình.");
         }
-
-        UserStatus oldStatus = target.getStatus();
-        target.updateStatus(status);
-        userRepository.save(target);
-        logChange(actor, target, "ADMIN_UPDATE_USER_STATUS", "status", oldStatus.name(), status.name());
-        return responseFor(target);
+        UserStatus previous = target.getStatus();
+        target.setStatus(status);
+        auditChange(actor, target, AuditAction.ADMIN_UPDATE_USER_STATUS, "status", previous.name(), status.name());
+        return toResponse(target);
     }
 
     @Transactional
-    public AdminUserItemResponse updateRole(UUID userId, UserRole role) {
+    public AdminUserResponse updateRole(UUID userId, UserRole role) {
         User actor = currentUserService.requireCurrentUser();
         User target = requireUser(userId);
         if (actor.getId().equals(target.getId()) && role != UserRole.ADMIN) {
-            throw new AppException(ErrorCode.INVALID_ARGUMENT, "Admin khong the tu ha quyen cua chinh minh.");
+            throw AppException.invalid("Admin không thể tự hạ quyền của chính mình.");
         }
-
-        UserRole oldRole = target.getRole();
-        target.updateRole(role);
-        userRepository.save(target);
-        logChange(actor, target, "ADMIN_UPDATE_USER_ROLE", "role", oldRole.name(), role.name());
-        return responseFor(target);
+        UserRole previous = target.getRole();
+        target.setRole(role);
+        auditChange(actor, target, AuditAction.ADMIN_UPDATE_USER_ROLE, "role", previous.name(), role.name());
+        return toResponse(target);
     }
 
-    private Map<UUID, List<UserPatientLink>> linksByUserId(List<User> users) {
-        List<UUID> userIds = users.stream()
-                .map(User::getId)
-                .toList();
-        if (userIds.isEmpty()) {
-            return Map.of();
-        }
-        return userPatientLinkRepository.findLinksForUsers(userIds).stream()
-                .collect(Collectors.groupingBy(link -> link.getUser().getId()));
-    }
-
-    private AdminUserItemResponse responseFor(User user) {
-        return AdminUserItemResponse.from(user, userPatientLinkRepository.findLinksForUser(user.getId()));
+    private AdminUserResponse toResponse(User user) {
+        return userMapper.toAdminUserResponse(user, userPatientLinkRepository.findByUserIds(List.of(user.getId())));
     }
 
     private User requireUser(UUID userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Khong tim thay nguoi dung."));
+        return userRepository.findById(userId).orElseThrow(() -> AppException.notFound("Không tìm thấy người dùng."));
     }
 
-    private void logChange(User actor, User target, String action, String field, String oldValue, String newValue) {
-        ObjectNode metadata = objectMapper.createObjectNode();
-        metadata.put("field", field);
-        metadata.put("old_value", oldValue);
-        metadata.put("new_value", newValue);
-        auditLogRepository.save(actor, null, action, "app_user", target.getId().toString(), metadata);
+    private void auditChange(User actor, User target, AuditAction action, String field, String oldValue, String newValue) {
+        auditService.record(actor, action, AuditResource.APP_USER, target.getId().toString(), auditService.metadata()
+                .put("field", field)
+                .put("old_value", oldValue)
+                .put("new_value", newValue));
     }
 }

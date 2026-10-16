@@ -1,7 +1,10 @@
 package com.medicalchatbot.backend.enums;
 
 public enum AlertSeverity {
-    INFO,       // Thông tin chung (vd: Hệ thống vừa backup xong)
-    WARNING,    // Cảnh báo (vd: Quota của user sắp hết)
-    CRITICAL    // Nghiêm trọng (vd: LLM sập, FHIR server mất kết nối)
+    /** Thông tin chung (vd hệ thống vừa backup xong). */
+    INFO,
+    /** Cảnh báo (vd quota của user sắp hết). */
+    WARNING,
+    /** Nghiêm trọng (vd LLM sập, FHIR server mất kết nối). */
+    CRITICAL
 }

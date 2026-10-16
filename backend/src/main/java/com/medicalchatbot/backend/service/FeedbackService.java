@@ -16,6 +16,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** Star ratings on assistant answers; a user rates an answer of their own sessions at most once. */
 @Service
 @RequiredArgsConstructor
 public class FeedbackService {
@@ -25,75 +26,51 @@ public class FeedbackService {
     private final CurrentUserService currentUserService;
 
     @Transactional
-    public FeedbackResponse createFeedback(UUID messageId, FeedbackRequest request) {
+    public FeedbackResponse create(UUID messageId, FeedbackRequest request) {
         User user = currentUserService.requireCurrentUser();
-        ChatMessage message = chatMessageRepository
-                .findAssistantMessageOwnedByUser(messageId, user.getId())
-                .orElseThrow(FeedbackService::messageNotFound);
-
-        feedbackRepository.findByMessage_IdAndUser_Id(messageId, user.getId())
-                .ifPresent(existing -> {
-                    throw feedbackAlreadyExists();
-                });
+        ChatMessage message = chatMessageRepository.findAssistantMessageOwnedByUser(messageId, user.getId())
+                .orElseThrow(() -> AppException.notFound("Không tìm thấy tin nhắn."));
+        if (feedbackRepository.existsByMessageIdAndUserId(messageId, user.getId())) {
+            throw feedbackAlreadyExists(null);
+        }
 
         try {
-            MessageFeedback feedback = feedbackRepository.saveAndFlush(
-                    new MessageFeedback(message, user, request.rating(), request.comment())
-            );
+            MessageFeedback feedback = feedbackRepository.saveAndFlush(MessageFeedback.builder()
+                    .message(message)
+                    .user(user)
+                    .rating(request.rating())
+                    .comment(request.comment())
+                    .build());
             return toResponse(feedback, messageId);
-        } catch (DataIntegrityViolationException ex) {
-            // The database unique constraint closes the race between the existence check and insert.
-            throw feedbackAlreadyExists(ex);
+        } catch (DataIntegrityViolationException exception) {
+            // The unique constraint closes the race between the existence check and the insert.
+            throw feedbackAlreadyExists(exception);
         }
     }
 
     @Transactional
-    public FeedbackResponse updateFeedback(UUID messageId, FeedbackRequest request) {
-        User user = currentUserService.requireCurrentUser();
-        MessageFeedback feedback = feedbackRepository
-                .findAuthorizedFeedback(messageId, user.getId())
-                .orElseThrow(FeedbackService::feedbackNotFound);
-
-        feedback.update(request.rating(), request.comment());
+    public FeedbackResponse update(UUID messageId, FeedbackRequest request) {
+        MessageFeedback feedback = requireOwnFeedback(messageId);
+        feedback.setRating(request.rating());
+        feedback.setComment(request.comment());
         return toResponse(feedback, messageId);
     }
 
     @Transactional
-    public void deleteFeedback(UUID messageId) {
-        User user = currentUserService.requireCurrentUser();
-        MessageFeedback feedback = feedbackRepository
-                .findAuthorizedFeedback(messageId, user.getId())
-                .orElseThrow(FeedbackService::feedbackNotFound);
-
-        feedbackRepository.delete(feedback);
+    public void delete(UUID messageId) {
+        feedbackRepository.delete(requireOwnFeedback(messageId));
     }
 
-    private FeedbackResponse toResponse(MessageFeedback feedback, UUID messageId) {
-        return new FeedbackResponse(
-                feedback.getId(),
-                messageId,
-                feedback.getRating(),
-                feedback.getComment()
-        );
+    private MessageFeedback requireOwnFeedback(UUID messageId) {
+        return feedbackRepository.findOwnedFeedback(messageId, currentUserService.requireCurrentUserId())
+                .orElseThrow(() -> AppException.notFound("Không tìm thấy đánh giá."));
     }
 
-    private static AppException messageNotFound() {
-        return new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Message not found.");
-    }
-
-    private static AppException feedbackNotFound() {
-        return new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Feedback not found.");
-    }
-
-    private static AppException feedbackAlreadyExists() {
-        return feedbackAlreadyExists(null);
+    private static FeedbackResponse toResponse(MessageFeedback feedback, UUID messageId) {
+        return new FeedbackResponse(feedback.getId(), messageId, feedback.getRating(), feedback.getComment());
     }
 
     private static AppException feedbackAlreadyExists(Throwable cause) {
-        return new AppException(
-                ErrorCode.CONFLICT,
-                "Feedback already exists for this message.",
-                cause
-        );
+        return new AppException(ErrorCode.CONFLICT, "Câu trả lời này đã được đánh giá.", cause);
     }
 }

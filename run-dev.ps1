@@ -12,7 +12,6 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Fix for double-quoted JAVA_HOME which breaks mvnw.cmd on Windows
 if ($env:JAVA_HOME -match '^"(.*)"$') {
     $env:JAVA_HOME = $matches[1]
 }
@@ -45,16 +44,11 @@ function Require-Command {
 }
 
 function Resolve-PythonExe {
-    # Tra ve duong dan toi mot Python that, tranh App execution alias cua
-    # Microsoft Store (stub 0 byte trong WindowsApps tra exit code 9009).
-
-    # 1. Uu tien virtualenv cua repo.
     $venvPython = Join-Path $RootDir ".venv\Scripts\python.exe"
     if ((Test-Path $venvPython) -and ((Get-Item $venvPython).Length -gt 0)) {
         return $venvPython
     }
 
-    # 2. Python launcher (py) -> interpreter that.
     if (Get-Command py -ErrorAction SilentlyContinue) {
         try {
             $exe = (& py -3 -c "import sys; print(sys.executable)" 2>$null)
@@ -64,7 +58,6 @@ function Resolve-PythonExe {
         } catch {}
     }
 
-    # 3. python.exe tren PATH nhung khong phai stub Store (0 byte / WindowsApps).
     foreach ($cmd in (Get-Command python -All -ErrorAction SilentlyContinue)) {
         $src = $cmd.Source
         if ($src -and (Test-Path $src) -and ((Get-Item $src).Length -gt 0) -and ($src -notlike "*\WindowsApps\*")) {
@@ -145,13 +138,11 @@ function Stop-ManagedProcess {
 
     $pidFile = Join-Path $RunDir "$Name.pid"
 
-    # Try stopping by PID first (using tree kill)
     if (Test-Path $pidFile) {
         $processId = Get-Content -Path $pidFile | Select-Object -First 1
         if ($processId) {
             $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
             if ($process) {
-                # Use taskkill /T /F to kill process trees (essential for batch/spawned JVMs)
                 taskkill /F /T /PID $processId 2>&1 | Out-Null
                 Write-Host "Stopped $Name process tree (PID $processId)."
             }
@@ -159,7 +150,6 @@ function Stop-ManagedProcess {
         Remove-Item -LiteralPath $pidFile -Force
     }
 
-    # Also clean up by port if specified, to catch orphaned JVMs or other processes
     if ($Port -gt 0) {
         $connections = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
         foreach ($conn in $connections) {
@@ -214,7 +204,6 @@ docker compose -f $AppPostgresCompose up -d
 docker compose -f $RedisCompose up -d
 docker compose -f $QdrantCompose up -d
 if (Test-Path $LiteLLMEnv) {
-    # LiteLLM chay khong trang thai: khong can database.
     Write-Step "Starting LiteLLM gateway"
     docker compose -f $LiteLLMCompose --env-file $LiteLLMEnv up -d
 } else {
@@ -289,7 +278,7 @@ Write-Step "Starting spring-backend"
 Start-ManagedProcess `
     -Name "spring-backend" `
     -FilePath (Join-Path $SpringDir "mvnw.cmd") `
-    -ArgumentList @("clean", "spring-boot:run") `
+    -ArgumentList @("clean", "spring-boot:run", "-Dmaven.clean.failOnError=false") `
     -WorkingDirectory $SpringDir `
     -Port 8081
 
@@ -308,8 +297,6 @@ Wait-Http -Url "http://localhost:5174" -Retries 30 -DelaySeconds 2
 
 if (-not $SkipFlowCheck) {
     Write-Step "Checking full chat flow through Spring"
-    # M1 requires JWT auth for /api/chat. Use doctor_demo because this smoke test
-    # asks for patient medication data, which USER accounts cannot access.
     $loginBody = @{
         username_or_email = "doctor_demo"
         password = "DoctorDemo123!"
@@ -332,7 +319,6 @@ if (-not $SkipFlowCheck) {
     }
     $httpClient.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $login.result.access_token)
 
-    # Keep the smoke-test payload ASCII to avoid Windows PowerShell source encoding issues.
     $body = @{
         message = "Benh nhan BN2026-00001 dang dung thuoc gi?"
         patient_id = "BN2026-00001"

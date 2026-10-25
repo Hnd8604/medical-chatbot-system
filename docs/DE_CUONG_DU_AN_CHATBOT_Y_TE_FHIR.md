@@ -49,6 +49,11 @@ Dự án hợp nhất ba hướng thành một sản phẩm xuyên suốt:
 | Bác sĩ — `DOCTOR` | Tra cứu và tổng hợp hồ sơ của bệnh nhân phụ trách | Danh sách bệnh nhân được phân công hoặc được cấp quyền |
 | Quản trị viên — `ADMIN` | Quản lý tài khoản, chính sách, cấu hình, báo cáo, sự cố và đánh giá | Dữ liệu vận hành; quyền đọc hồ sơ y tế phải được cấp riêng |
 
+> **Phạm vi bản demo hiện tại:** `USER` chỉ xem hồ sơ đã liên kết (kiểm ở cả backend và chatbot).
+> `DOCTOR` và `ADMIN` xem được mọi hồ sơ: chưa có bảng phân công bác sĩ–bệnh nhân và chưa tách
+> quyền đọc bệnh án của `ADMIN`. Đây là hướng phát triển tiếp theo; giới hạn này cũng được ghi
+> trong `chatbot-service/docs/agent.md` (mục Giới hạn đã biết).
+
 ### 2.2. Nguyên tắc kiểm soát truy cập
 
 - Kiểm tra cả vai trò và quyền trên từng bệnh nhân ở mỗi truy vấn.

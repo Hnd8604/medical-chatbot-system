@@ -2,7 +2,9 @@
 
 1. **Chốt bệnh nhân trước** (step ``search_patients``): nhiều bệnh nhân khớp ⇒ dừng hỏi
    lại người dùng *trước khi* chạm dữ liệu bệnh nhân nào.
-2. **Các step còn lại độc lập** ⇒ chạy song song (``asyncio.gather``).
+2. **Các step còn lại chạy theo đợt**: step độc lập chạy song song (``asyncio.gather``);
+   step tham chiếu kết quả step trước (``"$last_visit.encounter_id"``) chờ step đó xong.
+   Step mà tham chiếu không có giá trị (vd không có lần khám nào) được bỏ qua.
 3. **Lỗi từng phần**: một step lỗi FHIR không huỷ cả lượt — còn ít nhất một step chạy
    được thì trả ``partial`` kèm ``failed_steps``; lỗi hết mới là ``tool_error``.
 4. **Không dựng lại payload từ đầu**: tool đã trả payload chuẩn kèm câu template tiếng
@@ -98,11 +100,12 @@ async def execute_plan(
             # Nhiều bệnh nhân khớp: dừng lại hỏi người dùng thay vì đoán.
             return _early_result(_Outcome(payload, RESPONSE_STATUS_PATIENT_SELECTION), executed, resolved_patient_id)
         found = normalize_patient_id(payload.get("patient_id"))
+        if not other_steps:
+            # search_patients là step cuối: kết quả tìm (một người hay danh sách) chính là câu
+            # trả lời. Trước đây khớp đúng MỘT người lại rơi xuống nhánh "hỏi lại".
+            return _early_result(_Outcome(payload, status_for_payload(payload)), executed, found or resolved_patient_id)
         if found:
             resolved_patient_id = found
-        elif not other_steps:
-            # search_patients là step cuối và trả danh sách: đó chính là câu trả lời.
-            return _early_result(_Outcome(payload, status_for_payload(payload)), executed, resolved_patient_id)
         else:
             return _early_result(_clarification(), executed, resolved_patient_id)
 
@@ -119,13 +122,30 @@ async def execute_plan(
     if not prepared:
         return _early_result(_clarification(), executed, resolved_patient_id)
 
-    # --- Bước 3: các step còn lại độc lập với nhau -> chạy song song.
-    outcomes = await asyncio.gather(*(_run_step(client, step, args) for step, args in prepared))
+    # --- Bước 3: chạy theo đợt — step độc lập song song, step phụ thuộc chờ step nó trỏ tới.
     succeeded: list[tuple[PlanStep, _Outcome]] = []
     failed: list[tuple[PlanStep, _Outcome]] = []
-    for (step, args), outcome in zip(prepared, outcomes):
-        executed.append(_executed(step, args))
-        (succeeded if outcome.status is None else failed).append((step, outcome))
+    finished: dict[str, _Outcome] = {}
+    pending = list(prepared)
+    while pending:
+        ready = [(step, args) for step, args in pending if _dependencies(args) <= finished.keys()]
+        if not ready:  # validator chỉ cho trỏ về step đứng trước nên không thể xảy ra
+            break
+        pending = [item for item in pending if item not in ready]
+        runnable: list[tuple[PlanStep, dict[str, Any]]] = []
+        for step, args in ready:
+            resolved = _resolve_refs(args, finished)
+            if resolved is None:
+                # Step được trỏ tới lỗi hoặc không có kết quả (vd không có lần khám nào):
+                # câu trả lời của step đó đã nói lên điều này, bỏ qua step phụ thuộc.
+                finished[step.id] = _Outcome({}, RESPONSE_STATUS_NO_DATA)
+                continue
+            runnable.append((step, resolved))
+        outcomes = await asyncio.gather(*(_run_step(client, step, args) for step, args in runnable))
+        for (step, args), outcome in zip(runnable, outcomes):
+            finished[step.id] = outcome
+            executed.append(_executed(step, args))
+            (succeeded if outcome.status is None else failed).append((step, outcome))
 
     failed_steps = [
         {"id": step.id, "tool": step.tool, "error_code": outcome.error_code or ERROR_FHIR}
@@ -175,6 +195,42 @@ async def _run_step(client: FhirClient, step: PlanStep, args: dict[str, Any]) ->
         # response_status=tool_error cho phép Spring/FE phân biệt với câu trả lời thật.
         log.warning("FHIR tool %s lỗi: %s", step.tool, exc)
         return _Outcome(_tool_error_payload(exc.user_message), RESPONSE_STATUS_TOOL_ERROR, ERROR_FHIR)
+
+
+def _dependencies(args: dict[str, Any]) -> set[str]:
+    return {
+        value[len(STEP_REF_PREFIX):].split(".", 1)[0]
+        for value in args.values()
+        if isinstance(value, str) and value.startswith(STEP_REF_PREFIX)
+    }
+
+
+def _resolve_refs(args: dict[str, Any], finished: dict[str, "_Outcome"]) -> dict[str, Any] | None:
+    """Thay "$step.field" bằng giá trị thật; None nếu step được trỏ tới không cho giá trị."""
+    resolved = dict(args)
+    for key, value in args.items():
+        if not (isinstance(value, str) and value.startswith(STEP_REF_PREFIX)):
+            continue
+        target, _, field = value[len(STEP_REF_PREFIX):].partition(".")
+        outcome = finished.get(target)
+        if outcome is None or outcome.status is not None:
+            return None
+        actual = _ref_value(outcome.payload, field)
+        if not actual:
+            return None
+        resolved[key] = actual
+    return resolved
+
+
+def _ref_value(payload: dict[str, Any], field: str) -> str | None:
+    if field == "patient_id":
+        return normalize_patient_id(payload.get("patient_id"))
+    if field == "encounter_id":
+        # Evidence của get_encounters xếp mới nhất trước ⇒ phần tử đầu là lần khám gần nhất.
+        for item in payload.get("evidence") or []:
+            if isinstance(item, dict) and item.get("resource_type") == "Encounter" and item.get("id"):
+                return str(item["id"])
+    return None
 
 
 def _executed(step: PlanStep, args: dict[str, Any]) -> dict[str, Any]:

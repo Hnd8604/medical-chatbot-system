@@ -25,13 +25,14 @@ class ChatMapperTest {
         ChatMemory memory = new ChatMemory("patient-1", "summary", "intent", "tool", "Observation", "observation-1");
 
         ConversationContext context = mapper.toConversationContext(
-                memory, List.of(new ChatContextMessageProjection("user", "hello")), 4);
+                memory, List.of(new ChatContextMessageProjection("user", "hello")), 4, 2);
 
         assertEquals("summary", context.memorySummary());
         assertEquals("patient-1", context.activePatientId());
         assertEquals("observation-1", context.lastResourceId());
         assertEquals("hello", context.recentMessages().getFirst().content());
         assertEquals(4, context.totalMessageCount());
+        assertEquals(2, context.summarizedMessageCount());
     }
 
     @Test

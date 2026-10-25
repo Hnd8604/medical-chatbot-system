@@ -35,6 +35,10 @@ public class ChatSession extends BaseEntity {
     @Embedded
     ChatMemory memory;
 
+    /** memory_summary bao phủ tới tin nhắn thứ mấy của session (mốc rolling summary). */
+    @Column(name = "memory_summary_message_count", nullable = false)
+    int memorySummaryMessageCount;
+
     /** Hibernate maps an embeddable whose columns are all null to {@code null}. */
     public ChatMemory getMemory() {
         return memory == null ? ChatMemory.EMPTY : memory;
@@ -43,6 +47,11 @@ public class ChatSession extends BaseEntity {
     public void updateMemory(ChatMemory memory) {
         this.memory = memory;
         touch();
+    }
+
+    /** Summary mới vừa được lưu bao phủ mọi tin có trước lượt hiện tại. */
+    public void markSummarizedThrough(int messageCount) {
+        this.memorySummaryMessageCount = Math.max(messageCount, 0);
     }
 
     /** Moves the session to the top of the history list. */

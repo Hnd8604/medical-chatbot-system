@@ -7,6 +7,7 @@ chỉ **bỏ bớt**, không viết thêm gì — nên không có rủi ro bịa
 Thứ tự ưu tiên khi phải cắt:
 1. Giữ bản ghi mới nhất (theo mốc thời gian trong ``data``).
 2. Trước khi bỏ hẳn bản ghi, bỏ các trường phụ trợ ít khi cần cho câu trả lời.
+3. Mục tóm tắt do code tính (``pinned``: xu hướng, thống kê nhóm) không bao giờ bị bỏ.
 """
 
 from __future__ import annotations
@@ -61,6 +62,12 @@ def apply_evidence_budget(
             "pruned_fields": 0,
         }
 
+    # Mục tóm tắt do code tính (xu hướng, thống kê nhóm) luôn được giữ và giữ ở cuối:
+    # bỏ nó thì answer LLM mất đúng con số người dùng hỏi.
+    pinned = [item for item in evidence if isinstance(item, dict) and item.get("pinned")]
+    evidence = [item for item in evidence if not (isinstance(item, dict) and item.get("pinned"))]
+    max_chars = max(0, max_chars - _size(pinned))
+
     ordered = sorted(evidence, key=_recency_key, reverse=True)
 
     # Vòng 1: bỏ trường phụ trợ.
@@ -77,6 +84,7 @@ def apply_evidence_budget(
         trimmed.pop()
         dropped += 1
 
+    trimmed.extend(pinned)
     return trimmed, {
         "chars_before": chars_before,
         "chars_after": _size(trimmed),

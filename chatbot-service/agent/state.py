@@ -26,6 +26,8 @@ ROUTE_CONVERSATION_META = "conversation_meta"
 ROUTE_FHIR = "fhir"
 ROUTE_UNSUPPORTED = "unsupported"
 ROUTE_CACHE = "cache"
+# Câu mô tả tình huống cấp cứu, bắt bằng luật trước cả cache (agent/nodes/triage.py).
+ROUTE_EMERGENCY = "emergency"
 
 RESPONSE_STATUS_ANSWERED = "answered"
 RESPONSE_STATUS_PARTIAL = "partial"
@@ -54,6 +56,9 @@ class AgentState(TypedDict, total=False):
     conversation_context: dict[str, Any] | None
     low_cost_mode: bool
 
+    # --- triage (cấp cứu) ---
+    emergency_kind: str | None
+
     # --- cache ---
     cache_hit: bool
 
@@ -63,7 +68,7 @@ class AgentState(TypedDict, total=False):
     route_resource_hint: str | None
     route_safety_flag: str
     route_reason: str | None
-    route_source: str  # llm | route_cache | plan_cache | fallback | low_cost
+    route_source: str  # llm | route_cache | plan_cache | fallback | low_cost | rules
 
     # --- planner ---
     plan_steps: list[dict[str, Any]]

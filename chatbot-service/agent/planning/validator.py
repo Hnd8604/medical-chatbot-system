@@ -9,25 +9,37 @@ Module này thuần tuý (không I/O, không LLM) nên test được đầy đ�
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from agent.errors import PlanError, PolicyError
 from agent.planning.plan import STEP_REF_PREFIX, Plan, PlanStep
 from app.config import get_settings
-from nlp.observation_types import infer_observation_type
+from nlp.observation_types import canonical_observation_type, infer_bp_component, infer_observation_type
 from nlp.patient_refs import resolve_explicit_patient_id
 from nlp.text import normalize_patient_id
+from nlp.time_range import TimeRange, extract_time_range, normalize_iso_date, today_local
+from nlp.value_filter import extract_value_filter, normalize_threshold, normalize_value_op
+from tools.filters import normalize_encounter_id
 from tools.registry import (
     ALL_PATIENT_TOOLS,
+    DATE_FILTER_TOOLS,
     MAX_LIMIT,
     PATIENT_SCOPED_TOOLS,
     PUBLIC_TOOLS,
+    TOOL_GET_ALL_OBSERVATIONS,
+    TOOL_GET_ENCOUNTERS,
+    TOOL_GET_OBSERVATION_TREND,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_RESOURCE,
     TOOL_SEARCH_PATIENTS,
     get_tool,
 )
 from tools.resources import SUPPORTED_RESOURCE_TYPES
+
+
+# Tool nhận observation_type (validator suy từ câu hỏi khi planner bỏ sót).
+_OBSERVATION_TYPE_TOOLS = frozenset({TOOL_GET_OBSERVATIONS, TOOL_GET_OBSERVATION_TREND, TOOL_GET_ALL_OBSERVATIONS})
 
 
 def validate_plan(
@@ -37,14 +49,23 @@ def validate_plan(
     user_role: str,
     allowed_patient_ids: list[str],
     provided_patient_id: str | None,
+    today: date | None = None,
 ) -> Plan:
     """Trả plan đã được làm sạch, hoặc raise PolicyError/PlanError."""
     settings = get_settings()
     max_steps = max(1, settings.max_plan_steps)
     explicit_patient_id = resolve_explicit_patient_id(message)
+    # Khoảng ngày suy bằng luật (tất định) thắng phép tính ngày của LLM; LLM không đặt
+    # ngày cho step nào thì luật điền cho mọi step nhận ngày.
+    rule_range = extract_time_range(message, today=today or today_local(settings.app_timezone))
+    planner_dated = any(
+        normalize_iso_date(step.args.get("date_from")) or normalize_iso_date(step.args.get("date_to"))
+        for step in plan.steps
+        if isinstance(step.args, dict)
+    )
 
     validated: list[PlanStep] = []
-    known_step_ids: set[str] = set()
+    known_steps: dict[str, str] = {}
 
     for step in plan.steps[:max_steps]:
         tool = get_tool(step.tool)
@@ -58,7 +79,14 @@ def validate_plan(
         )
 
         args = _keep_known_args(step.args, tool.params)
-        args = _resolve_step_refs(args, known_step_ids, step_id=step.id)
+        args = _resolve_step_refs(args, known_steps, step_id=step.id)
+        args = _apply_filters(
+            tool_name=step.tool,
+            args=args,
+            message=message,
+            rule_range=rule_range,
+            planner_dated=planner_dated,
+        )
         args = _apply_defaults(
             tool_name=step.tool,
             args=args,
@@ -79,7 +107,7 @@ def validate_plan(
             allowed_patient_ids=allowed_patient_ids,
         )
 
-        known_step_ids.add(step.id)
+        known_steps[step.id] = step.tool
         validated.append(PlanStep(id=step.id, tool=step.tool, args=args))
 
     if not validated:
@@ -138,19 +166,97 @@ def _keep_known_args(args: dict[str, Any], params: tuple[str, ...]) -> dict[str,
     }
 
 
-def _resolve_step_refs(args: dict[str, Any], known_step_ids: set[str], *, step_id: str) -> dict[str, Any]:
-    """Giữ lại tham chiếu "$step.field" hợp lệ, bỏ tham chiếu trỏ vào step không tồn tại."""
+def _resolve_step_refs(args: dict[str, Any], known_steps: dict[str, str], *, step_id: str) -> dict[str, Any]:
+    """Giữ lại tham chiếu "$step.field" hợp lệ (chỉ trỏ về step ĐỨNG TRƯỚC ⇒ không có vòng).
+
+    - ``patient_id`` trỏ sai: bỏ tham số; _apply_defaults điền bằng patient_id đang có,
+      vẫn thiếu thì executor hỏi lại người dùng.
+    - ``encounter_id`` phải trỏ vào một step ``get_encounters``; trỏ sai thì plan hỏng,
+      vì bỏ đi sẽ âm thầm trả lời một câu hỏi rộng hơn câu được hỏi.
+    """
     cleaned: dict[str, Any] = {}
     for key, value in args.items():
         if not (isinstance(value, str) and value.startswith(STEP_REF_PREFIX)):
             cleaned[key] = value
             continue
-        target = value[1:].split(".", 1)[0]
-        if target in known_step_ids and target != step_id:
+        target, _, field = value[1:].partition(".")
+        valid = target in known_steps and target != step_id
+        if key == "encounter_id":
+            if not (valid and field == "encounter_id" and known_steps[target] == TOOL_GET_ENCOUNTERS):
+                raise PlanError(
+                    "Tham chiếu lần khám phải lấy từ một bước get_encounters đứng trước "
+                    '(dạng "$<id step>.encounter_id").'
+                )
             cleaned[key] = value
-        # Tham chiếu hỏng thì bỏ hẳn tham số; _apply_defaults sẽ điền bằng patient_id
-        # đang có, còn nếu vẫn thiếu thì executor hỏi lại người dùng.
+        elif valid:
+            cleaned[key] = value
     return cleaned
+
+
+def _apply_filters(
+    *,
+    tool_name: str,
+    args: dict[str, Any],
+    message: str,
+    rule_range: TimeRange | None,
+    planner_dated: bool,
+) -> dict[str, Any]:
+    """Chuẩn hoá bộ lọc: loại chỉ số, khoảng ngày, lần khám, ngưỡng giá trị."""
+    args = dict(args)
+
+    if tool_name in _OBSERVATION_TYPE_TOOLS:
+        observation_type = canonical_observation_type(args.get("observation_type")) or infer_observation_type(message)
+        if observation_type:
+            args["observation_type"] = observation_type
+        elif args.get("observation_type") and tool_name != TOOL_GET_OBSERVATIONS:
+            # Loại lạ không có mã LOINC: các tool nhóm/xu hướng không dùng được.
+            args.pop("observation_type")
+        if tool_name == TOOL_GET_OBSERVATION_TREND and not args.get("observation_type"):
+            raise PlanError(
+                "Cần nêu rõ loại chỉ số để xem xu hướng (vd huyết áp, đường huyết, HbA1c, cân nặng)."
+            )
+
+    if tool_name in DATE_FILTER_TOOLS:
+        start = normalize_iso_date(args.pop("date_from", None))
+        end = normalize_iso_date(args.pop("date_to", None))
+        planner_range = TimeRange(start, end) if (start or end) else None
+        if rule_range is not None and (planner_range is not None or not planner_dated):
+            chosen = rule_range
+        else:
+            chosen = planner_range
+        if chosen is not None:
+            args.update(_ordered(chosen).as_args())
+
+    if "encounter_id" in args and not str(args["encounter_id"]).startswith(STEP_REF_PREFIX):
+        encounter_id = normalize_encounter_id(args["encounter_id"])
+        if encounter_id:
+            args["encounter_id"] = encounter_id
+        else:
+            args.pop("encounter_id")
+
+    if tool_name == TOOL_GET_ALL_OBSERVATIONS:
+        op, value = normalize_value_op(args.pop("value_op", None)), normalize_threshold(args.pop("value", None))
+        if op is None or value is None:
+            op, value = extract_value_filter(message) or (None, None)
+        if op is not None and value is not None:
+            if not args.get("observation_type"):
+                raise PlanError("Cần nêu rõ loại chỉ số để lọc theo ngưỡng (vd HbA1c > 7).")
+            args["value_op"], args["value"] = op, value
+        if args.get("observation_type") == "blood_pressure":
+            component = str(args.get("component") or "").strip().lower()
+            args["component"] = component if component in {"systolic", "diastolic"} else (
+                infer_bp_component(message) or "systolic"
+            )
+        else:
+            args.pop("component", None)
+
+    return args
+
+
+def _ordered(time_range: TimeRange) -> TimeRange:
+    if time_range.date_from and time_range.date_to and time_range.date_from > time_range.date_to:
+        return TimeRange(time_range.date_to, time_range.date_from)
+    return time_range
 
 
 def _apply_defaults(
@@ -169,11 +275,6 @@ def _apply_defaults(
     tool = get_tool(tool_name)
     if tool and "limit" in tool.params:
         args["limit"] = _clamp_limit(args.get("limit"), default_limit)
-
-    if tool_name == TOOL_GET_OBSERVATIONS and not args.get("observation_type"):
-        observation_type = infer_observation_type(message)
-        if observation_type:
-            args["observation_type"] = observation_type
 
     if tool_name in PATIENT_SCOPED_TOOLS:
         raw = args.get("patient_id")

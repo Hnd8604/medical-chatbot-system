@@ -7,7 +7,9 @@ Lỗi FHIR được để nguyên cho executor quy thành ``tool_error``.
 
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 from fhir.client import FhirClient
 from fhir.normalizer import normalize_patient, normalize_patient_bundle
@@ -18,6 +20,9 @@ from tools.formatting import (
     gender_vi,
     value_or_unknown,
 )
+
+
+T = TypeVar("T")
 
 
 async def search_patients(
@@ -100,9 +105,50 @@ async def get_patient(client: FhirClient, *, patient_id: str) -> dict[str, Any]:
     }
 
 
-async def fetch_patients(client: FhirClient, limit: int = 20) -> list[dict[str, Any]]:
+# Tool "tất cả bệnh nhân" theo từng người (không lọc theo loại chỉ số) đọc trang đầu này.
+ALL_PATIENTS_PAGE_SIZE = 20
+PER_PATIENT_CONCURRENCY = 8
+
+
+async def fetch_patients(client: FhirClient, limit: int = ALL_PATIENTS_PAGE_SIZE) -> list[dict[str, Any]]:
     """Danh sách bệnh nhân cho các tool đọc dữ liệu của nhiều bệnh nhân."""
-    return normalize_patient_bundle(await client.search_patients(count=limit))
+    patients, _ = await fetch_patient_page(client, limit)
+    return patients
+
+
+async def fetch_patient_page(
+    client: FhirClient, limit: int = ALL_PATIENTS_PAGE_SIZE
+) -> tuple[list[dict[str, Any]], int | None]:
+    """Trang đầu danh sách bệnh nhân kèm tổng số (nếu FHIR server báo ``total``)."""
+    bundle = await client.search_patients(count=limit)
+    total = bundle.get("total")
+    return normalize_patient_bundle(bundle), total if isinstance(total, int) else None
+
+
+async def map_patients(
+    patients: list[dict[str, Any]],
+    fetch: Callable[[dict[str, Any]], Awaitable[T]],
+    *,
+    concurrency: int = PER_PATIENT_CONCURRENCY,
+) -> list[T]:
+    """Gọi ``fetch`` cho từng bệnh nhân, song song có giới hạn; giữ đúng thứ tự."""
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def run(patient: dict[str, Any]) -> T:
+        async with semaphore:
+            return await fetch(patient)
+
+    return list(await asyncio.gather(*(run(patient) for patient in patients)))
+
+
+def coverage_note(listed: int, total: int | None) -> str:
+    """Câu báo rõ khi mới duyệt một phần danh sách bệnh nhân (thay vì im lặng trả thiếu)."""
+    if total and total > listed:
+        return (
+            f" Lưu ý: mới duyệt {listed}/{total} bệnh nhân đầu tiên; hãy hỏi theo một loại chỉ số "
+            "hoặc một bệnh nhân cụ thể để xem đầy đủ."
+        )
+    return ""
 
 
 def with_patient_context(resource: dict[str, Any], patient: dict[str, Any]) -> dict[str, Any]:

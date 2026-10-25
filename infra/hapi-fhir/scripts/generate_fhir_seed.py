@@ -4,6 +4,12 @@
 Tạo một transaction Bundle gồm 100 Patient, 100 Encounter, 100 Observation,
 100 Condition và 100 MedicationRequest, liên kết chéo và nhất quán lâm sàng.
 
+Thêm chuỗi tái khám cho bệnh nhân mắc bệnh mạn tính (mỗi người 4 lần tái khám trước
+lần khám chính, mỗi lần một Encounter + một Observation cùng loại chỉ số) để demo câu
+hỏi theo thời gian và xu hướng ("HbA1c 6 tháng qua tăng hay giảm"). Chuỗi này dùng bộ
+sinh số ngẫu nhiên RIÊNG và được nối vào CUỐI bundle, nên 500 resource gốc giữ nguyên
+từng byte so với bản trước.
+
 - ID bệnh nhân dạng mã hồ sơ thực tế: BN2026-00001 .. BN2026-00100
 - Không dùng chữ "demo" ở bất cứ đâu.
 - Chỉ tham chiếu bác sĩ bằng display (HAPI bật enforce_referential_integrity).
@@ -325,6 +331,7 @@ def make_encounter_datetime(index: int) -> tuple[str, str]:
 
 def build() -> dict:
     entries: list[dict] = []
+    series_inputs: list[tuple[int, str, dict, dict]] = []
 
     for i in range(1, PATIENT_COUNT + 1):
         pid = f"BN2026-{i:05d}"
@@ -520,7 +527,104 @@ def build() -> dict:
         }
         entries.append(_entry(medication, "MedicationRequest", med_id))
 
+        if profile["key"] in SERIES_PROFILES:
+            series_inputs.append((i, profile["key"], encounter, observation))
+
+    entries.extend(build_followup_series(series_inputs))
     return {"resourceType": "Bundle", "type": "transaction", "entry": entries}
+
+
+# --- Chuỗi tái khám (dữ liệu theo thời gian) ----------------------------------
+
+# Bộ sinh RIÊNG: thêm chuỗi tái khám không làm đổi dữ liệu gốc sinh bằng `rng`.
+series_rng = random.Random(20261023)
+SERIES_POINTS = 4
+SERIES_INTERVAL_DAYS = (35, 50)
+FOLLOWUP_ENCOUNTER = ("390906007", "Follow-up encounter", "Tái khám định kỳ")
+# key hồ sơ -> (bước thay đổi mỗi lần, số chữ số thập phân, chiều "xấu đi", min, max).
+# Chiều xấu đi: +1 = giá trị cao là xấu (HbA1c, cholesterol...), -1 = thấp là xấu (SpO2, Hb).
+SERIES_PROFILES = {
+    "hypertension": (4, 0, +1, 100, 190),
+    "diabetes": (0.3, 1, +1, 5.0, 12.5),
+    "hyperlipidemia": (9, 0, +1, 150, 320),
+    "asthma": (0.8, 0, -1, 88, 100),
+    "hypothyroidism": (0.6, 2, +1, 0.3, 12.0),
+    "anemia": (0.4, 1, -1, 7.0, 16.0),
+    "gastritis": (0.8, 1, +1, 40, 95),
+}
+
+
+def build_followup_series(series_inputs: list[tuple[int, str, dict, dict]]) -> list[dict]:
+    from copy import deepcopy
+    from datetime import datetime, timedelta
+
+    entries: list[dict] = []
+    for i, key, encounter, observation in series_inputs:
+        step, decimals, worse, low, high = SERIES_PROFILES[key]
+        # Cải thiện (trước đây xấu hơn), xấu đi (trước đây tốt hơn) hoặc dao động quanh mức hiện tại.
+        trend = series_rng.choices(["improving", "worsening", "stable"], weights=[5, 3, 2])[0]
+        main_start = datetime.fromisoformat(encounter["period"]["start"])
+        day = main_start
+        for n in range(1, SERIES_POINTS + 1):  # n = 1 là lần tái khám gần lần khám chính nhất
+            day = day - timedelta(days=series_rng.randint(*SERIES_INTERVAL_DAYS))
+            start = day.replace(hour=8 + series_rng.randint(0, 7), minute=0, second=0)
+            end = start + timedelta(minutes=30)
+            suffix = f"F{n}"
+            enc_id = f"{encounter['id']}-{suffix}"
+            obs_id = f"{observation['id']}-{suffix}"
+
+            followup = deepcopy(encounter)
+            followup["id"] = enc_id
+            code, display, text = FOLLOWUP_ENCOUNTER
+            followup["type"] = [{"coding": [{"system": "http://snomed.info/sct", "code": code, "display": display}], "text": text}]
+            followup["period"] = {"start": start.isoformat(), "end": end.isoformat()}
+            entries.append(_entry(followup, "Encounter", enc_id))
+
+            point = deepcopy(observation)
+            point["id"] = obs_id
+            point["encounter"] = {"reference": f"Encounter/{enc_id}"}
+            point["effectiveDateTime"] = start.isoformat()
+            point["issued"] = end.isoformat()
+            if "component" in point:
+                for component, scale in zip(point["component"], (1.0, 0.5)):
+                    current = component["valueQuantity"]["value"]
+                    component["valueQuantity"]["value"] = int(round(
+                        _series_value(current, step * scale, 0, worse, low, high, trend, n)
+                    ))
+                systolic = point["component"][0]["valueQuantity"]["value"]
+                diastolic = point["component"][1]["valueQuantity"]["value"]
+                point["interpretation"] = [interp("H", "High") if systolic >= 140 or diastolic >= 90 else interp("N", "Normal")]
+                point["note"] = [{"text": f"Huyết áp {systolic}/{diastolic} mmHg đo khi tái khám."}]
+            else:
+                value = _series_value(point["valueQuantity"]["value"], step, decimals, worse, low, high, trend, n)
+                point["valueQuantity"]["value"] = value
+                point["interpretation"] = [_interpretation(value, point.get("referenceRange"))]
+                point["note"] = [{"text": f"{point['code']['text']}: {value} {point['valueQuantity']['unit']} (tái khám)."}]
+            entries.append(_entry(point, "Observation", obs_id))
+    return entries
+
+
+def _series_value(current, step, decimals, worse, low, high, trend, n):
+    if trend == "improving":
+        base = current + worse * step * n
+    elif trend == "worsening":
+        base = current - worse * step * n
+    else:
+        base = current
+    value = base + series_rng.uniform(-0.35, 0.35) * step
+    value = min(high, max(low, value))
+    return round(value, decimals) if decimals else int(round(value))
+
+
+def _interpretation(value, reference_range):
+    ranges = reference_range or [{}]
+    ref_low = (ranges[0].get("low") or {}).get("value")
+    ref_high = (ranges[0].get("high") or {}).get("value")
+    if ref_high is not None and value > ref_high:
+        return interp("H", "High")
+    if ref_low is not None and value < ref_low:
+        return interp("L", "Low")
+    return interp("N", "Normal")
 
 
 def _entry(resource: dict, resource_type: str, resource_id: str) -> dict:

@@ -5,7 +5,7 @@ dữ liệu nhiều bệnh nhân không), nên không cần một LLM Router ri�
 
 - nhiều step / ``explain`` / dữ liệu nhiều bệnh nhân ⇒ ``model_complex``;
 - còn lại ⇒ ``model_simple``;
-- quota đã dùng > ``QUOTA_DOWNGRADE_RATIO`` ⇒ luôn ``model_simple`` (cost-aware).
+- quota đã dùng >= ``settings.quota_downgrade_ratio`` ⇒ luôn ``model_simple`` (cost-aware).
 """
 
 from __future__ import annotations
@@ -14,8 +14,6 @@ from dataclasses import dataclass
 
 from app.config import get_settings
 
-
-QUOTA_DOWNGRADE_RATIO = 0.8
 
 COMPLEXITY_SIMPLE = "simple"
 COMPLEXITY_COMPLEX = "complex"
@@ -42,7 +40,7 @@ def select_answer_model(
     complex_turn = step_count > 1 or explain or all_patients
     complexity = COMPLEXITY_COMPLEX if complex_turn else COMPLEXITY_SIMPLE
 
-    if complex_turn and quota_used_ratio > QUOTA_DOWNGRADE_RATIO:
+    if complex_turn and quota_used_ratio >= settings.quota_downgrade_ratio:
         return ModelChoice(settings.model_simple, complexity, SOURCE_QUOTA_DOWNGRADE)
     model = settings.model_complex if complex_turn else settings.model_simple
     return ModelChoice(model, complexity, SOURCE_PLAN)

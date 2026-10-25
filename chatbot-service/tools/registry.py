@@ -20,6 +20,7 @@ from tools.medications import get_all_patient_medication_requests, get_medicatio
 from tools.observations import get_all_patient_observations, get_observations
 from tools.patients import get_patient, search_patients
 from tools.resources import SUPPORTED_RESOURCE_TYPES, fhir_status, get_resource_by_id
+from tools.trends import get_observation_trend
 
 
 TOOL_FHIR_STATUS = "fhir_status"
@@ -27,6 +28,7 @@ TOOL_SEARCH_PATIENTS = "search_patients"
 TOOL_GET_PATIENT = "get_patient_by_id"
 TOOL_GET_RESOURCE = "get_resource_by_id"
 TOOL_GET_OBSERVATIONS = "get_observations"
+TOOL_GET_OBSERVATION_TREND = "get_observation_trend"
 TOOL_GET_ENCOUNTERS = "get_encounters"
 TOOL_GET_CONDITIONS = "get_conditions"
 TOOL_GET_MEDICATIONS = "get_medication_requests"
@@ -39,6 +41,16 @@ TOOL_EXPLAIN_CONCEPT = "explain_concept"
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 20
 SEARCH_DEFAULT_LIMIT = 3
+TREND_DEFAULT_LIMIT = 20
+COHORT_DEFAULT_LIMIT = 20
+
+# Tham số dùng chung — mô tả ở đây đi thẳng vào prompt planner.
+DATE_PARAMS = ("date_from", "date_to")
+DATE_HINT = "date_from/date_to: YYYY-MM-DD, chỉ khi câu hỏi nêu mốc thời gian"
+ENCOUNTER_HINT = (
+    'encounter_id: chỉ lấy dữ liệu của một lần khám; dùng "$<id step get_encounters>.encounter_id" '
+    "để lấy lần khám mới nhất của step đó"
+)
 
 ToolHandler = Callable[..., Awaitable[dict[str, Any]]]
 
@@ -98,39 +110,62 @@ _TOOLS: tuple[FhirTool, ...] = (
     ),
     FhirTool(
         name=TOOL_GET_OBSERVATIONS,
-        description="Lấy chỉ số/xét nghiệm/sinh hiệu của một bệnh nhân.",
-        params=("patient_id", "observation_type", "limit"),
+        description=(
+            "Lấy chỉ số/xét nghiệm/sinh hiệu của một bệnh nhân, mới nhất trước. "
+            f"observation_type: loại chỉ số (vd blood_pressure, glucose, hba1c). {DATE_HINT}. {ENCOUNTER_HINT}."
+        ),
+        params=("patient_id", "observation_type", *DATE_PARAMS, "encounter_id", "limit"),
         handler=get_observations,
         needs_patient=True,
     ),
     FhirTool(
+        name=TOOL_GET_OBSERVATION_TREND,
+        description=(
+            "Xu hướng MỘT loại chỉ số của một bệnh nhân theo thời gian (tăng/giảm, thấp nhất, cao nhất, "
+            f"chênh lệch) — dùng khi hỏi xu hướng, diễn biến, thay đổi, tăng hay giảm. Bắt buộc observation_type. {DATE_HINT}."
+        ),
+        params=("patient_id", "observation_type", *DATE_PARAMS, "limit"),
+        handler=get_observation_trend,
+        needs_patient=True,
+        default_limit=TREND_DEFAULT_LIMIT,
+    ),
+    FhirTool(
         name=TOOL_GET_ENCOUNTERS,
-        description="Lấy các lần khám của một bệnh nhân.",
-        params=("patient_id", "limit"),
+        description=(
+            "Lấy các lần khám của một bệnh nhân, mới nhất trước (limit 1 = lần khám gần nhất). "
+            f"{DATE_HINT}."
+        ),
+        params=("patient_id", *DATE_PARAMS, "limit"),
         handler=get_encounters,
         needs_patient=True,
     ),
     FhirTool(
         name=TOOL_GET_CONDITIONS,
-        description="Lấy chẩn đoán/tình trạng đã ghi nhận của một bệnh nhân.",
-        params=("patient_id", "limit"),
+        description=f"Lấy chẩn đoán/tình trạng đã ghi nhận của một bệnh nhân. {DATE_HINT}. {ENCOUNTER_HINT}.",
+        params=("patient_id", *DATE_PARAMS, "encounter_id", "limit"),
         handler=get_conditions,
         needs_patient=True,
     ),
     FhirTool(
         name=TOOL_GET_MEDICATIONS,
-        description="Lấy thuốc/đơn thuốc đã ghi nhận của một bệnh nhân.",
-        params=("patient_id", "limit"),
+        description=f"Lấy thuốc/đơn thuốc đã ghi nhận của một bệnh nhân. {DATE_HINT}. {ENCOUNTER_HINT}.",
+        params=("patient_id", *DATE_PARAMS, "encounter_id", "limit"),
         handler=get_medication_requests,
         needs_patient=True,
     ),
     FhirTool(
         name=TOOL_GET_ALL_OBSERVATIONS,
-        description="Lấy chỉ số/xét nghiệm của nhiều bệnh nhân.",
-        params=("observation_type", "limit"),
+        description=(
+            "Chỉ số/xét nghiệm của nhiều bệnh nhân. Có observation_type thì xét kết quả GẦN NHẤT của mọi "
+            "bệnh nhân có dữ liệu; lọc ngưỡng bằng value_op (gt|ge|lt|le) + value, vd \"bệnh nhân nào "
+            "có HbA1c > 7\" → observation_type=hba1c, value_op=gt, value=7. Huyết áp: component "
+            "systolic|diastolic (mặc định systolic)."
+        ),
+        params=("observation_type", "value_op", "value", "component", "limit"),
         handler=get_all_patient_observations,
         all_patients=True,
         base_tool=TOOL_GET_OBSERVATIONS,
+        default_limit=COHORT_DEFAULT_LIMIT,
     ),
     FhirTool(
         name=TOOL_GET_ALL_ENCOUNTERS,
@@ -175,6 +210,13 @@ ALL_PATIENT_TOOLS: frozenset[str] = frozenset(
 )
 PATIENT_SCOPED_TOOLS: frozenset[str] = frozenset(
     name for name, tool in TOOL_REGISTRY.items() if tool.needs_patient
+)
+# Tool nhận khoảng ngày / lần khám (validator điền từ câu hỏi khi planner bỏ sót).
+DATE_FILTER_TOOLS: frozenset[str] = frozenset(
+    name for name, tool in TOOL_REGISTRY.items() if "date_from" in tool.params
+)
+ENCOUNTER_FILTER_TOOLS: frozenset[str] = frozenset(
+    name for name, tool in TOOL_REGISTRY.items() if "encounter_id" in tool.params
 )
 # Tool không chạm dữ liệu bệnh nhân nào -> mọi role đều dùng được.
 PUBLIC_TOOLS: frozenset[str] = frozenset({TOOL_FHIR_STATUS, TOOL_EXPLAIN_CONCEPT})

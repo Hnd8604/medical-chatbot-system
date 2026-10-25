@@ -16,6 +16,11 @@ public record ConversationContext(
         String lastResourceId,
         List<ContextMessage> recentMessages,
         /** Messages in the session before the current one; chatbot-service uses it to trigger rolling summaries. */
-        int totalMessageCount
+        int totalMessageCount,
+        /**
+         * memory_summary đã bao phủ tới tin thứ mấy (0 = chưa có summary). recent_messages luôn chứa
+         * đủ các tin sau mốc này (có trần).
+         */
+        int summarizedMessageCount
 ) {
 }

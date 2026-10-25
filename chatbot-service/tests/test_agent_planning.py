@@ -325,7 +325,8 @@ class PlanCacheTests(unittest.TestCase):
         self.assertIsNone(refill_identifiers(cached, question="thuốc của bệnh nhân này", conversation_context=None))
 
     def test_resource_id_refilled_from_context(self):
-        cached = make_plan(PlanStep(id="r", tool="get_resource_by_id", args={}))
+        # Plan đã cache cho câu "giải thích" mang answer_mode explain.
+        cached = make_plan(PlanStep(id="r", tool="get_resource_by_id", args={}), answer_mode=ANSWER_MODE_EXPLAIN)
         plan = refill_identifiers(
             cached,
             question="chỉ số này có ý nghĩa gì",

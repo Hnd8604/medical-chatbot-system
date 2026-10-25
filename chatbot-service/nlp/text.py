@@ -78,8 +78,19 @@ def extract_patient_name(message: str) -> str | None:
     return None
 
 
+# Đại từ ngôi thứ nhất và danh từ dữ liệu: đứng đầu "tên" bắt được thì đó không phải tên.
+_NON_NAME_FIRST_WORDS = frozenset({"toi", "tui", "minh", "em", "chung", "ban", "nguoi", "ho"})
+_NON_NAME_PREFIXES = (
+    "chi so", "xet nghiem", "ket qua", "thuoc", "don thuoc", "lan kham", "chan doan", "huyet ap",
+    "duong huyet", "can nang", "benh", "ho so", "tat ca", "cac ", "nhung ", "nhap vien", "xuat vien",
+    "tai kham", "kham",
+)
+
+
 def clean_name_candidate(candidate: str) -> str | None:
     value = re.sub(r"\s+", " ", candidate).strip(" .,'-")
+    # "Tìm bệnh nhân tên Trần Thị Mai": bỏ chữ "tên"/"là" đứng trước tên.
+    value = re.sub(r"^(tên|ten|là|la)\s+", "", value, flags=re.IGNORECASE)
     if not value:
         return None
 
@@ -104,6 +115,20 @@ def clean_name_candidate(candidate: str) -> str | None:
         " thuốc",
         " thong tin",
         " thông tin",
+        # Phần hỏi đứng sau tên: "Nguyễn Văn An nhập viện khi nào". (Không dừng ở "dung"
+        # đơn lẻ: đó cũng là tên "Dũng".)
+        " dung thuoc",
+        " uong thuoc",
+        " nhap vien",
+        " xuat vien",
+        " tai kham",
+        " khi nao",
+        " lan nao",
+        " the nao",
+        " ra sao",
+        " bao nhieu",
+        " la ai",
+        " la gi",
     ]
     lowered = normalize_text(f" {value} ")
     cut_at = len(value)
@@ -115,6 +140,10 @@ def clean_name_candidate(candidate: str) -> str | None:
 
     lowered_value = normalize_text(value)
     if lowered_value.startswith(("sdt", "so dien thoai", "ngay sinh", "sinh ngay", "phone")):
+        return None
+    # "của tôi", "của chỉ số này", "của lần khám..." không phải tên người.
+    first_word = lowered_value.split(" ", 1)[0]
+    if first_word in _NON_NAME_FIRST_WORDS or lowered_value.startswith(_NON_NAME_PREFIXES):
         return None
     if lowered_value in {
         "ai", "nao", "hien co", "tat ca", "danh sach", "benh nhan",

@@ -81,6 +81,11 @@ public class ChatbotResponseMapper {
         return metadata;
     }
 
+    /** Lượt này chatbot-service có sinh rolling summary mới không (memory_update.summary khác rỗng). */
+    public boolean hasSummaryUpdate(ChatbotChatResponse reply) {
+        return reply.memoryUpdate() != null && text(reply.memoryUpdate(), "summary") != null;
+    }
+
     /**
      * Merges the memory update of a turn into the session memory. The patient/resource focus only
      * moves when the turn was about one concrete patient — not when it listed all patients or asked

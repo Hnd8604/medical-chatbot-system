@@ -1,18 +1,22 @@
 """Agent graph — điều phối một lượt chat.
 
 ```text
-prepare ─ cache_lookup ──hit──────────────────────────────────────────> END   (0 LLM call)
-             │miss
-             └─ route ──┬─ general_chat ──────┐
-                        ├─ conversation_meta ─┼──────────────────────> END
-                        ├─ unsupported ───────┘
-                        └─ plan ──┬─ (không nhận ra) ─ clarify ──────> END
-                                  └─ validate ──┬─ (plan hỏng) ─ clarify > END
-                                                └─ execute ─ respond > END
+prepare ─ triage ──cấp cứu (luật) ────────────────────────────────────> END   (0 LLM call)
+            │
+            └─ cache_lookup ──hit─────────────────────────────────────> END   (0 LLM call)
+                 │miss
+                 └─ route ──┬─ general_chat ──────┐
+                            ├─ conversation_meta ─┼──────────────────> END
+                            ├─ unsupported ───────┘
+                            └─ plan ──┬─ (không nhận ra) ─ clarify ──> END
+                                      └─ validate ──┬─ (plan hỏng) ─ clarify > END
+                                                    └─ execute ─ respond > END
 
-(song song từ đầu lượt: summary_task — rolling summary, await ở bước finalize)
+(song song từ đầu lượt: summary_task — rolling summary, await ở bước finalize;
+ chỉ chạy khi số tin chưa tóm tắt đạt ngưỡng)
 ```
 
+- Triage cấp cứu (luật) đặt trước cả cache ⇒ hướng dẫn gọi 115 không bao giờ bị cache che.
 - Semantic cache đặt trước router ⇒ cache hit tốn 0 LLM call.
 - Rolling summary chạy song song cả lượt, không chặn response.
 - Các step FHIR độc lập chạy song song.
@@ -26,8 +30,8 @@ import uuid
 from typing import Any
 
 from agent.answer.generator import AnswerGenerator
-from agent.memory.context import compact_conversation_for_llm, patient_id_hint
-from agent.memory.summary import SummaryGenerator
+from agent.memory.context import patient_id_hint
+from agent.memory.summary import SummaryGenerator, summary_context_for_turn
 from agent.nodes.cache_lookup import cache_lookup
 from agent.nodes.execute import execute
 from agent.nodes.plan import has_plan, plan
@@ -35,6 +39,7 @@ from agent.nodes.prepare import prepare
 from agent.nodes.respond import respond
 from agent.nodes.route import route
 from agent.nodes.simple import clarify, conversation_meta, general_chat, unsupported
+from agent.nodes.triage import triage
 from agent.nodes.validate import validate
 from agent.prompts import (
     ANSWER_PROMPT_VERSION,
@@ -52,6 +57,7 @@ from agent.state import (
     AgentState,
 )
 from api.schemas import ChatRequest
+from app.config import get_settings
 from cache.semantic_cache import SemanticCacheService
 from fhir.client import FhirClient
 from llm.client import llm_unavailable_reason, recorded_calls, set_gateway_context, start_call_log
@@ -65,6 +71,7 @@ def build_graph():
 
     graph = StateGraph(AgentState)
     graph.add_node("prepare", prepare)
+    graph.add_node("triage", triage)
     graph.add_node("cache_lookup", cache_lookup)
     graph.add_node("route", route)
     graph.add_node("general_chat", general_chat)
@@ -77,7 +84,12 @@ def build_graph():
     graph.add_node("respond", respond)
 
     graph.set_entry_point("prepare")
-    graph.add_edge("prepare", "cache_lookup")
+    graph.add_edge("prepare", "triage")
+    graph.add_conditional_edges(
+        "triage",
+        lambda state: "emergency" if state.get("emergency_kind") else "continue",
+        {"emergency": END, "continue": "cache_lookup"},
+    )
     graph.add_conditional_edges(
         "cache_lookup",
         lambda state: "hit" if state.get("cache_hit") else "miss",
@@ -131,18 +143,23 @@ async def run_agent(
     start_call_log()
     trace_id = uuid.uuid4().hex
 
-    conversation_context = compact_conversation_for_llm(request.conversation_context)
-    # Rolling summary chạy song song cả lượt; các nhánh finalize mới await.
-    summary_task = asyncio.create_task(
-        summary_generator.summarize(
-            conversation_context=conversation_context,
-            question=request.message,
-            patient_id=patient_id_hint(request),
-            total_message_count=(
-                request.conversation_context.total_message_count if request.conversation_context else None
-            ),
-        )
+    # Rolling summary chạy song song cả lượt; các nhánh finalize mới await. Chọn tin cần
+    # tóm tắt theo mốc Spring gửi (xem summary_context_for_turn).
+    summary_context = summary_context_for_turn(
+        request.conversation_context,
+        low_cost=get_settings().is_low_cost(request.quota_used_ratio),
     )
+    total_message_count = request.conversation_context.total_message_count if request.conversation_context else None
+    summary_task = None
+    if summary_context is not None:
+        summary_task = asyncio.create_task(
+            summary_generator.summarize(
+                conversation_context=summary_context,
+                question=request.message,
+                patient_id=patient_id_hint(request),
+                total_message_count=total_message_count,
+            )
+        )
     deps = AgentDeps(
         client=client,
         answer_generator=answer_generator,

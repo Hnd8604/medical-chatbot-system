@@ -1,9 +1,14 @@
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
 from app.config import get_settings
+
+
+# Trần số resource (khớp tìm kiếm, không tính _include) đọc qua nhiều trang.
+MAX_SEARCH_RESULTS = 1000
 
 
 class FhirClientError(Exception):
@@ -109,15 +114,52 @@ class FhirClient:
         *,
         count: int = 10,
         sort: str | None = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        params: dict[str, str | int] = {
+        """Tìm resource của một bệnh nhân. ``params``: tham số FHIR thêm (code, date, encounter...)."""
+        query: dict[str, Any] = {
+            **(params or {}),
             "patient": f"Patient/{patient_id}",
             "_count": count,
         }
         if sort:
-            params["_sort"] = sort
-        return await self._get(resource_type, params=params)
-        
+            query["_sort"] = sort
+        return await self._get(resource_type, params=query)
+
+    async def search_resources(
+        self,
+        resource_type: str,
+        params: dict[str, Any],
+        *,
+        max_results: int = MAX_SEARCH_RESULTS,
+    ) -> dict[str, Any]:
+        """Tìm resource trên mọi bệnh nhân, đi theo link ``next`` tới khi đủ ``max_results``.
+
+        Trả một Bundle gộp: ``entry`` của mọi trang (kể cả resource ``_include``),
+        ``total`` nếu server báo, ``truncated=True`` nếu còn trang chưa đọc.
+        """
+        page = await self._get(resource_type, params=params)
+        total = page.get("total")
+        entries = list(page.get("entry") or [])
+        next_url = _next_link(page)
+        while next_url and _match_count(entries) < max_results:
+            page = await self._get_page(next_url)
+            entries.extend(page.get("entry") or [])
+            next_url = _next_link(page)
+        return {
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "total": total,
+            "entry": entries,
+            "truncated": bool(next_url),
+        }
+
+    async def _get_page(self, next_url: str) -> dict[str, Any]:
+        # Link phân trang của HAPI có thể mang host nội bộ (vd tên container); chỉ lấy
+        # query string và gọi lại qua base_url mà service này cấu hình.
+        query = parse_qs(urlsplit(next_url).query)
+        return await self._get("", params={key: values if len(values) > 1 else values[0] for key, values in query.items()})
+
     # Nơi fhir gửi request đến HAPI FHIR server
     async def _get(
         self,
@@ -125,7 +167,8 @@ class FhirClient:
         *,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
+        base = self.base_url.rstrip("/")
+        url = f"{base}/{path.lstrip('/')}" if path else base
         try:
             async with httpx.AsyncClient(
                 timeout=self.timeout_seconds,
@@ -153,6 +196,18 @@ class FhirClient:
         if not isinstance(payload, dict):
             raise FhirClientError("FHIR Server trả về JSON không hợp lệ.")
         return payload
+
+
+def _next_link(bundle: dict[str, Any]) -> str | None:
+    for link in bundle.get("link") or []:
+        if isinstance(link, dict) and link.get("relation") == "next" and link.get("url"):
+            return str(link["url"])
+    return None
+
+
+def _match_count(entries: list[dict[str, Any]]) -> int:
+    # Resource kéo theo bằng _include có search.mode = "include"; không tính vào trần.
+    return sum(1 for entry in entries if (entry.get("search") or {}).get("mode", "match") == "match")
 
 
 def get_fhir_client() -> FhirClient:

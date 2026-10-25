@@ -18,6 +18,11 @@ An toàn: giá trị định danh (patient_id, tên, SĐT, mã resource...) khô
 lưu — chúng bị thay bằng placeholder và được **điền lại từ lượt hiện tại** khi đọc; điền
 không được thì coi như miss. Plan lấy từ cache **vẫn phải chạy lại validator** trước khi
 thực thi, nên cache không thể trở thành đường vòng qua chính sách role.
+
+Giá trị phụ thuộc câu chữ (khoảng ngày, ngưỡng "> 7") cũng không được tái dùng: chúng
+được điền lại bằng luật từ câu hỏi hiện tại. Ngoài ra có các chốt tất định chống hit nhầm
+giữa hai câu gần giống: loại chỉ số suy từ câu hỏi phải khớp loại trong plan, và câu hỏi
+"giải thích" không dùng lại plan "chỉ dữ liệu" (và ngược lại).
 """
 
 from __future__ import annotations
@@ -30,11 +35,16 @@ from typing import Any
 from agent.planning.plan import PLAN_SOURCE_CACHE, Plan, PlanStep
 from agent.planning.router import RouteDecision
 from agent.planning.rule_planner import extract_resource_reference
-from agent.state import ANSWER_MODE_DATA_ONLY
+from agent.state import ANSWER_MODE_DATA_ONLY, ANSWER_MODE_EXPLAIN
 from app.config import get_settings
-from cache.semantic_cache import get_semantic_cache
+from cache.semantic_cache import embedding_text, get_semantic_cache
+from nlp.observation_types import canonical_observation_type, infer_observation_type
 from nlp.patient_refs import extract_patient_search_criteria
-from nlp.text import normalize_text
+from nlp.query_signature import plan_signature
+from nlp.text import contains_any, normalize_text
+from nlp.time_range import extract_time_range
+from nlp.value_filter import extract_value_filter
+from nlp.vocabulary import EXPLAIN_KEYWORDS
 from tools.registry import TOOL_GET_RESOURCE, TOOL_SEARCH_PATIENTS
 
 
@@ -42,7 +52,14 @@ log = logging.getLogger(__name__)
 
 # Giá trị thay cho mọi patient_id/resource_id thật trước khi ghi cache.
 PATIENT_PLACEHOLDER = "$active_patient"
-_REDACTED_ARG_KEYS = ("patient_id", "resource_id", "identifier", "phone", "birth_date", "name")
+# Khoảng ngày / ngưỡng: phải điền lại bằng luật từ câu hỏi hiện tại, không được thì miss.
+TIME_RANGE_PLACEHOLDER = "$time_range"
+VALUE_FILTER_PLACEHOLDER = "$value_filter"
+# "component" (tâm thu/tâm trương) không phải PHI nhưng phụ thuộc câu chữ: bỏ đi để
+# validator suy lại từ câu hỏi hiện tại.
+_REDACTED_ARG_KEYS = ("patient_id", "resource_id", "identifier", "phone", "birth_date", "name", "component")
+_TIME_KEYS = ("date_from", "date_to")
+_VALUE_KEYS = ("value_op", "value")
 
 
 def _context_shape(conversation_context: dict[str, Any] | None) -> str:
@@ -107,13 +124,16 @@ class PlanCache:
         if not settings.enable_plan_cache:
             return None
         try:
-            vector = await self._cache._get_embedding(normalize_text(question))
+            vector = await self._cache._get_embedding(embedding_text(question))
             result = await self._cache.client.query_points(
                 collection_name=self.collection,
                 query=vector,
                 query_filter=Filter(
                     must=[
                         FieldCondition(key="user_role", match=MatchValue(value=user_role)),
+                        # Chữ ký "khung" tất định: chặn hit nhầm giữa câu gần giống nhưng khác
+                        # loại chỉ số / loại dữ liệu / ý định (đo bằng tests/eval/run_cache_pairs.py).
+                        FieldCondition(key="plan_signature", match=MatchValue(value=plan_signature(question))),
                         FieldCondition(
                             key="context_shape",
                             match=MatchValue(value=_context_shape(conversation_context)),
@@ -160,8 +180,11 @@ class PlanCache:
         settings = get_settings()
         if not settings.enable_plan_cache:
             return
+        if plan and any(_has_literal_encounter(step) for step in plan.steps):
+            # Mã lần khám cụ thể là định danh và không điền lại được từ câu hỏi: không cache.
+            return
         try:
-            vector = await self._cache._get_embedding(normalize_text(question))
+            vector = await self._cache._get_embedding(embedding_text(question))
             await self._cache.client.upsert(
                 collection_name=self.collection,
                 points=[
@@ -170,6 +193,7 @@ class PlanCache:
                         vector=vector,
                         payload={
                             "user_role": user_role,
+                            "plan_signature": plan_signature(question),
                             "context_shape": _context_shape(conversation_context),
                             "route": decision.route,
                             "meta_kind": decision.meta_kind,
@@ -193,9 +217,18 @@ def _redact_step(step: PlanStep) -> dict[str, Any]:
         if key in _REDACTED_ARG_KEYS:
             # Giữ *hình dạng* tham số (tool này cần patient_id) chứ không giữ giá trị.
             args[key] = PATIENT_PLACEHOLDER
+        elif key in _TIME_KEYS:
+            args[key] = TIME_RANGE_PLACEHOLDER
+        elif key in _VALUE_KEYS:
+            args[key] = VALUE_FILTER_PLACEHOLDER
         else:
             args[key] = value
     return {"id": step.id, "tool": step.tool, "args": args}
+
+
+def _has_literal_encounter(step: PlanStep) -> bool:
+    value = step.args.get("encounter_id")
+    return isinstance(value, str) and bool(value) and not value.startswith("$")
 
 
 def refill_identifiers(
@@ -212,9 +245,29 @@ def refill_identifiers(
     với tiêu chí rỗng.
     """
     context = conversation_context or {}
+    # Câu "giải thích" và câu "chỉ dữ liệu" gần giống nhau về embedding nhưng cần plan khác.
+    if (plan.answer_mode == ANSWER_MODE_EXPLAIN) != contains_any(normalize_text(question), EXPLAIN_KEYWORDS):
+        return None
+    asked_type = infer_observation_type(question)
     steps: list[PlanStep] = []
     for step in plan.steps:
         args = dict(step.args)
+        cached_type = canonical_observation_type(args.get("observation_type"))
+        if asked_type and cached_type and asked_type != cached_type:
+            # "đường huyết của bệnh nhân này" không được dùng plan của "huyết áp của bệnh nhân này".
+            return None
+        if TIME_RANGE_PLACEHOLDER in (args.get("date_from"), args.get("date_to")):
+            time_range = extract_time_range(question)
+            if time_range is None:
+                return None
+            for key in _TIME_KEYS:
+                args.pop(key, None)
+            args.update(time_range.as_args())
+        if VALUE_FILTER_PLACEHOLDER in (args.get("value_op"), args.get("value")):
+            value_filter = extract_value_filter(question)
+            if value_filter is None:
+                return None
+            args["value_op"], args["value"] = value_filter
         if step.tool == TOOL_SEARCH_PATIENTS:
             criteria = extract_patient_search_criteria(question)
             if not criteria:

@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 import logging
 import time
@@ -17,9 +18,23 @@ from qdrant_client.models import (
 )
 from fastembed import TextEmbedding
 
-from app.config import Settings, get_settings 
+from app.config import Settings, get_settings
+from nlp.query_signature import query_signature
+from nlp.text import normalize_text
+from nlp.time_range import today_local
 
 log = logging.getLogger(__name__)
+
+
+def embedding_text(question: str) -> str:
+    """Văn bản đưa vào embedding: bỏ dấu + chữ thường (giống plan cache).
+
+    Đo bằng tests/eval/run_cache_pairs.py: cùng một câu có dấu / không dấu chỉ giống nhau
+    0.2–0.4 nếu để nguyên, nên người gõ không dấu gần như không bao giờ hit cache.
+    """
+    text = normalize_text(question or "")
+    # Dấu câu chỉ làm lệch điểm ("...thuốc gì" và "...thuốc gì?" còn 0.92).
+    return re.sub(r"\s+", " ", re.sub(r"[?!.,;:…\"'()]+", " ", text)).strip()
 
 
 class SemanticCacheService:
@@ -70,21 +85,23 @@ class SemanticCacheService:
         Returns (answer, intent, original_usage, llm_provider, llm_model) if a match is found;
         provider/model là của lượt đã sinh câu trả lời gốc (entry cũ có thể thiếu → None).
         """
-        # Lấy threshold từ tham số truyền vào, nếu không có thì lấy từ config
-        threshold =self.settings.cache_similarity_threshold
-        query_vector = await self._get_embedding(question)
-        
+        threshold = self.settings.cache_similarity_threshold
+        query_vector = await self._get_embedding(embedding_text(question))
+
         expiration_threshold = (
             time.time() - self.settings.cache_ttl_seconds
         )
         search_result = await self.client.query_points(
             collection_name=self.collection_name,
-            query=query_vector, 
+            query=query_vector,
             query_filter=Filter(
                 must=[
                     FieldCondition(key="user_id", match=MatchValue(value=user_id)),
                     FieldCondition(key="patient_id", match=MatchValue(value=patient_id)),
-                    FieldCondition(key="created_at",range=Range(gte=expiration_threshold))
+                    # Embedding không phân biệt "HbA1c > 7" với "> 8", "năm 2025" với "2026",
+                    # "dưới 95" với "trên 95": chữ ký tất định phải trùng mới được hit.
+                    FieldCondition(key="signature", match=MatchValue(value=self._signature(question))),
+                    FieldCondition(key="created_at", range=Range(gte=expiration_threshold)),
                 ]
             ),
             limit=1
@@ -135,7 +152,7 @@ class SemanticCacheService:
         đó chính là chi phí tiết kiệm được (``saved_usage.saved_cost_usd``).
         ``llm_provider``/``llm_model`` là model đã sinh câu trả lời gốc.
         """
-        vector = await self._get_embedding(question)
+        vector = await self._get_embedding(embedding_text(question))
 
         await self.client.upsert(
             collection_name=self.collection_name,
@@ -148,6 +165,7 @@ class SemanticCacheService:
                         "patient_id": patient_id,
                         "intent": intent,
                         "question": question,
+                        "signature": self._signature(question),
                         "answer": answer,
                         "original_usage": usage,
                         "llm_provider": llm_provider,
@@ -158,6 +176,9 @@ class SemanticCacheService:
             ]
         )
         log.info(f"[CACHE SAVED] Đã lưu câu trả lời mới kèm user_id '{user_id}' vào Vector DB.")
+
+    def _signature(self, question: str) -> str:
+        return query_signature(question, today=today_local(self.settings.app_timezone))
 
     async def invalidate_patient_cache(self, patient_id: str) -> None:
         """Clears all current cache points bound to a specific patient context."""

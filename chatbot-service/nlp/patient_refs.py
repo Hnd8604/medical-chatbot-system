@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from nlp.text import (
     normalize_text,
@@ -47,7 +48,38 @@ def is_self_patient_reference(message: str) -> bool:
 
 
 def is_contextual_patient_reference(message: str) -> bool:
-    return contains_any(normalize_text(message), CONTEXTUAL_PATIENT_REFERENCE_PHRASES)
+    text = normalize_text(message)
+    for phrase in CONTEXTUAL_PATIENT_REFERENCE_PHRASES:
+        if phrase not in text:
+            continue
+        if phrase.endswith(" do") and not _is_demonstrative_do(message, phrase):
+            continue
+        return True
+    return False
+
+
+def _is_demonstrative_do(message: str, phrase: str) -> bool:
+    """"bệnh nhân đó" (chỉ định) hay "bệnh nhân Đỗ Văn Hùng" (họ Đỗ)? Bỏ dấu thì trùng nhau.
+
+    Xem chữ gốc: "đó" là chỉ định; "Đỗ"/"đỗ" hoặc "Do" viết hoa là họ; "do" thường thì là
+    chỉ định, trừ khi từ sau nó viết hoa (tên người gõ không dấu: "benh nhan do Van Hung").
+    """
+    words = phrase.split()
+    tokens = re.findall(r"[\wÀ-ỹ]+", unicodedata.normalize("NFC", message))
+    for index in range(len(tokens) - len(words) + 1):
+        window = [normalize_text(token) for token in tokens[index:index + len(words)]]
+        if window != words:
+            continue
+        raw = tokens[index + len(words) - 1]
+        following = tokens[index + len(words)] if index + len(words) < len(tokens) else ""
+        if raw.lower() == "đó":
+            return True
+        if raw.lower() == "đỗ" or raw[:1].isupper():
+            continue
+        if following[:1].isupper():
+            continue
+        return True
+    return False
 
 
 def is_patient_list_request(message: str) -> bool:

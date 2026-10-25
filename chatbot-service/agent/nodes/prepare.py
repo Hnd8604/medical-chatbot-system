@@ -33,5 +33,5 @@ async def prepare(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         "allowed_patient_ids": allowed,
         "provided_patient_id": provided,
         "conversation_context": compact_conversation_for_llm(request.conversation_context),
-        "low_cost_mode": request.quota_used_ratio >= get_settings().low_cost_mode_ratio,
+        "low_cost_mode": get_settings().is_low_cost(request.quota_used_ratio),
     }

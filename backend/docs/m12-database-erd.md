@@ -70,6 +70,7 @@ erDiagram
         varchar     title
         varchar     active_patient_id
         text        memory_summary
+        integer     memory_summary_message_count
         varchar     last_intent
         varchar     last_tool_name
         varchar     last_resource_type
@@ -251,6 +252,7 @@ Mở <https://dbdiagram.io/d>, dán toàn bộ khối dưới đây để render
     title              varchar
     active_patient_id  varchar
     memory_summary     text
+    memory_summary_message_count integer [not null, default: 0] // summary bao phủ tới tin thứ mấy
     last_intent        varchar
     last_tool_name     varchar
     last_resource_type varchar

@@ -40,6 +40,8 @@ public class ChatTurnService {
 
     /** Messages of the session sent along as conversation context. */
     private static final int CONTEXT_MESSAGE_LIMIT = 8;
+    /** Trần số tin gửi kèm khi còn tồn nhiều tin chưa tóm tắt (summary lỡ nhiều lượt liền). */
+    private static final int MAX_SUMMARY_CONTEXT_MESSAGES = 24;
     private static final int TITLE_MAX_LENGTH = 80;
     private static final String DEFAULT_TITLE = "Cuộc trò chuyện mới";
 
@@ -74,11 +76,15 @@ public class ChatTurnService {
         ChatSession session = existingSession != null ? existingSession : startSession(user, request.message());
         ChatMemory memory = scope.restrict(storedMemory);
 
-        ChatbotChatRequest chatbotRequest = buildChatbotRequest(user, session, request, scope, memory, quota);
+        // Counted before the current question is stored, so chatbot-service sees the same history
+        // size as the recent messages it receives.
+        int previousMessageCount = (int) chatMessageRepository.countBySessionId(session.getId());
+        ChatbotChatRequest chatbotRequest = buildChatbotRequest(
+                user, session, request, scope, memory, quota, previousMessageCount);
         ChatMessage question = saveMessage(session, ChatMessageRole.USER, request.message(),
                 chatbotResponseMapper.userMessageMetadata(request.patientId(), scope.effectivePatientId()));
         return new PreparedTurn(user, existingSession, session.getId(), question.getId(), request.patientId(),
-                scope, memory, chatbotRequest);
+                scope, memory, chatbotRequest, previousMessageCount);
     }
 
     /** Stores the answer, the next session memory, the usage and the audit entry of the turn. */
@@ -90,6 +96,10 @@ public class ChatTurnService {
 
         ChatMessage answer = saveMessage(session, ChatMessageRole.ASSISTANT, reply.answer(),
                 chatbotResponseMapper.assistantMessageMetadata(reply));
+        if (chatbotResponseMapper.hasSummaryUpdate(reply)) {
+            // Summary mới gộp mọi tin có trước lượt này (+ câu hỏi hiện tại).
+            session.markSummarizedThrough(turn.previousMessageCount());
+        }
         session.updateMemory(chatbotResponseMapper.nextMemory(turn.memory(), effectivePatientId, reply));
         interactionRecorder.recordCompletedTurn(
                 turn.user(), session, turn.requestPatientId(), effectivePatientId, reply, latencyMs);
@@ -121,11 +131,11 @@ public class ChatTurnService {
             ChatRequest request,
             PatientScope scope,
             ChatMemory memory,
-            QuotaStatusResponse quota
+            QuotaStatusResponse quota,
+            int previousMessageCount
     ) {
-        // Counted before the current question is stored, so chatbot-service sees the same history
-        // size as the recent messages it receives.
-        int previousMessageCount = (int) chatMessageRepository.countBySessionId(session.getId());
+        int summarizedMessageCount = summarizedMessageCount(session, memory, previousMessageCount);
+        int contextLimit = contextMessageLimit(previousMessageCount, summarizedMessageCount);
         return new ChatbotChatRequest(
                 user.getId().toString(),
                 user.getRole().name(),
@@ -136,11 +146,29 @@ public class ChatTurnService {
                 scope.name(),
                 chatMapper.toConversationContext(
                         memory,
-                        chatSessionRepository.findRecentMessages(session.getId(), user.getId(), CONTEXT_MESSAGE_LIMIT),
-                        previousMessageCount
+                        chatSessionRepository.findRecentMessages(session.getId(), user.getId(), contextLimit),
+                        previousMessageCount,
+                        summarizedMessageCount
                 ),
                 quotaService.usedRatio(quota)
         );
+    }
+
+    /**
+     * Mốc summary gửi cho chatbot-service. Không có summary (hoặc summary bị ẩn do đổi phạm vi
+     * bệnh nhân của USER) thì mốc = 0: chatbot phải tóm tắt lại từ các tin hiện có.
+     */
+    private static int summarizedMessageCount(ChatSession session, ChatMemory memory, int previousMessageCount) {
+        if (memory.summary() == null || memory.summary().isBlank()) {
+            return 0;
+        }
+        return Math.min(Math.max(session.getMemorySummaryMessageCount(), 0), previousMessageCount);
+    }
+
+    /** Luôn gửi ít nhất cửa sổ thường; còn tồn tin chưa tóm tắt thì gửi đủ các tin đó (có trần). */
+    private static int contextMessageLimit(int previousMessageCount, int summarizedMessageCount) {
+        int unsummarized = previousMessageCount - summarizedMessageCount;
+        return Math.max(CONTEXT_MESSAGE_LIMIT, Math.min(unsummarized, MAX_SUMMARY_CONTEXT_MESSAGES));
     }
 
     private ChatSession startSession(User user, String firstMessage) {
@@ -174,6 +202,7 @@ public class ChatTurnService {
      * @param existingSession session that existed before the turn, or null when the turn opened one
      * @param sessionId       session of the turn, existing or just opened
      * @param questionId      the stored question
+     * @param previousMessageCount messages of the session before the question
      */
     public record PreparedTurn(
             User user,
@@ -183,7 +212,8 @@ public class ChatTurnService {
             String requestPatientId,
             PatientScope scope,
             ChatMemory memory,
-            ChatbotChatRequest chatbotRequest
+            ChatbotChatRequest chatbotRequest,
+            int previousMessageCount
     ) {
 
         boolean opensSession() {

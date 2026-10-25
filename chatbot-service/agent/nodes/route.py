@@ -1,4 +1,4 @@
-"""Chọn route cấp cao. Thứ tự rẻ → đắt: plan cache → low-cost mode → LLM router."""
+"""Chọn route cấp cao. Thứ tự rẻ → đắt: plan cache → low-cost mode (luật) → LLM router."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 
 from agent.planning.plan_cache import get_plan_cache
 from agent.planning.router import FALLBACK_DECISION, RouteDecision, decide_route
+from agent.planning.rule_router import rule_route
 from agent.state import ROUTE_FHIR, STAGE_ROUTER, AgentState, get_deps
 from api.schemas import ChatRequest
 from app.config import get_settings
@@ -38,14 +39,14 @@ async def route(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
             "plan_source": plan.source,
         }
 
-    # 2) Low-cost mode: quota gần cạn thì không tiêu LLM cho việc định tuyến.
+    # 2) Low-cost mode: quota gần cạn thì định tuyến bằng luật — vẫn chặn câu xin tư vấn
+    # y khoa và nhận ra chào hỏi / câu hỏi về cuộc trò chuyện.
     if state.get("low_cost_mode"):
-        return _route_update(
-            RouteDecision(route=ROUTE_FHIR, reason="Low-cost mode: bỏ router LLM.", source="low_cost")
-        )
+        return _route_update(rule_route(request.message))
 
-    # 3) LLM router (có LRU cache riêng). Lỗi ⇒ route fhir: an toàn nhất vì validator vẫn
-    # chặn quyền phía sau, còn general_chat/unsupported sẽ nuốt mất câu hỏi thật.
+    # 3) LLM router (có LRU cache riêng). Lỗi ⇒ router luật, như low-cost mode: vẫn chặn câu
+    # xin chẩn đoán/kê đơn và nhận ra chào hỏi; mọi câu luật không nhận ra đều về fhir
+    # (validator vẫn chặn quyền phía sau, không nuốt mất câu hỏi dữ liệu thật).
     usage = zero_usage()
     try:
         decision, usage = await decide_route(
@@ -56,10 +57,15 @@ async def route(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
             model=get_settings().route_model,
         )
     except LlmCallError as exc:
-        log.info("Router LLM lỗi, dùng route mặc định: %s", exc)
-        decision = FALLBACK_DECISION
+        log.info("Router LLM lỗi, dùng router luật: %s", exc)
+        decision = _rule_fallback(request.message)
     deps.record(STAGE_ROUTER, usage)
     return _route_update(decision)
+
+
+def _rule_fallback(message: str) -> RouteDecision:
+    decision = rule_route(message)
+    return RouteDecision(**{**decision.as_dict(), "source": FALLBACK_DECISION.source})
 
 
 def decision_from_state(state: AgentState) -> RouteDecision:

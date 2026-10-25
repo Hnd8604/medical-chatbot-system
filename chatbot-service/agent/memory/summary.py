@@ -15,6 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from agent.memory.context import compact_conversation_for_llm
 from agent.prompts import SUMMARY_SYSTEM_PROMPT
 from agent.state import STAGE_SUMMARY
 from app.config import get_settings
@@ -23,6 +24,10 @@ from llm.usage import zero_usage
 
 
 log = logging.getLogger(__name__)
+
+# Spring cũ (chưa gửi mốc summary): summary xem đúng cửa sổ Spring gửi
+# (RECENT_CONTEXT_MESSAGE_LIMIT=8), không cắt xuống 6 như prompt khác.
+SUMMARY_WINDOW_MESSAGES = 8
 
 
 @dataclass(frozen=True)
@@ -102,6 +107,56 @@ class LlmSummaryGenerator:
         if not summary:
             return SummaryResult(usage=result.usage, source="error", reason="LLM returned an empty summary.")
         return SummaryResult(summary=summary, usage=result.usage, source="llm")
+
+
+def summary_context_for_turn(context: Any, *, low_cost: bool) -> dict[str, Any] | None:
+    """Ngữ cảnh cho rolling summary của lượt này, hoặc ``None`` nếu chưa cần tóm tắt.
+
+    Có mốc (``summarized_message_count``) từ Spring: chỉ đưa các tin CHƯA tóm tắt, và chỉ
+    tóm tắt khi số tin đó đạt ngưỡng (low-cost: ngưỡng cao hơn). Lượt bị lỡ (cache hit,
+    LLM lỗi, chọn bệnh nhân) không làm mất tin: mốc đứng yên nên lượt sau Spring gửi lại
+    đủ các tin còn thiếu.
+
+    Không có mốc (Spring cũ): giữ cách cũ — cửa sổ 8 tin, low-cost tóm tắt mỗi 2 lượt.
+    """
+    if context is None:
+        return None
+    total = context.total_message_count
+    if total is None or total < get_settings().summary_trigger_message_count:
+        return None
+
+    summarized = context.summarized_message_count
+    if summarized is None:
+        if low_cost and not low_cost_summary_due(total):
+            return None
+        return compact_conversation_for_llm(context, max_messages=SUMMARY_WINDOW_MESSAGES)
+
+    settings = get_settings()
+    unsummarized = total - min(summarized, total)
+    threshold = settings.low_cost_summary_min_new_messages if low_cost else settings.summary_min_new_messages
+    if unsummarized <= 0 or unsummarized < threshold:
+        return None
+    return compact_conversation_for_llm(context, max_messages=unsummarized)
+
+
+def low_cost_summary_due(total_message_count: int | None) -> bool:
+    """Spring cũ, low-cost mode: có cần tóm tắt ở lượt này không.
+
+    Cửa sổ ``SUMMARY_WINDOW_MESSAGES`` tin = 4 lượt (mỗi lượt 2 tin). Tóm tắt mỗi nửa cửa
+    sổ (2 lượt) thì kể cả lỡ MỘT lần (cache hit huỷ summary, LLM lỗi), lần kế tiếp vẫn
+    thấy đủ mọi tin chưa tóm tắt.
+    """
+    trigger = get_settings().summary_trigger_message_count
+    if total_message_count is None or total_message_count < trigger:
+        return False
+    # Đếm theo lượt, không theo tin: vẫn đúng nếu tổng số tin lệch thành số lẻ.
+    turns_since_trigger = (total_message_count - trigger) // 2
+    return turns_since_trigger % low_cost_summary_interval() == 0
+
+
+def low_cost_summary_interval() -> int:
+    """Số lượt giữa hai lần tóm tắt ở low-cost mode: nửa cửa sổ, chịu được một lần lỡ."""
+    return max(SUMMARY_WINDOW_MESSAGES // 2 // 2, 1)
 
 
 def get_summary_generator() -> SummaryGenerator:

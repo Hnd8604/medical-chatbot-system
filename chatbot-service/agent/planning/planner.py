@@ -13,6 +13,7 @@ from agent.prompts import PLANNER_SYSTEM_PROMPT_TEMPLATE
 from agent.state import STAGE_PLANNER
 from app.config import get_settings
 from llm.client import call_llm, parse_json_object
+from nlp.time_range import today_local
 from tools.registry import tool_catalog_for_prompt
 
 
@@ -27,9 +28,10 @@ async def create_plan(
     model: str,
 ) -> tuple[Plan, dict[str, int | float]]:
     """Trả (plan, usage). Raise ``LlmCallError`` để node rơi về rule planner."""
+    settings = get_settings()
     system_prompt = PLANNER_SYSTEM_PROMPT_TEMPLATE.format(
         tool_catalog=tool_catalog_for_prompt(),
-        max_steps=get_settings().max_plan_steps,
+        max_steps=settings.max_plan_steps,
     )
     result = await call_llm(
         stage=STAGE_PLANNER,
@@ -41,6 +43,9 @@ async def create_plan(
             "provided_patient_id": provided_patient_id,
             "allowed_patient_ids": allowed_patient_ids,
             "resource_hint": resource_hint,
+            # Để quy đổi "tháng trước", "3 tháng qua"... thành ngày; validator vẫn ưu tiên
+            # khoảng ngày suy bằng luật khi luật nhận ra mốc thời gian.
+            "today": today_local(settings.app_timezone).isoformat(),
             "context": conversation_context or {},
         },
         max_output_tokens=500,

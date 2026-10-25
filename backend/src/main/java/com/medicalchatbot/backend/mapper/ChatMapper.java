@@ -20,7 +20,8 @@ public interface ChatMapper {
     ConversationContext toConversationContext(
             ChatMemory memory,
             List<ChatContextMessageProjection> recentMessages,
-            int totalMessageCount
+            int totalMessageCount,
+            int summarizedMessageCount
     );
 
     ContextMessage toContextMessage(ChatContextMessageProjection message);

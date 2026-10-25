@@ -51,8 +51,12 @@ def main() -> int:
             {"patient": patient_ref, "_sort": "-date", "_count": "5"},
         )
         observations_count = bundle_count(observations)
-        if observations_count < 1:
-            raise ValueError("expected at least one Observation for the demo patient")
+        # Bệnh nhân demo có chuỗi tái khám (>= 2 lần đo) để demo câu hỏi xu hướng; dữ liệu
+        # cũ chỉ có 1 lần đo ⇒ báo lỗi để run-dev.ps1 nạp lại seed (PUT, ghi đè an toàn).
+        if observations_count < 2:
+            raise ValueError(
+                "expected the follow-up Observation series for the demo patient (re-seed to load it)"
+            )
         checks.append(("observations", str(observations_count)))
 
         conditions = get_json("Condition", {"patient": patient_ref})

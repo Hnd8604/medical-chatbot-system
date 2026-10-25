@@ -4,7 +4,8 @@ Hai lối ra:
 
 - ``finalize_answer``: nhánh FHIR — evidence budget → terminology (nếu cần giải thích)
   → answer LLM (hoặc template fast-path) → grounding check → ghi semantic cache → chờ
-  rolling summary → usage → ``memory_update``.
+  rolling summary → usage → ``memory_update``. Low-cost mode: evidence budget nhỏ hơn,
+  bỏ terminology, template fast-path luôn được xét.
 - ``finalize_simple``: nhánh không-FHIR (general_chat / conversation_meta / unsupported /
   clarification) — câu trả lời đã có sẵn, chỉ còn kế toán + memory.
 """
@@ -73,6 +74,7 @@ async def finalize_answer(
     answer_mode: str,
     step_count: int,
     cache: CacheTarget | None,
+    low_cost: bool = False,
 ) -> dict[str, Any]:
     settings = get_settings()
     _apply_turn_metadata(payload, meta, model=model_choice.model)
@@ -93,7 +95,7 @@ async def finalize_answer(
 
     evidence, prune_stats = apply_evidence_budget(
         payload.get("evidence") or [],
-        max_chars=settings.evidence_max_chars,
+        max_chars=settings.low_cost_evidence_limit() if low_cost else settings.evidence_max_chars,
     )
     payload["evidence"] = evidence
     if prune_stats.get("dropped_items") or prune_stats.get("pruned_fields"):
@@ -101,13 +103,16 @@ async def finalize_answer(
 
     # Terminology CHỈ khi câu hỏi mang ý "giải thích" — câu hỏi dữ liệu thuần không gọi
     # API ngoài. explain_concept đã tự gắn external_knowledge (không có FHIR evidence).
-    external_knowledge = payload.get("external_knowledge") or await enrich_terminology(evidence, meta.explain)
+    # Low-cost mode bỏ bước này: kết quả của nó làm phình prompt answer.
+    external_knowledge = payload.get("external_knowledge") or await enrich_terminology(
+        evidence, meta.explain and not low_cost
+    )
     if external_knowledge:
         payload["external_knowledge"] = external_knowledge
 
     generator = answer_generator
-    if _use_template_fast_path(payload, answer_mode=answer_mode, step_count=step_count):
-        generator = TemplateAnswerGenerator(source="template_fast_path")
+    if _use_template_fast_path(payload, answer_mode=answer_mode, step_count=step_count, low_cost=low_cost):
+        generator = TemplateAnswerGenerator(source="template_low_cost" if low_cost else "template_fast_path")
 
     template_answer = payload.get("answer") or ""
     answer = await generator.generate(
@@ -281,10 +286,15 @@ def _apply_turn_metadata(payload: dict[str, Any], meta: TurnMeta, *, model: str)
         payload["all_patients"] = True
 
 
-def _use_template_fast_path(payload: dict[str, Any], *, answer_mode: str, step_count: int) -> bool:
-    """Plan 1 bước, chỉ hỏi dữ liệu, ít evidence ⇒ câu template đã đủ, khỏi gọi answer LLM."""
+def _use_template_fast_path(
+    payload: dict[str, Any], *, answer_mode: str, step_count: int, low_cost: bool = False
+) -> bool:
+    """Plan 1 bước, chỉ hỏi dữ liệu, ít evidence ⇒ câu template đã đủ, khỏi gọi answer LLM.
+
+    Bật bằng ``TEMPLATE_FAST_PATH``; low-cost mode luôn xét, bất kể cờ đó.
+    """
     settings = get_settings()
-    if not settings.template_fast_path:
+    if not (settings.template_fast_path or low_cost):
         return False
     if answer_mode != ANSWER_MODE_DATA_ONLY or step_count != 1:
         return False

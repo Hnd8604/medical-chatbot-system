@@ -76,6 +76,15 @@ def evidence_item(resource_type: str, resource_id: Any, summary: Any, data: Any 
     }
 
 
+def summary_evidence_item(kind: str, summary: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Evidence do code tính ra (xu hướng, thống kê nhóm bệnh nhân), không phải resource FHIR.
+
+    ``pinned``: evidence budget luôn giữ mục này. Đặt ở CUỐI danh sách evidence để
+    ``evidence[0]`` vẫn là resource FHIR thật (Spring dùng nó làm last_resource).
+    """
+    return {"resource_type": kind, "id": None, "summary": summary, "data": data, "pinned": True}
+
+
 def format_resource_summary(resource_type: str, resource: dict[str, Any]) -> str:
     if resource_type == "Observation":
         return format_observation(resource)

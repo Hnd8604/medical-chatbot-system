@@ -72,7 +72,9 @@ PLANNER_CONDITIONS = (
 )
 
 
-class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
+class AgentGraphFixture(unittest.IsolatedAsyncioTestCase):
+    """LLM giả lập theo stage, FHIR giả, plan cache luôn miss. Dùng chung cho các file test graph."""
+
     async def asyncSetUp(self):
         reset_route_cache()
         self.answer_generator = FakeAnswerGenerator()
@@ -93,7 +95,7 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         reset_route_cache()
 
-    async def _run(self, request, *, llm_responses):
+    async def _run(self, request, *, llm_responses, summary_generator=None):
         calls: list[str] = []
 
         async def fake_call_llm(*, stage, **kwargs):
@@ -114,10 +116,12 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
                 client=self.client,
                 answer_generator=self.answer_generator,
                 cache_service=self.cache,
-                summary_generator=FakeSummaryGenerator(),
+                summary_generator=summary_generator or FakeSummaryGenerator(),
             )
         return payload, calls
 
+
+class AgentGraphTests(AgentGraphFixture):
     async def test_fhir_route_end_to_end(self):
         payload, calls = await self._run(
             make_request(message="Bệnh nhân BN2026-00001 có chẩn đoán gì?"),

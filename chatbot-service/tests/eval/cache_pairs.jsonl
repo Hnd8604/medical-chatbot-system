@@ -1,0 +1,53 @@
+// Cặp câu gần giống để đo semantic cache (câu hỏi -> câu trả lời) và plan cache (câu hỏi -> plan).
+// same_answer: hai câu có được dùng chung câu trả lời không (cùng user, cùng bệnh nhân nếu same_patient).
+// same_plan: hai câu có được dùng chung KHUNG plan không (plan cache dùng chung mọi user; định danh, khoảng ngày, ngưỡng, tâm thu/tâm trương được code điền lại từ câu hỏi mới).
+{"id": "pair-01", "kind": "observation_type", "a": "Huyết áp của bệnh nhân này", "b": "Đường huyết của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-02", "kind": "observation_type", "a": "huyet ap cua benh nhan nay", "b": "duong huyet cua benh nhan nay", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-03", "kind": "observation_type", "a": "HbA1c gần nhất của bệnh nhân này", "b": "Hemoglobin gần nhất của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-04", "kind": "observation_type", "a": "Cholesterol của BN2026-00003", "b": "Triglyceride của BN2026-00003", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-05", "kind": "observation_type", "a": "Nhịp tim của bệnh nhân này", "b": "Nhịp thở của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-06", "kind": "observation_type", "a": "SpO2 của bệnh nhân này", "b": "Nhiệt độ của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-07", "kind": "observation_type", "a": "Cân nặng của bệnh nhân này", "b": "Chiều cao của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-08", "kind": "observation_type", "a": "LDL của BN2026-00003", "b": "HDL của BN2026-00003", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-09", "kind": "observation_type", "a": "Huyết áp tâm thu của bệnh nhân này", "b": "Huyết áp tâm trương của bệnh nhân này", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-10", "kind": "resource", "a": "Bệnh nhân này đang dùng thuốc gì?", "b": "Bệnh nhân này có chẩn đoán gì?", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-11", "kind": "resource", "a": "Thuốc của BN2026-00001", "b": "Chẩn đoán của BN2026-00001", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-12", "kind": "resource", "a": "Các lần khám của bệnh nhân này", "b": "Các xét nghiệm của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-13", "kind": "time", "a": "Huyết áp tháng 3 của bệnh nhân này", "b": "Huyết áp tháng 4 của bệnh nhân này", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-14", "kind": "time", "a": "HbA1c năm 2025 của bệnh nhân này", "b": "HbA1c năm 2026 của bệnh nhân này", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-15", "kind": "time", "a": "Huyết áp 3 tháng qua của bệnh nhân này", "b": "Huyết áp 6 tháng qua của bệnh nhân này", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-16", "kind": "time", "a": "Thuốc được kê tháng trước của bệnh nhân này", "b": "Thuốc được kê tháng này của bệnh nhân này", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-17", "kind": "time", "a": "Lần khám năm 2025 của BN2026-00001", "b": "Lần khám năm 2024 của BN2026-00001", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-18", "kind": "threshold", "a": "Bệnh nhân nào có HbA1c > 7?", "b": "Bệnh nhân nào có HbA1c > 8?", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-19", "kind": "threshold", "a": "Bệnh nhân nào có SpO2 dưới 95?", "b": "Bệnh nhân nào có SpO2 trên 95?", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-20", "kind": "threshold", "a": "Bệnh nhân nào có cholesterol trên 240?", "b": "Bệnh nhân nào có cholesterol dưới 240?", "same_answer": false, "same_plan": true, "same_patient": true}
+{"id": "pair-21", "kind": "intent", "a": "HbA1c của bệnh nhân này", "b": "HbA1c của bệnh nhân này có ý nghĩa gì?", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-22", "kind": "intent", "a": "Thuốc của bệnh nhân này", "b": "Thuốc của bệnh nhân này dùng để làm gì?", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-23", "kind": "intent", "a": "HbA1c gần nhất của bệnh nhân này", "b": "Xu hướng HbA1c của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-24", "kind": "intent", "a": "Huyết áp gần nhất của bệnh nhân này", "b": "Huyết áp của bệnh nhân này có giảm không?", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-25", "kind": "intent", "a": "Thuốc trong lần khám gần nhất của bệnh nhân này", "b": "Thuốc của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-26", "kind": "intent", "a": "Lần khám gần nhất của bệnh nhân này", "b": "Lần khám đầu tiên của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-27", "kind": "intent", "a": "3 lần khám gần nhất của bệnh nhân này", "b": "Lần khám gần nhất của bệnh nhân này", "same_answer": false, "same_plan": false, "same_patient": true}
+{"id": "pair-28", "kind": "patient", "a": "Thuốc của BN2026-00001", "b": "Thuốc của BN2026-00002", "same_answer": false, "same_plan": true, "same_patient": false}
+{"id": "pair-29", "kind": "patient", "a": "Chẩn đoán của bệnh nhân Nguyễn Văn An", "b": "Chẩn đoán của bệnh nhân Trần Thị Mai", "same_answer": false, "same_plan": true, "same_patient": false}
+{"id": "pair-30", "kind": "paraphrase", "a": "Bệnh nhân này đang dùng thuốc gì?", "b": "Bệnh nhân này đang uống những thuốc nào?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-31", "kind": "paraphrase", "a": "Huyết áp gần nhất của bệnh nhân này", "b": "Chỉ số huyết áp mới nhất của bệnh nhân này", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-32", "kind": "paraphrase", "a": "benh nhan nay dang dung thuoc gi", "b": "Bệnh nhân này đang dùng thuốc gì?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-33", "kind": "paraphrase", "a": "Chẩn đoán của bệnh nhân này là gì?", "b": "Bệnh nhân này được chẩn đoán bệnh gì?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-34", "kind": "paraphrase", "a": "Các lần khám của bệnh nhân này", "b": "Lịch sử khám của bệnh nhân này", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-35", "kind": "paraphrase", "a": "HbA1c gần nhất của bệnh nhân này", "b": "Kết quả HbA1c mới nhất của bệnh nhân này", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-36", "kind": "paraphrase", "a": "Thuốc của BN2026-00001", "b": "BN2026-00001 dùng thuốc gì", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-37", "kind": "paraphrase", "a": "Đơn thuốc của tôi có gì?", "b": "Tôi đang được kê những thuốc gì?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-38", "kind": "paraphrase", "a": "Kết quả xét nghiệm của tôi", "b": "Xét nghiệm của tôi thế nào?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-39", "kind": "paraphrase", "a": "Bệnh nhân nào có HbA1c > 7?", "b": "Những bệnh nhân nào có HbA1c lớn hơn 7?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-40", "kind": "paraphrase", "a": "Xu hướng HbA1c của bệnh nhân này", "b": "HbA1c của bệnh nhân này tăng hay giảm?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-41", "kind": "paraphrase", "a": "Huyết áp tháng 3 của bệnh nhân này", "b": "Chỉ số huyết áp trong tháng 3 của bệnh nhân này", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-42", "kind": "paraphrase", "a": "Bệnh nhân này có chẩn đoán gì?", "b": "Bệnh nhân này mắc bệnh gì?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-43", "kind": "paraphrase", "a": "Thông tin bệnh nhân này", "b": "Hồ sơ của bệnh nhân này", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-44", "kind": "paraphrase", "a": "Lần khám gần nhất của bệnh nhân này là khi nào?", "b": "Bệnh nhân này khám lần cuối khi nào?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-45", "kind": "paraphrase", "a": "Đường huyết của bệnh nhân này", "b": "duong huyet cua benh nhan nay", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-46", "kind": "paraphrase", "a": "Cholesterol của bệnh nhân này", "b": "Chỉ số cholesterol của bệnh nhân này", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-47", "kind": "paraphrase", "a": "SpO2 của bệnh nhân này", "b": "Độ bão hòa oxy của bệnh nhân này", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-48", "kind": "paraphrase", "a": "Cân nặng của bệnh nhân này", "b": "Bệnh nhân này nặng bao nhiêu kg?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-49", "kind": "paraphrase", "a": "Bệnh nhân này có dị ứng gì không?", "b": "Bệnh nhân này có tiền sử dị ứng không?", "same_answer": true, "same_plan": true, "same_patient": true}
+{"id": "pair-50", "kind": "paraphrase", "a": "Thuốc của bệnh nhân này", "b": "thuoc cua benh nhan nay", "same_answer": true, "same_plan": true, "same_patient": true}

@@ -436,6 +436,77 @@ class ChatServiceTest {
         assertEquals("BN2026-00003", sentRequest().patientId());
     }
 
+    // ---------------------------------------------------------------- mốc rolling summary
+
+    @Test
+    void chatSendsSummaryWatermarkAndEveryUnsummarizedMessage() throws Exception {
+        ChatSession session = sessionWithSummary("Đã xem huyết áp.", 4);
+
+        ChatbotChatRequest request = runSummaryTurn(session, 20, 16, null);
+
+        assertEquals(4, request.conversationContext().summarizedMessageCount());
+        // Lượt này không có summary mới ⇒ mốc giữ nguyên.
+        assertEquals(4, session.getMemorySummaryMessageCount());
+    }
+
+    @Test
+    void chatCapsContextMessagesWhenSummaryBacklogIsLarge() throws Exception {
+        ChatSession session = sessionWithSummary("Đã xem huyết áp.", 0);
+
+        runSummaryTurn(session, 100, 24, null);
+    }
+
+    @Test
+    void newSummaryMovesWatermarkToMessageCountBeforeTurn() throws Exception {
+        ChatSession session = sessionWithSummary("Đã xem huyết áp.", 4);
+
+        runSummaryTurn(session, 12, 8, "Đã xem huyết áp và thuốc.");
+
+        assertEquals(12, session.getMemorySummaryMessageCount());
+    }
+
+    @Test
+    void sessionWithoutSummarySendsZeroWatermark() throws Exception {
+        ChatSession session = sessionWithSummary(null, 10);
+
+        ChatbotChatRequest request = runSummaryTurn(session, 12, 12, null);
+
+        assertEquals(0, request.conversationContext().summarizedMessageCount());
+    }
+
+    private ChatSession sessionWithSummary(String summary, int summarizedMessageCount) {
+        ChatSession session = existingSession(doctor, new ChatMemory("BN2026-00001", summary,
+                "observations", "get_observations", "Observation", "obs-1"));
+        session.markSummarizedThrough(summarizedMessageCount);
+        return session;
+    }
+
+    /** Chạy một lượt chat với số tin cho trước, kiểm tra số tin Spring lấy kèm, trả request gửi chatbot. */
+    private ChatbotChatRequest runSummaryTurn(
+            ChatSession session,
+            long previousMessageCount,
+            int expectedContextLimit,
+            String newSummary
+    ) throws Exception {
+        String summaryField = newSummary == null ? "" : ", \"summary\": \"" + newSummary + "\"";
+        when(chatSessionRepository.findRecentMessages(session.getId(), doctor.getId(), expectedContextLimit))
+                .thenReturn(List.of());
+        when(chatMessageRepository.countBySessionId(session.getId())).thenReturn(previousMessageCount);
+        chatbotAnswers("""
+                {
+                  "answer": "Theo dữ liệu FHIR...",
+                  "intent": "observations",
+                  "tool_name": "get_observations",
+                  "patient_id": "BN2026-00001",
+                  "memory_update": {"last_intent": "observations"%s}
+                }
+                """.formatted(summaryField));
+
+        service.chat(new ChatRequest(session.getId(), null, "huyết áp của bệnh nhân?"));
+
+        return sentRequest();
+    }
+
     private ChatSession existingSession(User user, ChatMemory memory) {
         ChatSession session = ChatSession.builder().id(UUID.randomUUID()).user(user).memory(memory).build();
         TestUsers.signIn(user, userRepository);

@@ -19,6 +19,9 @@ class ConversationContext(BaseModel):
     # Tổng số message của session TRƯỚC khi lưu message hiện tại (Spring đếm).
     # None => Spring cũ chưa gửi => không kích hoạt rolling summary.
     total_message_count: int | None = None
+    # memory_summary đã bao phủ tới tin thứ mấy (Spring lưu). None => Spring cũ chưa gửi mốc.
+    # Khi có mốc, recent_messages chứa đủ các tin sau mốc (Spring có trần 24 tin).
+    summarized_message_count: int | None = Field(default=None, ge=0)
 
 
 class ChatRequest(BaseModel):
@@ -42,7 +45,7 @@ ResponseStatus = Literal[
     "patient_selection_needed",
     "tool_error",
 ]
-AgentRoute = Literal["fhir", "general_chat", "conversation_meta", "unsupported", "cache"]
+AgentRoute = Literal["fhir", "general_chat", "conversation_meta", "unsupported", "cache", "emergency"]
 
 
 class PlanStepRef(BaseModel):

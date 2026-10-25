@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Dịch vụ Chatbot Y tế"
+    # Múi giờ để hiểu "hôm nay", "tháng trước", "3 tháng qua" trong câu hỏi.
+    app_timezone: str = Field(default="Asia/Ho_Chi_Minh")
     fhir_base_url: str = Field(default="http://localhost:8080/fhir")
     fhir_request_timeout_seconds: float = Field(default=20)
     llm_provider: str = Field(default="openai")
@@ -22,6 +24,11 @@ class Settings(BaseSettings):
     model_summary: str = Field(default="gpt-4o-mini")
     summary_trigger_message_count: int = Field(default=8)
     summary_max_output_tokens: int = Field(default=256)
+    # Có mốc summary từ Spring: tóm tắt khi số tin chưa tóm tắt đạt ngưỡng. 2 = mỗi lượt.
+    # Lỡ lượt nào cũng không mất tin: lượt sau Spring gửi lại đủ các tin chưa tóm tắt.
+    summary_min_new_messages: int = Field(default=2, ge=1)
+    # Ngưỡng ở low-cost mode (8 tin = 4 lượt). Phải <= 24 (trần tin Spring gửi kèm).
+    low_cost_summary_min_new_messages: int = Field(default=8, ge=1, le=24)
 
 
     litellm_base_url: str = Field(default="http://localhost:4000")
@@ -58,9 +65,16 @@ class Settings(BaseSettings):
     enable_plan_cache: bool = Field(default=True)
     plan_cache_collection_name: str = Field(default="medical_plan_cache")
     plan_cache_ttl_seconds: int = Field(default=86400)
-    plan_cache_similarity_threshold: float = Field(default=0.95)
-    # Low-cost mode: quota vượt ngưỡng -> bỏ router/planner LLM, tắt terminology.
+    # Hiệu chỉnh bằng tests/eval/run_cache_pairs.py (50 cặp): có chữ ký "khung" chặn hit nhầm
+    # thì 0.92 cho 47% hit đúng / 0% hit nhầm (0.95: 31% / 0%).
+    plan_cache_similarity_threshold: float = Field(default=0.92)
+    # Quota đã dùng >= ngưỡng này -> lượt phức tạp cũng chỉ dùng model_simple cho answer.
+    quota_downgrade_ratio: float = Field(default=0.8)
+    # Low-cost mode: quota >= ngưỡng này -> router/planner bằng luật, nhánh chat dùng template,
+    # tắt terminology, rolling summary chờ nhiều tin hơn, ép template fast-path, thu nhỏ evidence budget.
     low_cost_mode_ratio: float = Field(default=0.9)
+    # Evidence budget riêng của low-cost mode (lấy giá trị nhỏ hơn với evidence_max_chars).
+    low_cost_evidence_max_chars: int = Field(default=6000)
     # QUYẾT ĐỊNH BẢO MẬT ĐANG CHỜ CHỐT.
     # false = USER không được get_resource_by_id.
     # true  = cho phép, nhưng executor kiểm tra chủ sở hữu resource sau khi fetch
@@ -76,6 +90,8 @@ class Settings(BaseSettings):
     cache_embedding_model: str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     cache_vector_size: int = Field(default=384)
     cache_ttl_seconds: int = Field(default=300)
+    # 0.94 + chữ ký tất định: 33% hit đúng / 0% hit nhầm trên bộ cặp câu (không chữ ký: 22% hit nhầm
+    # và không ngưỡng nào sửa được — embedding không phân biệt "> 7" với "> 8").
     cache_similarity_threshold: float = Field(default=0.94)
 
     model_config = SettingsConfigDict(
@@ -121,6 +137,12 @@ class Settings(BaseSettings):
     def chat_model(self) -> str:
         """Model cho general_chat / conversation_meta / unsupported (câu ngắn, không FHIR)."""
         return self.model_chat or self.model_simple
+
+    def is_low_cost(self, quota_used_ratio: float) -> bool:
+        return quota_used_ratio >= self.low_cost_mode_ratio
+
+    def low_cost_evidence_limit(self) -> int:
+        return min(self.evidence_max_chars, self.low_cost_evidence_max_chars)
 
 
 @lru_cache

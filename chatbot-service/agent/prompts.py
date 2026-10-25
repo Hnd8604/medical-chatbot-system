@@ -7,7 +7,7 @@ Prompt là thứ thay đổi nhiều nhất và cần A/B được bằng bộ e
 from __future__ import annotations
 
 ROUTER_PROMPT_VERSION = "router_v1"
-PLANNER_PROMPT_VERSION = "planner_v1"
+PLANNER_PROMPT_VERSION = "planner_v2"
 CHAT_PROMPT_VERSION = "chat_v1"
 ANSWER_PROMPT_VERSION = "answer_v1"
 SUMMARY_PROMPT_VERSION = "summary_v1"
@@ -78,12 +78,22 @@ Chính sách theo vai trò:
 Chọn tool:
 - thông tin/hồ sơ bệnh nhân → get_patient_by_id
 - chỉ số, xét nghiệm, huyết áp, đường huyết, BMI, SpO2 → get_observations
+- xu hướng / diễn biến / tăng hay giảm / thay đổi theo thời gian của MỘT chỉ số → get_observation_trend
 - lần khám, lượt khám, nhập viện, tái khám → get_encounters
 - chẩn đoán, bệnh lý, tình trạng đã ghi nhận → get_conditions
 - thuốc, đơn thuốc, y lệnh thuốc → get_medication_requests
 - hỏi cùng loại dữ liệu cho TẤT CẢ bệnh nhân → get_all_patient_*
+- "bệnh nhân nào có <chỉ số> > / < ngưỡng" → get_all_patient_observations với observation_type,
+  value_op (gt|ge|lt|le) và value
 - khái niệm y khoa chung, không gắn bệnh nhân → explain_concept
 - hỏi FHIR server sống không → fhir_status
+
+Mốc thời gian: payload có "today" (YYYY-MM-DD). Câu hỏi nêu mốc thời gian ("tháng trước",
+"3 tháng qua", "năm 2025", "từ 01/02 đến 15/03/2026") thì đặt date_from/date_to dạng
+YYYY-MM-DD cho step cần lọc. Không nêu mốc thời gian thì KHÔNG đặt date_from/date_to.
+
+Theo lần khám: "thuốc/chẩn đoán/chỉ số trong lần khám gần nhất" → step get_encounters
+(limit 1, id ví dụ "last_visit") rồi step sau đặt encounter_id = "$last_visit.encounter_id".
 
 Xác định bệnh nhân:
 - Câu hỏi có mã rõ ràng ("Patient/BN2026-00001" hay "BN2026-00001") → dùng thẳng
@@ -109,7 +119,8 @@ Chỉ trả về đúng MỘT JSON object, không markdown:
   "answer_mode": "data_only|explain_with_external_knowledge",
   "steps": [
     {{"id": "resolve_patient", "tool": "search_patients", "args": {{"name": "Nguyễn Văn A", "limit": 3}}}},
-    {{"id": "meds", "tool": "get_medication_requests", "args": {{"patient_id": "$resolve_patient.patient_id", "limit": 10}}}}
+    {{"id": "last_visit", "tool": "get_encounters", "args": {{"patient_id": "$resolve_patient.patient_id", "limit": 1}}}},
+    {{"id": "meds", "tool": "get_medication_requests", "args": {{"patient_id": "$resolve_patient.patient_id", "encounter_id": "$last_visit.encounter_id"}}}}
   ],
   "reason": "một câu ngắn"
 }}"""

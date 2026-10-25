@@ -30,6 +30,7 @@ from tools.registry import (
     TOOL_GET_CONDITIONS,
     TOOL_GET_ENCOUNTERS,
     TOOL_GET_MEDICATIONS,
+    TOOL_GET_OBSERVATION_TREND,
     TOOL_GET_OBSERVATIONS,
     TOOL_GET_PATIENT,
     TOOL_GET_RESOURCE,
@@ -45,6 +46,7 @@ _DATA_LABELS = {
     TOOL_GET_PATIENT: "thông tin hành chính",
     TOOL_GET_RESOURCE: "tài nguyên FHIR được hỏi",
     TOOL_GET_OBSERVATIONS: "chỉ số/xét nghiệm",
+    TOOL_GET_OBSERVATION_TREND: "xu hướng chỉ số",
     TOOL_GET_ENCOUNTERS: "lần khám",
     TOOL_GET_CONDITIONS: "chẩn đoán",
     TOOL_GET_MEDICATIONS: "đơn thuốc",
@@ -87,6 +89,7 @@ async def respond(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         step_count=len(plan.steps),
         # Câu trả lời thiếu dữ liệu do sự cố tạm thời không được phục vụ lại từ cache.
         cache=None if partial else CacheTarget(service=deps.cache_service, user_id=request.user_id),
+        low_cost=bool(state.get("low_cost_mode")),
     )
     if partial:
         finalized["answer"] = f"{finalized['answer'].rstrip()}\n\n{partial_note(failed_steps)}"

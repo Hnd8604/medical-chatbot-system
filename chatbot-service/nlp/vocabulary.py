@@ -99,7 +99,7 @@ CONDITION_KEYWORDS = [
     "co tien su",
 ]
 
-PATIENT_INFO_KEYWORDS = ["patient", "information", "info", "thong tin", "benh nhan"]
+PATIENT_INFO_KEYWORDS = ["patient", "information", "info", "thong tin", "benh nhan", "ho so"]
 
 # Câu hỏi mang ý "giải thích/ý nghĩa/công dụng" -> bật terminology enrichment (explain=True).
 EXPLAIN_KEYWORDS = [
@@ -115,4 +115,43 @@ EXPLAIN_KEYWORDS = [
     "explain",
     "what is",
     "what does",
+]
+
+# Hỏi xu hướng một chỉ số theo thời gian -> get_observation_trend.
+TREND_KEYWORDS = [
+    "xu huong",
+    "dien bien",
+    "tang hay giam",
+    "giam hay tang",
+    "co tang khong",
+    "co giam khong",
+    "thay doi the nao",
+    "thay doi nhu the nao",
+    "thay doi ra sao",
+    "bien dong",
+    "tien trien",
+    "theo thoi gian",
+    "qua cac lan do",
+    "trend",
+]
+
+# "... trong lần khám gần nhất" -> get_encounters(limit 1) rồi lọc theo encounter_id.
+LATEST_VISIT_PHRASES = [
+    "lan kham gan nhat",
+    "lan kham moi nhat",
+    "lan kham cuoi",
+    "lan kham gan day nhat",
+    "dot kham gan nhat",
+    "buoi kham gan nhat",
+    "lan tai kham gan nhat",
+]
+
+# "Bệnh nhân nào có HbA1c > 7" -> get_all_patient_observations với ngưỡng.
+COHORT_PHRASES = [
+    "benh nhan nao",
+    "nhung benh nhan",
+    "bao nhieu benh nhan",
+    "nguoi benh nao",
+    "nhung nguoi",
+    "which patients",
 ]
